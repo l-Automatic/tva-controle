@@ -1,0 +1,11 @@
+{
+  "total_pages": null,
+  "current_page": null,
+  "per_page": null,
+  "total_items": null,
+  "items": [
+    {"id":12028930322432,"number":"411ROUSSEAU","label":"CLIENT ROUSSEAU","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T14:36:04.651815Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"customer","letterable":true}
+  ],
+  "has_more": false,
+  "next_cursor": null
+}

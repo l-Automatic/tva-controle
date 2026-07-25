@@ -1,0 +1,13 @@
+{
+  "total_pages": null,
+  "current_page": null,
+  "per_page": null,
+  "total_items": null,
+  "items": [
+    {"id":92522389352448,"debit":"0.0","credit":"3555.14","label":"ROUSSEAU VIR 21/01","ledger_account_id":12028930121728,"ledger_account":{"id":12028930121728,"number":"7061","url":"https://app.pennylane.com/api/external/v2/ledger_accounts/12028930121728"}},
+    {"id":92522389344256,"debit":"0.0","credit":"711.03","label":"ROUSSEAU VIR 21/01","ledger_account_id":12028930117632,"ledger_account":{"id":12028930117632,"number":"445711","url":"https://app.pennylane.com/api/external/v2/ledger_accounts/12028930117632"}},
+    {"id":92522389336064,"debit":"4266.17","credit":"0.0","label":"ROUSSEAU VIR 21/01","ledger_account_id":12028930322432,"ledger_account":{"id":12028930322432,"number":"411ROUSSEAU","url":"https://app.pennylane.com/api/external/v2/ledger_accounts/12028930322432"}}
+  ],
+  "has_more": false,
+  "next_cursor": null
+}

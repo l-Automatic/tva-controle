@@ -1,0 +1,19 @@
+{
+  "name": "@tva-controle/controles-module4",
+  "version": "0.1.0",
+  "description": "Pré-contrôles déterministes (Module 4) — fonctions pures, aucun accès réseau ni base de données.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tva-controle/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

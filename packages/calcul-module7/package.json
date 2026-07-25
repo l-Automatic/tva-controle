@@ -1,0 +1,20 @@
+{
+  "name": "@tva-controle/calcul-module7",
+  "version": "0.1.0",
+  "description": "Calcul TVA (Module 7) — fonction pure, refuse de calculer si des anomalies bloquantes existent.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tva-controle/core": "*",
+    "@tva-controle/controles-module4": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "total_pages": null,
+  "current_page": null,
+  "per_page": null,
+  "total_items": null,
+  "items": [
+    {"id":12028930207744,"number":"445713","label":"TVA COLLECTÉE 5,5%","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T14:36:04.651815Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"custom","letterable":true},
+    {"id":12028930187264,"number":"445664","label":"TVA DÉD. AUTOLIQUIDÉE","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T14:36:04.651815Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"custom","letterable":true},
+    {"id":12028930183168,"number":"4454","label":"TVA DUE AUTOLIQUIDÉE","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T14:36:04.651815Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"custom","letterable":true},
+    {"id":12028930117632,"number":"445711","label":"TVA COLLECTÉE 20%","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T14:36:04.651815Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"custom","letterable":true},
+    {"id":12028930088960,"number":"445712","label":"TVA COLLECTÉE 10%","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T14:36:04.651815Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"custom","letterable":true},
+    {"id":12021345099776,"number":"44566","label":"TVA sur autres biens et services","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T12:55:31.415256Z","updated_at":"2026-06-04T14:36:04.611136Z","type":"reserved","letterable":true},
+    {"id":12021345034240,"number":"44562","label":"TVA sur immobilisations","vat_rate":"any","country_alpha2":"any","enabled":true,"created_at":"2026-06-04T12:55:31.415256Z","updated_at":"2026-06-04T12:55:30.920959Z","type":"reserved","letterable":true}
+  ],
+  "has_more": false,
+  "next_cursor": null
+}

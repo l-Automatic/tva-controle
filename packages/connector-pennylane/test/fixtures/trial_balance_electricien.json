@@ -1,0 +1,59 @@
+{
+  "items": [
+    {
+      "credits": "5268.43",
+      "debits": "0.0",
+      "label": "TVA DUE AUTOLIQUIDÉE",
+      "number": "4454",
+      "formatted_number": "44540000000"
+    },
+    {
+      "credits": "0.0",
+      "debits": "1600.0",
+      "label": "TVA sur immobilisations",
+      "number": "44562",
+      "formatted_number": "44562000000"
+    },
+    {
+      "credits": "192.68",
+      "debits": "11528.63",
+      "label": "TVA sur autres biens et services",
+      "number": "44566",
+      "formatted_number": "44566000000"
+    },
+    {
+      "credits": "0.0",
+      "debits": "5268.43",
+      "label": "TVA DÉD. AUTOLIQUIDÉE",
+      "number": "445664",
+      "formatted_number": "44566400000"
+    },
+    {
+      "credits": "13186.47",
+      "debits": "49.08",
+      "label": "TVA COLLECTÉE 20%",
+      "number": "445711",
+      "formatted_number": "44571100000"
+    },
+    {
+      "credits": "1832.11",
+      "debits": "44.81",
+      "label": "TVA COLLECTÉE 10%",
+      "number": "445712",
+      "formatted_number": "44571200000"
+    },
+    {
+      "credits": "489.4",
+      "debits": "45.34",
+      "label": "TVA COLLECTÉE 5,5%",
+      "number": "445713",
+      "formatted_number": "44571300000"
+    }
+  ],
+  "total_pages": null,
+  "current_page": null,
+  "per_page": null,
+  "total_items": null,
+  "has_more": false,
+  "next_cursor": null
+}

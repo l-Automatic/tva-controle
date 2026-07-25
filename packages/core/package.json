@@ -1,0 +1,11 @@
+{
+  "name": "@tva-controle/core",
+  "version": "0.1.0",
+  "description": "Types pivot partagés — indépendants de tout connecteur ou logiciel source.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@tva-controle/onboarding-module3",
+  "version": "0.1.0",
+  "description": "Onboarding (Module 3) — analyses déterministes de l'historique pour proposer le remplissage initial de la mémoire de dossier. Pas de LLM dans cette v1.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tva-controle/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

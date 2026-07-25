@@ -1,0 +1,32 @@
+export { PennylaneClient, PennylaneApiError } from './connectors/pennylane/client.js';
+export {
+  fetchTrialBalance,
+  filterComptesParPrefixe,
+  type FetchTrialBalanceParams,
+} from './connectors/pennylane/trialBalance.js';
+export {
+  resolveLedgerAccounts,
+  resolveLedgerAccountsByIds,
+  decouvrirComptesParPrefixe,
+  type CompteResolu,
+} from './connectors/pennylane/ledgerAccounts.js';
+export {
+  fetchLignesParCompte,
+  type FetchLignesParCompteParams,
+} from './connectors/pennylane/tvaLedgerLines.js';
+export { fetchLignesDePiece, type LignePiece } from './connectors/pennylane/pieceLines.js';
+export { fetchLettrage } from './connectors/pennylane/lettering.js';
+export {
+  fetchEcrituresTvaCompletes,
+  type FetchEcrituresTvaComptletesParams,
+} from './connectors/pennylane/tvaEcrituresCompletes.js';
+export type {
+  BalanceComptable,
+  CompteSolde,
+  LigneEcriture,
+  LigneEcritureAvecLettrage,
+  LigneTiersAvecContexte,
+  LigneEcritureBrute,
+  EcritureTvaComplete,
+  Lettrage,
+} from '@tva-controle/core';

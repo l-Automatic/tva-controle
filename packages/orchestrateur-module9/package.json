@@ -1,0 +1,25 @@
+{
+  "name": "@tva-controle/orchestrateur-module9",
+  "version": "0.1.0",
+  "description": "Orchestrateur global — enchaîne connecteur, contrôles Module 4 et calcul Module 7 pour un dossier et une période.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tva-controle/core": "*",
+    "@tva-controle/connector-pennylane": "*",
+    "@tva-controle/controles-module4": "*",
+    "@tva-controle/calcul-module7": "*",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "@types/pg": "^8.11.6",
+    "@types/node": "^22.5.0"
+  }
+}
