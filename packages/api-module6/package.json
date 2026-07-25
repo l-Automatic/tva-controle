@@ -1,0 +1,28 @@
+{
+  "name": "@tva-controle/api-module6",
+  "version": "0.1.0",
+  "description": "Module 6 (validation humaine) — persistance des résultats et API HTTP pour traiter anomalies et propositions.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tva-controle/core": "*",
+    "@tva-controle/onboarding-module3": "*",
+    "@tva-controle/calcul-module7": "*",
+    "@tva-controle/orchestrateur-module9": "*",
+    "pg": "^8.12.0",
+    "fastify": "^4.28.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "tsx": "^4.19.0",
+    "@types/pg": "^8.11.6",
+    "@types/node": "^22.5.0"
+  }
+}

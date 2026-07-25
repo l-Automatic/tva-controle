@@ -46,7 +46,7 @@ export async function chargerDossier(client: PoolClient, dossierId: string): Pro
 export async function chargerContexteDossier(client: PoolClient, dossierId: string): Promise<ContexteDossier> {
   const tauxRes = await client.query(
     `SELECT compte_produit_ou_charge, taux_habituel, nb_occurrences
-     FROM taux_historique WHERE dossier_id = $1`,
+     FROM taux_historique WHERE dossier_id = $1 AND statut = 'confirmed'`,
     [dossierId]
   );
   const conventionsRes = await client.query(
