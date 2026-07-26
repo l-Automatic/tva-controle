@@ -136,8 +136,8 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
     const resultat = await executerCycleTva(pool, {
       cabinetId: CABINET_ID,
       dossierId: DOSSIER_ID,
-      periodeDebut: '2025-01-01',
-      periodeFin: '2025-01-31',
+      periodeDebut: '2025-02-01',
+      periodeFin: '2025-02-28',
       client,
       comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
       configExigibilite: { comptesVenteService: ['706'], comptesChargeService: ['611'] },
@@ -146,6 +146,29 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
     });
 
     expect(resultat.statut).toBe('calcule');
+    if (resultat.statut !== 'calcule') throw new Error('assertion');
+
+    // Vérifie que ce n'est pas juste retourné en mémoire — le calcul doit
+    // réellement exister en base, récupérable indépendamment de l'appel.
+    const clientVerif = await pool.connect();
+    try {
+      await clientVerif.query('BEGIN');
+      await clientVerif.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
+      const resCalcul = await clientVerif.query(`SELECT * FROM calculs_tva WHERE id = $1`, [
+        resultat.calculId,
+      ]);
+      expect(resCalcul.rows).toHaveLength(1);
+      expect(resCalcul.rows[0].statut).toBe('brouillon');
+
+      const resLignes = await clientVerif.query(
+        `SELECT * FROM calculs_tva_lignes WHERE calcul_id = $1`,
+        [resultat.calculId]
+      );
+      expect(resLignes.rows.length).toBeGreaterThan(0);
+      await clientVerif.query('COMMIT');
+    } finally {
+      clientVerif.release();
+    }
   });
 });
 
@@ -220,5 +243,23 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
     expect(resultat.statut).toBe('bloque');
     if (resultat.statut !== 'bloque') throw new Error('assertion');
     expect(resultat.anomalies.some((a) => a.type === 'taux_incoherent' && a.gravite === 'bloquant')).toBe(true);
+
+    // Même sur le chemin bloqué, les anomalies doivent être en base — c'est
+    // ce qui permet à Module 6 de les voir et de les traiter, sans quoi le
+    // blocage serait invisible pour le collaborateur.
+    const clientVerif = await pool.connect();
+    try {
+      await clientVerif.query('BEGIN');
+      await clientVerif.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
+      const res = await clientVerif.query(
+        `SELECT * FROM anomalies WHERE dossier_id = $1 AND type_anomalie = 'taux_incoherent'`,
+        [DOSSIER_ID]
+      );
+      expect(res.rows.length).toBeGreaterThan(0);
+      expect(res.rows[0].statut).toBe('ouvert');
+      await clientVerif.query('COMMIT');
+    } finally {
+      clientVerif.release();
+    }
   });
 });

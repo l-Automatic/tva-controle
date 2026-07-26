@@ -1,13 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { avecContexteCabinet } from '@tva-controle/orchestrateur-module9';
 import {
-  listerAnomalies,
-  listerConventions,
-  listerTauxHistorique,
-  listerCalculs,
-} from './db/readRepository.js';
-import {
+  avecContexteCabinet,
   resoudreAnomalie,
   justifierAnomalie,
   confirmerConvention,
@@ -15,7 +9,11 @@ import {
   confirmerTauxHistorique,
   rejeterTauxHistorique,
   validerCalcul,
-} from './db/writeRepository.js';
+  listerAnomalies,
+  listerConventions,
+  listerTauxHistorique,
+  listerCalculs,
+} from '@tva-controle/orchestrateur-module9';
 
 // Pas d'authentification construite à ce stade — le cabinet est identifié
 // par un header explicite plutôt que deviné. Stand-in volontaire en

@@ -12,6 +12,7 @@ import { calculerTva, type ResultatCalculTva } from '@tva-controle/calcul-module
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur } from './db/dossierRepository.js';
+import { enregistrerAnomalies, enregistrerCalcul } from './db/writeRepository.js';
 
 export interface ParametresCycleTva {
   cabinetId: string;
@@ -29,16 +30,23 @@ export interface ParametresCycleTva {
 
 export type ResultatCycleTva =
   | { statut: 'bloque'; anomalies: Anomalie[] }
-  | { statut: 'calcule'; anomalies: Anomalie[]; resultat: ResultatCalculTva };
+  | { statut: 'calcule'; anomalies: Anomalie[]; resultat: ResultatCalculTva; calculId: string };
 
 // Enchaîne : charge le contexte dossier (Module 2) -> récupère les écritures
-// (Module 1) -> exécute tous les contrôles (Module 4) -> s'arrête si une
-// anomalie bloquante existe -> sinon calcule (Module 7).
+// (Module 1) -> exécute tous les contrôles (Module 4) -> persiste les
+// anomalies -> s'arrête si une anomalie bloquante existe -> sinon calcule
+// (Module 7) et persiste le résultat.
 //
-// Comme rien ne marque encore une anomalie "résolue" en base (Module 6 pas
-// construit), TOUTE anomalie bloquante arrête systématiquement le calcul —
-// c'est le comportement attendu de cette version, pas une limitation à
-// corriger dans ce module précis.
+// Les anomalies sont TOUJOURS persistées, même en cas de blocage — c'est
+// justement ce qui permet à Module 6 (validation humaine) de les voir et de
+// les traiter. Comme rien ne marque encore une anomalie "résolue" avant le
+// prochain cycle, relancer executerCycleTva sur la même période sans avoir
+// traité les anomalies precédentes les insère à nouveau (pas de
+// déduplication en v1 — limitation connue, pas un oubli).
+//
+// La persistance se fait dans des transactions séparées de la lecture du
+// contexte et de l'appel réseau Pennylane, pour ne jamais garder une
+// transaction Postgres ouverte pendant une opération lente/externe.
 export async function executerCycleTva(
   pool: Pool,
   params: ParametresCycleTva
@@ -87,6 +95,10 @@ export async function executerCycleTva(
     ...anomaliesImmobilisation,
   ];
 
+  await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    enregistrerAnomalies(client, params.dossierId, params.periodeDebut, toutesAnomalies)
+  );
+
   if (toutesAnomalies.some((a) => a.gravite === 'bloquant')) {
     return { statut: 'bloque', anomalies: toutesAnomalies };
   }
@@ -97,5 +109,9 @@ export async function executerCycleTva(
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
   });
 
-  return { statut: 'calcule', anomalies: toutesAnomalies, resultat };
+  const calculId = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    enregistrerCalcul(client, params.dossierId, params.periodeDebut, params.periodeFin, resultat)
+  );
+
+  return { statut: 'calcule', anomalies: toutesAnomalies, resultat, calculId };
 }
