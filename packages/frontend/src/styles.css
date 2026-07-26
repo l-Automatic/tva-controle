@@ -1,0 +1,266 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f6f8;
+  color: #1a1d21;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.app-header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 1rem;
+}
+
+.identite-form {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #e0e2e6;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.identite-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  color: #5a5f66;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.identite-form input {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.app-main {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .app-main {
+    grid-template-columns: 1fr 1fr;
+  }
+  .app-main .panel:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #e0e2e6;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.panel-header h2 {
+  font-size: 1.05rem;
+  margin: 0;
+  flex: 1 1 100%;
+}
+
+.panel-header .toggle {
+  flex: 1;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: #5a5f66;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid #2f6fed;
+  background: #2f6fed;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+button.secondary {
+  background: #fff;
+  color: #c0392b;
+  border-color: #c0392b;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+input[type='text'] {
+  border: 1px solid #d0d3d8;
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+}
+
+.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.card {
+  border: 1px solid #e0e2e6;
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 0.65rem 0.8rem;
+}
+
+.card.gravite-bloquant {
+  border-left-color: #c0392b;
+}
+.card.gravite-signale {
+  border-left-color: #e0972d;
+}
+.card.gravite-info {
+  border-left-color: #7a8087;
+}
+.card.proposition {
+  border-left-color: #2f6fed;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #5a5f66;
+  margin-bottom: 0.35rem;
+}
+
+.type-anomalie {
+  font-weight: 600;
+  color: #1a1d21;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.statut-ouvert,
+.statut-candidate {
+  background: #fdf1d6;
+  color: #8a5a00;
+}
+.statut-resolu,
+.statut-confirmed {
+  background: #ddf3e4;
+  color: #1e7a3c;
+}
+.statut-justifie {
+  background: #dde6f9;
+  color: #2f4fa3;
+}
+.statut-rejected {
+  background: #f9dede;
+  color: #a32f2f;
+}
+
+.gravite-badge-bloquant {
+  background: #f9dede;
+  color: #a32f2f;
+}
+.gravite-badge-signale {
+  background: #fbe7cf;
+  color: #8a5300;
+}
+.gravite-badge-info {
+  background: #e7e8ea;
+  color: #4a4f55;
+}
+
+.description,
+.label {
+  margin: 0.3rem 0;
+  font-size: 0.9rem;
+}
+
+.reference {
+  margin: 0.2rem 0;
+  font-size: 0.8rem;
+  color: #5a5f66;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.actions input[type='text'] {
+  flex: 1;
+  min-width: 180px;
+}
+
+.error {
+  color: #c0392b;
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+}
+
+.empty {
+  color: #7a8087;
+  font-size: 0.85rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #16181c;
+    color: #e8e9eb;
+  }
+  .identite-form,
+  .panel,
+  .card {
+    background: #1f2226;
+    border-color: #2c2f34;
+  }
+  input[type='text'] {
+    background: #16181c;
+    border-color: #3a3e44;
+    color: #e8e9eb;
+  }
+  button.secondary {
+    background: #1f2226;
+  }
+}
