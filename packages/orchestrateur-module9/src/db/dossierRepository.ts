@@ -89,3 +89,11 @@ export function conventionValeur(contexte: ContexteDossier, cle: string): string
   const trouve = contexte.conventions.find((c) => c.cle === cle);
   return typeof trouve?.valeur === 'string' ? trouve.valeur : undefined;
 }
+
+// Symétrique de conventionValeur, pour les conventions dont la valeur est une
+// liste de comptes (ex: comptes_vente_service) plutôt qu'une chaîne unique.
+export function conventionListe(contexte: ContexteDossier, cle: string): string[] | undefined {
+  const trouve = contexte.conventions.find((c) => c.cle === cle);
+  if (!Array.isArray(trouve?.valeur)) return undefined;
+  return trouve.valeur.every((v) => typeof v === 'string') ? (trouve.valeur as string[]) : undefined;
+}

@@ -48,7 +48,8 @@ beforeAll(async () => {
     await client.query(
       `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut, source) VALUES
        ($1, 'compte_tva_due_autoliquidee', '"4454"', 'confirmed', 'onboarding'),
-       ($1, 'compte_tva_deductible_autoliquidee', '"445664"', 'confirmed', 'onboarding')`,
+       ($1, 'compte_tva_deductible_autoliquidee', '"445664"', 'confirmed', 'onboarding'),
+       ($1, 'comptes_vente_service', '["706"]', 'confirmed', 'onboarding')`,
       [DOSSIER_ID]
     );
     await client.query(
@@ -110,9 +111,10 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
       periodeFin: '2025-01-31',
       client,
       comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
-      configExigibilite: { comptesVenteService: ['706'], comptesChargeService: ['611'] },
-      configCarburant: { comptesCarburant: ['6061'] },
-      comptesEquipement: ['6063'],
+      comptesVenteServiceOverride: ['706'],
+      comptesChargeServiceOverride: ['611'],
+      comptesCarburantOverride: ['6061'],
+      comptesEquipementOverride: ['6063'],
     });
 
     expect(resultat.statut).toBe('calcule');
@@ -140,9 +142,10 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
       periodeFin: '2025-02-28',
       client,
       comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
-      configExigibilite: { comptesVenteService: ['706'], comptesChargeService: ['611'] },
-      configCarburant: { comptesCarburant: ['6061'] },
-      comptesEquipement: ['6063'],
+      comptesVenteServiceOverride: ['706'],
+      comptesChargeServiceOverride: ['611'],
+      comptesCarburantOverride: ['6061'],
+      comptesEquipementOverride: ['6063'],
     });
 
     expect(resultat.statut).toBe('calcule');
@@ -169,6 +172,74 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
     } finally {
       clientVerif.release();
     }
+  });
+});
+
+describe('executerCycleTva — dérivation des comptes depuis conventions_dossier (sans override)', () => {
+  it('exclut la vente non lettrée car comptes_vente_service=["706"] est bien lu en base, pas silencieusement vide', async () => {
+    // Même pièce ROUSSEAU, mais lettrage à vide (facture non payée) — si
+    // comptes_vente_service n'était PAS correctement dérivé de la base (donc
+    // vide par repli), la ligne serait classée "bien" et resterait exigible
+    // malgré le non-lettrage. Ce test échouerait silencieusement faux si la
+    // dérivation était cassée : c'est exactement ce qu'on veut détecter.
+    const comptesTva = loadFixture('ledger_accounts_tva.json');
+    const comptesCandidats = loadFixture('ledger_accounts_candidats_rousseau.json');
+    const pieceRousseau = loadFixture('piece_rousseau_lines.json');
+    const lignesTvaFixture = loadFixture('ledger_entry_lines_tva_rousseau_only.json');
+    const lettrageReel = loadFixture('lettering_rousseau_lettree.json') as {
+      items: Array<Record<string, unknown>>;
+    };
+    const lettrageNonLettre = {
+      items: [
+        {
+          ...lettrageReel.items[0],
+          lettered_ledger_entry_lines: { ids: [], url: 'x' }, // non lettrée cette fois
+        },
+      ],
+      has_more: false,
+      next_cursor: null,
+    };
+
+    const fetchImpl = (async (rawUrl: string) => {
+      const url = new URL(rawUrl);
+      const filtre = url.searchParams.get('filter') ?? '';
+      if (url.pathname === '/api/external/v2/ledger_accounts') {
+        if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
+        if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
+      }
+      if (url.pathname === '/api/external/v2/ledger_entry_lines') {
+        if (filtre.includes('"field":"ledger_account_id"'))
+          return new Response(JSON.stringify(lignesTvaFixture), { status: 200 });
+        if (filtre.includes('"field":"id"'))
+          return new Response(JSON.stringify(lettrageNonLettre), { status: 200 });
+      }
+      if (/\/ledger_entries\/\d+\/ledger_entry_lines/.test(url.pathname)) {
+        return new Response(JSON.stringify(pieceRousseau), { status: 200 });
+      }
+      throw new Error(`URL non routée : ${rawUrl}`);
+    }) as unknown as typeof fetch;
+
+    const client = new PennylaneClient({ token: 'x', fetchImpl });
+
+    const resultat = await executerCycleTva(pool, {
+      cabinetId: CABINET_ID,
+      dossierId: DOSSIER_ID,
+      periodeDebut: '2025-03-01',
+      periodeFin: '2025-03-31',
+      client,
+      comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
+      // Aucun override : comptesVenteService doit venir de conventions_dossier
+      // (seedée à ["706"] dans le beforeAll de ce fichier).
+    });
+
+    expect(resultat.statut).toBe('calcule');
+    if (resultat.statut !== 'calcule') throw new Error('assertion');
+
+    // Si la dérivation avait échoué (liste vide par repli), la ligne serait
+    // classée "bien" et resterait dans collectee_20 malgré le non-lettrage.
+    expect(resultat.resultat.lignes).toEqual([]);
+    expect(resultat.resultat.ecrituresExclues).toHaveLength(1);
+    expect(resultat.resultat.ecrituresExclues[0]?.motif).toContain('pas encore exigible');
   });
 });
 
@@ -235,9 +306,10 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
       periodeFin: '2025-01-31',
       client,
       comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
-      configExigibilite: { comptesVenteService: ['706'], comptesChargeService: ['611'] },
-      configCarburant: { comptesCarburant: ['6061'] },
-      comptesEquipement: ['6063'],
+      comptesVenteServiceOverride: ['706'],
+      comptesChargeServiceOverride: ['611'],
+      comptesCarburantOverride: ['6061'],
+      comptesEquipementOverride: ['6063'],
     });
 
     expect(resultat.statut).toBe('bloque');
