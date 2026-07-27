@@ -243,12 +243,14 @@ describe('enregistrerCalcul et validerCalcul', () => {
       enregistrerCalcul(client, dossierId, '2025-06-01', '2025-06-30', second)
     );
 
-    // Un seul calcul pour cette période, avec les valeurs de la relance, pas
-    // celles du premier passage.
+    // Même ligne mise à jour en place (pas de DELETE possible sur
+    // calculs_tva) : même id, mais valeurs de la relance.
+    expect(secondCalculId).toBe(premierCalculId);
+
     const calculs = await avecClient((client) => listerCalculs(client, dossierId));
-    const surCettePeriode = calculs.filter((c) => c.id === premierCalculId || c.id === secondCalculId);
+    const surCettePeriode = calculs.filter((c) => c.id === premierCalculId);
     expect(surCettePeriode).toHaveLength(1);
-    expect(surCettePeriode[0]).toMatchObject({ id: secondCalculId, tvaNette: 250 });
+    expect(surCettePeriode[0]).toMatchObject({ tvaNette: 250 });
   });
 
   it('refuse de relancer un cycle sur une période déjà validée plutôt que de laisser remonter une erreur de contrainte brute', async () => {
