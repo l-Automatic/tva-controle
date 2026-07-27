@@ -1,4 +1,4 @@
-import type { Anomalie, Proposition } from './types';
+import type { Anomalie, AuditEvenement, Proposition } from './types';
 
 const BASE_URL = '/api';
 
@@ -96,8 +96,52 @@ export function confirmerConvention(
   });
 }
 
-export function rejeterConvention(cabinetId: string, id: string): Promise<void> {
-  return request<void>(`/conventions/${id}/rejeter`, cabinetId, { method: 'POST' });
+export function rejeterConvention(cabinetId: string, id: string, utilisateurId: string): Promise<void> {
+  return request<void>(`/conventions/${id}/rejeter`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
+  });
+}
+
+export function fetchAudit(
+  cabinetId: string,
+  dossierId: string,
+  filtres: { typeEvenement?: string; acteur?: string } = {}
+): Promise<AuditEvenement[]> {
+  const params = new URLSearchParams();
+  if (filtres.typeEvenement) params.set('typeEvenement', filtres.typeEvenement);
+  if (filtres.acteur) params.set('acteur', filtres.acteur);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return request<AuditEvenement[]>(`/dossiers/${dossierId}/audit${query}`, cabinetId);
+}
+
+// Un lien <a href> classique ne peut pas envoyer le header x-cabinet-id
+// (nécessaire pour le contexte RLS côté serveur) — on récupère donc le CSV
+// via fetch, puis on déclenche le téléchargement navigateur nous-mêmes via
+// une URL objet temporaire.
+export async function telechargerExportAudit(
+  cabinetId: string,
+  dossierId: string,
+  filtres: { typeEvenement?: string; acteur?: string } = {}
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (filtres.typeEvenement) params.set('typeEvenement', filtres.typeEvenement);
+  if (filtres.acteur) params.set('acteur', filtres.acteur);
+  const query = params.toString() ? `?${params.toString()}` : '';
+
+  const response = await fetch(`${BASE_URL}/dossiers/${dossierId}/audit/export${query}`, {
+    headers: { 'x-cabinet-id': cabinetId },
+  });
+  if (!response.ok) {
+    throw new ApiError(response.statusText, response.status);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement('a');
+  lien.href = url;
+  lien.download = `audit-${dossierId}.csv`;
+  lien.click();
+  URL.revokeObjectURL(url);
 }
 
 export function fetchTauxHistorique(
@@ -120,6 +164,9 @@ export function confirmerTauxHistorique(
   });
 }
 
-export function rejeterTauxHistorique(cabinetId: string, id: string): Promise<void> {
-  return request<void>(`/taux-historique/${id}/rejeter`, cabinetId, { method: 'POST' });
+export function rejeterTauxHistorique(cabinetId: string, id: string, utilisateurId: string): Promise<void> {
+  return request<void>(`/taux-historique/${id}/rejeter`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
+  });
 }

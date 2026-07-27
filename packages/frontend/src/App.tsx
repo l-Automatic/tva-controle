@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AnomaliesPanel } from './components/AnomaliesPanel';
+import { AuditPanel } from './components/AuditPanel';
 import { PropositionsPanel } from './components/PropositionsPanel';
 import {
   confirmerConvention,
@@ -109,6 +110,7 @@ export function App() {
             rejeter={rejeterTauxHistorique}
             renderLabel={libelleTaux}
           />
+          <AuditPanel cabinetId={cabinetId} dossierId={dossierId} />
         </main>
       )}
     </div>

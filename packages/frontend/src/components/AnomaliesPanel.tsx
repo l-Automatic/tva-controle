@@ -25,6 +25,19 @@ const LIBELLE_GRAVITE: Record<GraviteAnomalie, string> = {
   info: 'Info',
 };
 
+function detailsLisibles(details: unknown): string | null {
+  if (!details || typeof details !== 'object') return null;
+  const d = details as Record<string, unknown>;
+  // Cas concret : anomalies de groupe de lettrage (paiement_partiel_a_verifier)
+  // — les autres pièces du groupe sont la seule info qui permette d'aller
+  // vérifier manuellement dans Pennylane, donc on les met en avant plutôt
+  // que de les enterrer dans un bloc JSON générique.
+  if (Array.isArray(d.groupeIds)) {
+    return `Autres pièces du même groupe de lettrage : ${d.groupeIds.join(', ')}`;
+  }
+  return JSON.stringify(details, null, 2);
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -71,6 +84,7 @@ function AnomalieRow({
   }
 
   const estOuverte = anomalie.statut === 'ouvert';
+  const details = detailsLisibles(anomalie.details);
 
   return (
     <li className={`card anomalie gravite-${anomalie.gravite}`}>
@@ -81,9 +95,11 @@ function AnomalieRow({
         <span className="periode">{anomalie.periode}</span>
       </div>
       <p className="description">{anomalie.description}</p>
+      {anomalie.compte && <p className="reference">Compte : {anomalie.compte}</p>}
       {anomalie.referencePiece && (
         <p className="reference">Pièce : {anomalie.referencePiece}</p>
       )}
+      {details && <p className="reference details">{details}</p>}
 
       {estOuverte && (
         <div className="actions">

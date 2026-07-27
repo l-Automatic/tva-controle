@@ -60,7 +60,8 @@ body {
   .app-main {
     grid-template-columns: 1fr 1fr;
   }
-  .app-main .panel:first-child {
+  .app-main .panel:first-child,
+  .app-main .panel:last-child {
     grid-column: 1 / -1;
   }
 }
@@ -119,10 +120,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
-input[type='text'] {
+input[type='text'],
+select {
   border: 1px solid #d0d3d8;
   border-radius: 6px;
   padding: 0.4rem 0.5rem;
+  font-size: 0.85rem;
+  background: #fff;
+  color: inherit;
 }
 
 .card-list {
@@ -153,6 +158,15 @@ input[type='text'] {
 .card.proposition {
   border-left-color: #2f6fed;
 }
+.card.acteur-utilisateur {
+  border-left-color: #2f6fed;
+}
+.card.acteur-systeme {
+  border-left-color: #7a8087;
+}
+.card.acteur-agent {
+  border-left-color: #7a3fd6;
+}
 
 .card-header {
   display: flex;
@@ -164,9 +178,15 @@ input[type='text'] {
   margin-bottom: 0.35rem;
 }
 
-.type-anomalie {
+.type-anomalie,
+.type-evenement {
   font-weight: 600;
   color: #1a1d21;
+}
+
+.module-source {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
 }
 
 .badge {
@@ -209,6 +229,19 @@ input[type='text'] {
   color: #4a4f55;
 }
 
+.acteur-badge-utilisateur {
+  background: #dde6f9;
+  color: #2f4fa3;
+}
+.acteur-badge-systeme {
+  background: #e7e8ea;
+  color: #4a4f55;
+}
+.acteur-badge-agent {
+  background: #ece0fa;
+  color: #6a2fb0;
+}
+
 .description,
 .label {
   margin: 0.3rem 0;
@@ -244,6 +277,21 @@ input[type='text'] {
   font-size: 0.85rem;
 }
 
+.details {
+  font-size: 0.78rem;
+}
+
+pre.details {
+  background: #f5f6f8;
+  border: 1px solid #e0e2e6;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin: 0.3rem 0 0;
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background: #16181c;
@@ -255,12 +303,17 @@ input[type='text'] {
     background: #1f2226;
     border-color: #2c2f34;
   }
-  input[type='text'] {
+  input[type='text'],
+  select {
     background: #16181c;
     border-color: #3a3e44;
     color: #e8e9eb;
   }
   button.secondary {
     background: #1f2226;
+  }
+  pre.details {
+    background: #16181c;
+    border-color: #2c2f34;
   }
 }

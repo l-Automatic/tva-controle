@@ -8,6 +8,7 @@ export interface Anomalie {
   typeAnomalie: string;
   gravite: GraviteAnomalie;
   referencePiece: string | null;
+  compte: string | null;
   description: string;
   details: unknown;
   statut: StatutAnomalie;
@@ -30,4 +31,18 @@ export interface Proposition {
 
 export interface ApiErrorBody {
   erreur: string;
+}
+
+export type ActeurAudit = 'agent' | 'utilisateur' | 'systeme';
+
+export interface AuditEvenement {
+  id: string;
+  dossierId: string | null;
+  typeEvenement: string;
+  moduleSource: string;
+  acteur: ActeurAudit;
+  acteurUtilisateurId: string | null;
+  acteurNom: string | null;
+  details: unknown;
+  horodatage: string;
 }

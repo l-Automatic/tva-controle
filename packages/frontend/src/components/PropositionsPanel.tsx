@@ -9,7 +9,7 @@ interface PropositionsPanelProps {
   utilisateurId: string;
   fetchPropositions: (cabinetId: string, dossierId: string, statut?: string) => Promise<Proposition[]>;
   confirmer: (cabinetId: string, id: string, utilisateurId: string) => Promise<void>;
-  rejeter: (cabinetId: string, id: string) => Promise<void>;
+  rejeter: (cabinetId: string, id: string, utilisateurId: string) => Promise<void>;
   renderLabel: (proposition: Proposition) => string;
 }
 
@@ -56,7 +56,7 @@ function PropositionRow({
     setSubmitting('rejeter');
     setError(null);
     try {
-      await rejeter(cabinetId, proposition.id);
+      await rejeter(cabinetId, proposition.id, utilisateurId);
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec du rejet');
