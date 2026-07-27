@@ -13,19 +13,38 @@ export interface CompteResolu {
 // Résout une liste de numéros de compte (ex: ["44566", "445711"]) vers leurs id
 // internes Pennylane. Nécessaire car aucun autre endpoint ne filtre par numéro
 // de compte directement — confirmé sur trial_balance ET ledger_entry_lines.
+//
+// Paginé — bug réel trouvé en conditions réelles : sans pagination, une
+// requête avec beaucoup de comptes candidats peut silencieusement omettre
+// certains résultats au-delà de la première page. Sur le cas de test
+// (Rousseau, 7 comptes), ça ne se voyait jamais ; sur un vrai dossier avec
+// davantage de comptes actifs, ça produirait une résolution incomplète sans
+// aucune erreur visible — exactement le genre de bug qu'on ne veut jamais
+// laisser passer silencieusement.
 export async function resolveLedgerAccounts(
   client: PennylaneClient,
   numeros: string[]
 ): Promise<Map<string, CompteResolu>> {
-  const response = await client.get<PennylaneLedgerAccountsResponse>(LEDGER_ACCOUNTS_PATH, {
-    filter: JSON.stringify([{ field: 'number', operator: 'in', value: numeros }]),
-    use_2026_api_changes: true,
-  });
-
   const resultat = new Map<string, CompteResolu>();
-  for (const item of response.items) {
-    resultat.set(item.number, mapCompte(item));
+  if (numeros.length === 0) {
+    return resultat;
   }
+
+  let cursor: string | undefined;
+  do {
+    const response = await client.get<PennylaneLedgerAccountsResponse>(LEDGER_ACCOUNTS_PATH, {
+      filter: JSON.stringify([{ field: 'number', operator: 'in', value: numeros }]),
+      use_2026_api_changes: true,
+      limit: 100,
+      cursor,
+    });
+
+    for (const item of response.items) {
+      resultat.set(item.number, mapCompte(item));
+    }
+    cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
   return resultat;
 }
 
@@ -72,6 +91,14 @@ export async function decouvrirComptesParPrefixe(
 // découverts dynamiquement en décomposant une pièce (ex: "411ROUSSEAU" trouvé
 // dans fetchLignesDePiece, dont on ne connaît que le numéro et l'id, pas le
 // libellé). Batchable : un seul appel pour plusieurs comptes à la fois.
+//
+// Paginé — c'est ici, précisément, qu'un vrai bug a été trouvé en conditions
+// réelles (dossier électricien) : sans pagination, sur ~30 pièces réelles,
+// certains comptes clients (ex: 411GARNIER) tombaient hors de la première
+// page. Le compte manquant était alors silencieusement traité comme "non
+// lettrable" (absent de la map), la ligne finissait dans autresLignes au
+// lieu de lignesTiers, et la base HT du calcul se retrouvait faussée —
+// donnant des taux implicites de 100% sur des écritures pourtant correctes.
 export async function resolveLedgerAccountsByIds(
   client: PennylaneClient,
   ids: number[]
@@ -81,13 +108,20 @@ export async function resolveLedgerAccountsByIds(
     return resultat;
   }
 
-  const response = await client.get<PennylaneLedgerAccountsResponse>(LEDGER_ACCOUNTS_PATH, {
-    filter: JSON.stringify([{ field: 'id', operator: 'in', value: ids }]),
-    use_2026_api_changes: true,
-  });
+  let cursor: string | undefined;
+  do {
+    const response = await client.get<PennylaneLedgerAccountsResponse>(LEDGER_ACCOUNTS_PATH, {
+      filter: JSON.stringify([{ field: 'id', operator: 'in', value: ids }]),
+      use_2026_api_changes: true,
+      limit: 100,
+      cursor,
+    });
 
-  for (const item of response.items) {
-    resultat.set(item.id, mapCompte(item));
-  }
+    for (const item of response.items) {
+      resultat.set(item.id, mapCompte(item));
+    }
+    cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
   return resultat;
 }

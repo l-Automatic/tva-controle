@@ -219,6 +219,47 @@ describe('resolveLedgerAccountsByIds — libellé réel du compte client Roussea
     expect(comptes.size).toBe(0);
     expect(appelE).toBe(false);
   });
+
+  it('suit la pagination — bug réel trouvé sur le dossier électricien : un compte sur la 2e page était silencieusement perdu sans ça', async () => {
+    // Rousseau sur la page 1, GARNIER (vraie donnée du dossier réel, id et
+    // libellé confirmés en conditions réelles) sur la page 2 — reproduit
+    // exactement le scénario qui a corrompu le calcul en production : sans
+    // pagination, GARNIER n'apparaissait jamais dans la map retournée.
+    const page1 = {
+      total_pages: null, current_page: null, per_page: null, total_items: null,
+      items: [
+        { id: 12028930322432, number: '411ROUSSEAU', label: 'CLIENT ROUSSEAU', vat_rate: 'any', country_alpha2: 'any', enabled: true, created_at: 'x', updated_at: 'x', type: 'customer', letterable: true },
+      ],
+      has_more: true,
+      next_cursor: 'cursor-page-2',
+    };
+    const page2 = {
+      total_pages: null, current_page: null, per_page: null, total_items: null,
+      items: [
+        { id: 12028930301952, number: '411GARNIER', label: 'CLIENT GARNIER', vat_rate: 'any', country_alpha2: 'any', enabled: true, created_at: 'x', updated_at: 'x', type: 'customer', letterable: true },
+      ],
+      has_more: false,
+      next_cursor: null,
+    };
+
+    let appel = 0;
+    const fetchImpl = (async (url: string) => {
+      appel += 1;
+      if (appel === 1) {
+        expect(url).not.toContain('cursor=');
+        return new Response(JSON.stringify(page1), { status: 200 });
+      }
+      expect(url).toContain('cursor=cursor-page-2');
+      return new Response(JSON.stringify(page2), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const client = new PennylaneClient({ token: 'x', fetchImpl });
+    const comptes = await resolveLedgerAccountsByIds(client, [12028930322432, 12028930301952]);
+
+    expect(appel).toBe(2);
+    expect(comptes.size).toBe(2);
+    expect(comptes.get(12028930301952)).toMatchObject({ numero: '411GARNIER', lettrable: true });
+  });
 });
 
 describe('decouvrirComptesParPrefixe', () => {
