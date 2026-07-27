@@ -25,6 +25,12 @@ export async function listerAnomalies(
   if (filtres.statut) {
     params.push(filtres.statut);
     conditions.push(`statut = $${params.length}`);
+  } else {
+    // 'obsolete' est un statut de bookkeeping interne (anomalie remplacée
+    // par une relance de cycle, cf. writeRepository.enregistrerAnomalies) :
+    // jamais destiné à l'affichage humain, donc exclu par défaut. Reste
+    // consultable explicitement via filtres.statut = 'obsolete' au besoin.
+    conditions.push(`statut != 'obsolete'`);
   }
   if (filtres.periode) {
     params.push(filtres.periode);
