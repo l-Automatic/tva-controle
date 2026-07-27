@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { AnomaliesPanel } from './components/AnomaliesPanel';
 import { AuditPanel } from './components/AuditPanel';
+import { ConventionsComptesPanel } from './components/ConventionsComptesPanel';
+import { CycleForm } from './components/CycleForm';
 import { PropositionsPanel } from './components/PropositionsPanel';
 import {
   confirmerConvention,
@@ -10,7 +12,7 @@ import {
   rejeterConvention,
   rejeterTauxHistorique,
 } from './api';
-import type { Proposition } from './types';
+import { CLES_CONVENTIONS_COMPTES, type CleConventionCompte, type Proposition } from './types';
 
 const STORAGE_KEY = 'module6.identite';
 
@@ -36,6 +38,18 @@ function libelleConvention(proposition: Proposition): string {
 
 function libelleTaux(proposition: Proposition): string {
   return `Compte ${proposition.compteProduitOuCharge ?? '—'} — taux habituel ${proposition.tauxHabituel ?? '—'}%`;
+}
+
+// Les 4 conventions de comptes ont leur propre panneau dédié
+// (ConventionsComptesPanel) — on les exclut ici pour ne pas les afficher en
+// double dans le panneau générique "Conventions".
+async function fetchConventionsAutoliquidation(
+  cabinetId: string,
+  dossierId: string,
+  statut?: string
+): Promise<Proposition[]> {
+  const toutes = await fetchConventions(cabinetId, dossierId, statut);
+  return toutes.filter((p) => !CLES_CONVENTIONS_COMPTES.includes(p.cle as CleConventionCompte));
 }
 
 export function App() {
@@ -89,13 +103,15 @@ export function App() {
         <p className="empty">Renseignez le cabinet, le dossier et l'utilisateur pour commencer.</p>
       ) : (
         <main className="app-main">
+          <CycleForm cabinetId={cabinetId} dossierId={dossierId} />
           <AnomaliesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+          <ConventionsComptesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
           <PropositionsPanel
             title="Conventions"
             cabinetId={cabinetId}
             dossierId={dossierId}
             utilisateurId={utilisateurId}
-            fetchPropositions={fetchConventions}
+            fetchPropositions={fetchConventionsAutoliquidation}
             confirmer={confirmerConvention}
             rejeter={rejeterConvention}
             renderLabel={libelleConvention}

@@ -83,7 +83,7 @@ export function AuditPanel({ cabinetId, dossierId }: AuditPanelProps) {
   }
 
   return (
-    <section className="panel">
+    <section className="panel panel-full">
       <div className="panel-header">
         <h2>Audit ({evenements.length})</h2>
         <select value={filtreActeur} onChange={(e) => setFiltreActeur(e.target.value as '' | ActeurAudit)}>

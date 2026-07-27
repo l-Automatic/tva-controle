@@ -1,4 +1,4 @@
-import type { Anomalie, AuditEvenement, Proposition } from './types';
+import type { Anomalie, AuditEvenement, Proposition, ResultatCycle } from './types';
 
 const BASE_URL = '/api';
 
@@ -85,6 +85,19 @@ export function fetchConventions(
   return request<Proposition[]>(`/dossiers/${dossierId}/conventions${query}`, cabinetId);
 }
 
+export function ajouterConvention(
+  cabinetId: string,
+  dossierId: string,
+  utilisateurId: string,
+  cle: string,
+  valeur: unknown
+): Promise<{ id: string }> {
+  return request<{ id: string }>(`/dossiers/${dossierId}/conventions`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, cle, valeur }),
+  });
+}
+
 export function confirmerConvention(
   cabinetId: string,
   id: string,
@@ -168,5 +181,28 @@ export function rejeterTauxHistorique(cabinetId: string, id: string, utilisateur
   return request<void>(`/taux-historique/${id}/rejeter`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId }),
+  });
+}
+
+export interface ParametresCycle {
+  periodeDebut: string;
+  periodeFin: string;
+  pennylaneToken: string;
+  comptesVenteService?: string[];
+  comptesChargeService?: string[];
+  comptesEquipement?: string[];
+  comptesCarburant?: string[];
+}
+
+// 409 (ApiError.status) si un calcul déjà validé/déclaré existe sur cette
+// période — géré par l'appelant, pas ici (message déjà porté par ApiError).
+export function lancerCycle(
+  cabinetId: string,
+  dossierId: string,
+  parametres: ParametresCycle
+): Promise<ResultatCycle> {
+  return request<ResultatCycle>(`/dossiers/${dossierId}/cycles`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(parametres),
   });
 }

@@ -151,7 +151,7 @@ export function AnomaliesPanel({ cabinetId, dossierId, utilisateurId }: Anomalie
   const nbOuvertes = anomalies.filter((a) => a.statut === 'ouvert').length;
 
   return (
-    <section className="panel">
+    <section className="panel panel-full">
       <div className="panel-header">
         <h2>Anomalies ({nbOuvertes} ouverte{nbOuvertes === 1 ? '' : 's'})</h2>
         <label className="toggle">
