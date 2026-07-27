@@ -13,6 +13,7 @@ export {
   resoudreAnomalie,
   justifierAnomalie,
   enregistrerPropositionsConventions,
+  ajouterConventionManuelle,
   confirmerConvention,
   rejeterConvention,
   enregistrerPropositionsTaux,

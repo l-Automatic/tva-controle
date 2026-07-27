@@ -6,6 +6,7 @@ import {
   executerCycleTva,
   resoudreAnomalie,
   justifierAnomalie,
+  ajouterConventionManuelle,
   confirmerConvention,
   rejeterConvention,
   confirmerTauxHistorique,
@@ -110,6 +111,25 @@ export function buildApp(pool: Pool): FastifyInstance {
       return avecContexteCabinet(pool, cabinetId, (client) =>
         listerConventions(client, request.params.dossierId, request.query.statut)
       );
+    }
+  );
+
+  // Saisie manuelle d'une convention (typiquement une des 4 conventions de
+  // comptes non couvertes par la découverte automatique du Module 3 :
+  // comptes_vente_service, comptes_charge_service, comptes_equipement,
+  // comptes_carburant). Reste 'candidate' — voir ajouterConventionManuelle.
+  app.post<{ Params: { dossierId: string }; Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
+    '/dossiers/:dossierId/conventions',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const { utilisateurId, cle, valeur } = request.body;
+      if (!utilisateurId || !cle || valeur === undefined) {
+        return reply.code(400).send({ erreur: 'utilisateurId, cle et valeur sont requis' });
+      }
+      const id = await avecContexteCabinet(pool, cabinetId, (client) =>
+        ajouterConventionManuelle(client, request.params.dossierId, utilisateurId, cle, valeur)
+      );
+      reply.code(201).send({ id });
     }
   );
 

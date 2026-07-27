@@ -6,6 +6,7 @@ import {
   enregistrerAnomalies,
   enregistrerEvenementAudit,
   enregistrerPropositionsConventions,
+  ajouterConventionManuelle,
   enregistrerPropositionsTaux,
   enregistrerCalcul,
   validerCalcul,
@@ -165,6 +166,53 @@ describe('enregistrerPropositionsConventions et enregistrerPropositionsTaux', ()
 
     expect(conventions.some((c) => c.cle === 'compte_tva_due_autoliquidee')).toBe(true);
     expect(taux.some((t) => t.compteProduitOuCharge === '445712' && t.tauxHabituel === 10)).toBe(true);
+  });
+});
+
+describe('ajouterConventionManuelle', () => {
+  it('insère une convention en candidate avec source saisie_manuelle et trace l’audit', async () => {
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U3', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u3-${Date.now()}@test.fr`]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+
+    const conventionId = await avecClient((client) =>
+      ajouterConventionManuelle(client, dossierId, utilisateurId, 'comptes_vente_service', ['706'])
+    );
+
+    const conventions = await avecClient((client) => listerConventions(client, dossierId, 'candidate'));
+    const creee = conventions.find((c) => c.id === conventionId);
+    expect(creee).toMatchObject({ cle: 'comptes_vente_service', source: 'saisie_manuelle', valeur: ['706'] });
+
+    const audit = await avecClient((client) =>
+      client.query(
+        `SELECT * FROM audit_log WHERE type_evenement = 'convention_ajoutee_manuellement' AND details->>'conventionId' = $1`,
+        [conventionId]
+      )
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0].acteur).toBe('utilisateur');
+    expect(audit.rows[0].acteur_utilisateur_id).toBe(utilisateurId);
+  });
+
+  it('une convention ajoutée manuellement reste candidate tant qu’elle n’est pas confirmée explicitement', async () => {
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U4', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u4-${Date.now()}@test.fr`]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+
+    const conventionId = await avecClient((client) =>
+      ajouterConventionManuelle(client, dossierId, utilisateurId, 'comptes_carburant', ['6061'])
+    );
+
+    const confirmees = await avecClient((client) => listerConventions(client, dossierId, 'confirmed'));
+    expect(confirmees.some((c) => c.id === conventionId)).toBe(false);
   });
 });
 

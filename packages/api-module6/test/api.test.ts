@@ -199,6 +199,63 @@ describe('API Module 6 — cycle de vie d’une convention candidate', () => {
   });
 });
 
+describe('API Module 6 — ajout manuel d’une convention', () => {
+  it('refuse sans cle ni valeur', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/dossiers/${dossierId}/conventions`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('crée une convention candidate via l’API, visible ensuite dans la liste', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/dossiers/${dossierId}/conventions`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, cle: 'comptes_equipement', valeur: ['6063'] },
+    });
+    expect(res.statusCode).toBe(201);
+    const { id } = res.json();
+    expect(typeof id).toBe('string');
+
+    const resListe = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/conventions?statut=candidate`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    const creee = resListe.json().find((c: { id: string }) => c.id === id);
+    expect(creee).toMatchObject({ cle: 'comptes_equipement', valeur: ['6063'], source: 'saisie_manuelle' });
+  });
+
+  it('la nouvelle convention peut ensuite être confirmée comme n’importe quelle candidate', async () => {
+    const resCreation = await app.inject({
+      method: 'POST',
+      url: `/dossiers/${dossierId}/conventions`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, cle: 'comptes_charge_service', valeur: ['611'] },
+    });
+    const { id } = resCreation.json();
+
+    const resConfirmer = await app.inject({
+      method: 'POST',
+      url: `/conventions/${id}/confirmer`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId },
+    });
+    expect(resConfirmer.statusCode).toBe(204);
+
+    const resListe = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/conventions?statut=confirmed`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(resListe.json().some((c: { id: string }) => c.id === id)).toBe(true);
+  });
+});
+
 describe('API Module 6 — consultation et export de l’audit (Module 10)', () => {
   // Ce fichier partage un seul dossierId entre tous les describe — les
   // actions des tests précédents (résolution d'anomalie, confirmations de
