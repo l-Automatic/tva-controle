@@ -57,6 +57,17 @@ export async function enregistrerAnomalies(
   periode: string, // YYYY-MM-DD, premier jour de la période contrôlée
   anomalies: Anomalie[]
 ): Promise<{ id: string; type: string; gravite: string }[]> {
+  // Déduplication : sans ce nettoyage, relancer un cycle sur une période déjà
+  // contrôlée réinsère un second lot d'anomalies par-dessus le premier au
+  // lieu de le remplacer (pas d'échec visible, juste une accumulation
+  // silencieuse). Seules les anomalies encore 'ouvert' sont purgées : une
+  // anomalie déjà 'resolu'/'justifie' est une décision humaine, elle reste
+  // en base comme trace même si le contrôle ne la redétecte plus.
+  await client.query(`DELETE FROM anomalies WHERE dossier_id = $1 AND periode = $2 AND statut = 'ouvert'`, [
+    dossierId,
+    periode,
+  ]);
+
   const inserees: { id: string; type: string; gravite: string }[] = [];
   for (const a of anomalies) {
     const res = await client.query<{ id: string }>(
@@ -278,6 +289,21 @@ export async function rejeterTauxHistorique(
 // CALCUL TVA
 // ============================================================================
 
+// Levée quand un cycle est relancé sur une période dont le calcul a déjà
+// été 'valide' ou 'declare'. Le trigger d'immuabilité (002) ne protège que
+// les UPDATE sur calculs_tva/calculs_tva_lignes, pas les DELETE : c'est donc
+// à cette fonction de vérifier le statut avant toute suppression, plutôt que
+// de compter sur la DB pour empêcher d'effacer un calcul déjà validé.
+export class CalculDejaValideError extends Error {
+  constructor(statut: string) {
+    super(
+      `Un calcul TVA existe déjà pour ce dossier sur cette période (statut '${statut}'). ` +
+        `Impossible de relancer un cycle sans le repasser en brouillon au préalable.`
+    );
+    this.name = 'CalculDejaValideError';
+  }
+}
+
 export async function enregistrerCalcul(
   client: PoolClient,
   dossierId: string,
@@ -285,6 +311,23 @@ export async function enregistrerCalcul(
   periodeFin: string,
   resultat: ResultatCalculTva
 ): Promise<string> {
+  const existant = await client.query<{ id: string; statut: string }>(
+    `SELECT id, statut FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND periode_fin = $3`,
+    [dossierId, periodeDebut, periodeFin]
+  );
+  if (existant.rows.length > 0) {
+    const { id, statut } = existant.rows[0]!;
+    if (statut !== 'brouillon') {
+      throw new CalculDejaValideError(statut);
+    }
+    // Brouillon existant : on le remplace proprement. Les lignes doivent être
+    // supprimées avant le header (le trigger de protection des lignes
+    // vérifie le statut du header parent, qui doit encore exister à ce
+    // moment-là pour renvoyer 'brouillon' et laisser passer le DELETE).
+    await client.query(`DELETE FROM calculs_tva_lignes WHERE calcul_id = $1`, [id]);
+    await client.query(`DELETE FROM calculs_tva WHERE id = $1`, [id]);
+  }
+
   const resCalcul = await client.query<{ id: string }>(
     `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, statut, tva_nette, sens)
      VALUES ($1, $2, $3, 'brouillon', $4, $5)
