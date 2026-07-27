@@ -3,6 +3,7 @@ import { TAUX_NOMINAL_PAR_DEFAUT } from './types.js';
 import { verifierCoherenceTauxCollecte } from './coherenceTaux.js';
 import { verifierAutoliquidationEquilibree } from './autoliquidation.js';
 import { verifierAvoirsCollecte } from './avoirs.js';
+import { detecterComptesTvaNonReconnus } from './comptesNonReconnus.js';
 export {
   determinerExigibiliteTva,
   type ConfigExigibiliteTva,
@@ -18,6 +19,7 @@ export {
   type ConfigCarburantVehicule,
   type StatutCarburant,
 } from './carburant.js';
+export { detecterComptesTvaNonReconnus, type ConfigComptesTva } from './comptesNonReconnus.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
@@ -51,5 +53,13 @@ export function executerPreControles(
       config.compteAutoliquidationDeductible
     ),
     ...verifierAvoirsCollecte(ecritures),
+    ...detecterComptesTvaNonReconnus(ecritures, {
+      ...(config.compteAutoliquidationDue !== undefined
+        ? { compteAutoliquidationDue: config.compteAutoliquidationDue }
+        : {}),
+      ...(config.compteAutoliquidationDeductible !== undefined
+        ? { compteAutoliquidationDeductible: config.compteAutoliquidationDeductible }
+        : {}),
+    }),
   ];
 }
