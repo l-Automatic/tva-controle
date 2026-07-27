@@ -17,6 +17,7 @@ import {
   listerCalculs,
   listerAuditLog,
   listerAuditLogPourExport,
+  CalculDejaValideError,
   type AuditEvenementDb,
 } from '@tva-controle/orchestrateur-module9';
 
@@ -248,21 +249,28 @@ export function buildApp(pool: Pool): FastifyInstance {
 
     const pennylaneClient = new PennylaneClient({ token: pennylaneToken });
 
-    const resultat = await executerCycleTva(pool, {
-      cabinetId,
-      dossierId: request.params.dossierId,
-      periodeDebut,
-      periodeFin,
-      client: pennylaneClient,
-      ...(overrides.comptesVenteService ? { comptesVenteServiceOverride: overrides.comptesVenteService } : {}),
-      ...(overrides.comptesChargeService
-        ? { comptesChargeServiceOverride: overrides.comptesChargeService }
-        : {}),
-      ...(overrides.comptesEquipement ? { comptesEquipementOverride: overrides.comptesEquipement } : {}),
-      ...(overrides.comptesCarburant ? { comptesCarburantOverride: overrides.comptesCarburant } : {}),
-    });
+    try {
+      const resultat = await executerCycleTva(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        periodeDebut,
+        periodeFin,
+        client: pennylaneClient,
+        ...(overrides.comptesVenteService ? { comptesVenteServiceOverride: overrides.comptesVenteService } : {}),
+        ...(overrides.comptesChargeService
+          ? { comptesChargeServiceOverride: overrides.comptesChargeService }
+          : {}),
+        ...(overrides.comptesEquipement ? { comptesEquipementOverride: overrides.comptesEquipement } : {}),
+        ...(overrides.comptesCarburant ? { comptesCarburantOverride: overrides.comptesCarburant } : {}),
+      });
 
-    return resultat;
+      return resultat;
+    } catch (err) {
+      if (err instanceof CalculDejaValideError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
   });
 
   return app;
