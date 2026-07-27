@@ -20,6 +20,7 @@ export {
   rejeterTauxHistorique,
   enregistrerCalcul,
   validerCalcul,
+  CalculDejaValideError,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,
