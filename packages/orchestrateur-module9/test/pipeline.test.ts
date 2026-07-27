@@ -110,7 +110,7 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
       periodeDebut: '2025-01-01',
       periodeFin: '2025-01-31',
       client,
-      comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
+      comptesTvaOverride: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
       comptesVenteServiceOverride: ['706'],
       comptesChargeServiceOverride: ['611'],
       comptesCarburantOverride: ['6061'],
@@ -125,6 +125,34 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
     ]);
     expect(resultat.resultat.sens).toBe('a_decaisser');
     expect(resultat.resultat.tvaNette).toBe(711.03);
+
+    // Module 10 : le pipeline doit avoir tracé ses deux événements auto pour
+    // ce cycle, sans qu'aucun appel explicite à l'audit n'ait été fait ici —
+    // c'est le pipeline lui-même qui les déclenche.
+    const clientVerif = await pool.connect();
+    try {
+      await clientVerif.query('BEGIN');
+      await clientVerif.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
+
+      const evenements = await clientVerif.query(
+        `SELECT type_evenement, module_source, acteur FROM audit_log
+         WHERE dossier_id = $1 AND type_evenement IN ('anomalies_detectees', 'calcul_genere')
+         ORDER BY horodatage`,
+        [DOSSIER_ID]
+      );
+      expect(evenements.rows.map((r) => r.type_evenement)).toEqual(['anomalies_detectees', 'calcul_genere']);
+      expect(evenements.rows.every((r) => r.acteur === 'systeme')).toBe(true);
+
+      const calculGenere = await clientVerif.query(
+        `SELECT details FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'calcul_genere'
+         ORDER BY horodatage DESC LIMIT 1`,
+        [DOSSIER_ID]
+      );
+      expect(calculGenere.rows[0]!.details.calculId).toBe(resultat.calculId);
+      await clientVerif.query('COMMIT');
+    } finally {
+      clientVerif.release();
+    }
   });
 
   it('utilise bien le taux de la base réelle (445711 -> 20% via taux_historique, pas le repli national)', async () => {
@@ -141,7 +169,7 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
       periodeDebut: '2025-02-01',
       periodeFin: '2025-02-28',
       client,
-      comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
+      comptesTvaOverride: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
       comptesVenteServiceOverride: ['706'],
       comptesChargeServiceOverride: ['611'],
       comptesCarburantOverride: ['6061'],
@@ -227,7 +255,7 @@ describe('executerCycleTva — dérivation des comptes depuis conventions_dossie
       periodeDebut: '2025-03-01',
       periodeFin: '2025-03-31',
       client,
-      comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
+      comptesTvaOverride: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
       // Aucun override : comptesVenteService doit venir de conventions_dossier
       // (seedée à ["706"] dans le beforeAll de ce fichier).
     });
@@ -299,13 +327,32 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
 
     const client = new PennylaneClient({ token: 'x', fetchImpl });
 
+    // Compté AVANT le cycle bloqué : ce dossier partage son id avec d'autres
+    // tests de ce même fichier (même beforeAll), qui ont déjà pu générer des
+    // événements calcul_genere sur cette même période. On vérifie donc une
+    // absence de NOUVEL événement, pas une absence absolue.
+    const clientAvant = await pool.connect();
+    let nbCalculGenereAvant = 0;
+    try {
+      await clientAvant.query('BEGIN');
+      await clientAvant.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
+      const resAvant = await clientAvant.query(
+        `SELECT COUNT(*)::int AS n FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'calcul_genere'`,
+        [DOSSIER_ID]
+      );
+      nbCalculGenereAvant = resAvant.rows[0].n;
+      await clientAvant.query('COMMIT');
+    } finally {
+      clientAvant.release();
+    }
+
     const resultat = await executerCycleTva(pool, {
       cabinetId: CABINET_ID,
       dossierId: DOSSIER_ID,
       periodeDebut: '2025-01-01',
       periodeFin: '2025-01-31',
       client,
-      comptesTva: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
+      comptesTvaOverride: ['44562', '44566', '445664', '445711', '445712', '445713', '4454'],
       comptesVenteServiceOverride: ['706'],
       comptesChargeServiceOverride: ['611'],
       comptesCarburantOverride: ['6061'],
@@ -329,9 +376,115 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
       );
       expect(res.rows.length).toBeGreaterThan(0);
       expect(res.rows[0].statut).toBe('ouvert');
+
+      // Module 10 : le blocage lui-même doit être tracé, avec les ids réels
+      // des anomalies bloquantes (pas juste un décompte) — c'est la preuve
+      // exploitable en cas de contrôle : "le calcul a refusé de tourner à
+      // cause de CES anomalies précises".
+      const auditBloque = await clientVerif.query(
+        `SELECT * FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'calcul_bloque'`,
+        [DOSSIER_ID]
+      );
+      expect(auditBloque.rows).toHaveLength(1);
+      expect(auditBloque.rows[0].acteur).toBe('systeme');
+      const anomalieIdsTracees: string[] = auditBloque.rows[0].details.anomalieIds;
+      expect(anomalieIdsTracees).toContain(res.rows[0].id);
+
+      // Le calcul n'ayant jamais tourné DANS CE TEST, aucun NOUVEL événement
+      // calcul_genere ne doit être apparu depuis le comptage fait avant
+      // l'appel — comparaison relative, pas absence absolue, car ce dossier
+      // est partagé avec d'autres tests de ce fichier qui, eux, génèrent
+      // légitimement des calculs sur la même période.
+      const auditCalcule = await clientVerif.query(
+        `SELECT COUNT(*)::int AS n FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'calcul_genere'`,
+        [DOSSIER_ID]
+      );
+      expect(auditCalcule.rows[0].n).toBe(nbCalculGenereAvant);
+
       await clientVerif.query('COMMIT');
     } finally {
       clientVerif.release();
     }
+  });
+});
+
+describe('executerCycleTva — découverte automatique des comptes via la balance (sans comptesTvaOverride)', () => {
+  it('utilise la balance, exclut les comptes à solde nul (ex: sous-comptes pays jamais utilisés)', async () => {
+    // Fixture réelle + un compte fantôme à solde nul ajouté volontairement —
+    // exactement le scénario qui a produit un calcul vide en conditions
+    // réelles (comptes TVA pays désactivés/jamais utilisés remontés par
+    // l'ancienne découverte par simple préfixe).
+    const balanceReelle = loadFixture('trial_balance_electricien.json') as { items: unknown[] };
+    const balanceAvecFantome = {
+      ...balanceReelle,
+      items: [
+        ...balanceReelle.items,
+        { credits: '0.0', debits: '0.0', label: 'TVA collectée Portugal à 16%', number: '445721073', formatted_number: '44572107300' },
+      ],
+    };
+
+    const comptesCandidats = loadFixture('ledger_accounts_candidats_rousseau.json');
+    const lignesTvaFixture = loadFixture('ledger_entry_lines_tva_rousseau_only.json');
+    const pieceRousseau = loadFixture('piece_rousseau_lines.json');
+    const lettrageRousseau = loadFixture('lettering_rousseau_lettree.json');
+
+    let appelBalance = false;
+    let comptesEnvoyesAuxEcritures: string[] = [];
+
+    const fetchImpl = (async (rawUrl: string) => {
+      const url = new URL(rawUrl);
+
+      if (url.pathname === '/api/external/v2/trial_balance') {
+        appelBalance = true;
+        return new Response(JSON.stringify(balanceAvecFantome), { status: 200 });
+      }
+
+      const filtre = url.searchParams.get('filter') ?? '';
+      if (url.pathname === '/api/external/v2/ledger_accounts') {
+        if (filtre.includes('"field":"number"') && filtre.includes('"operator":"in"')) {
+          // Capture les comptes réellement transmis pour la résolution —
+          // le fantôme à solde nul ne doit PAS y figurer.
+          const valeurMatch = filtre.match(/"value":\[(.*?)\]/);
+          comptesEnvoyesAuxEcritures = valeurMatch ? JSON.parse(`[${valeurMatch[1]}]`) : [];
+          return new Response(JSON.stringify(loadFixture('ledger_accounts_tva.json')), { status: 200 });
+        }
+        if (filtre.includes('"field":"id"')) {
+          return new Response(JSON.stringify(comptesCandidats), { status: 200 });
+        }
+      }
+      if (url.pathname === '/api/external/v2/ledger_entry_lines') {
+        if (filtre.includes('"field":"ledger_account_id"'))
+          return new Response(JSON.stringify(lignesTvaFixture), { status: 200 });
+        if (filtre.includes('"field":"id"'))
+          return new Response(JSON.stringify(lettrageRousseau), { status: 200 });
+      }
+      if (/\/ledger_entries\/\d+\/ledger_entry_lines/.test(url.pathname)) {
+        return new Response(JSON.stringify(pieceRousseau), { status: 200 });
+      }
+      throw new Error(`URL non routée : ${rawUrl}`);
+    }) as unknown as typeof fetch;
+
+    const client = new PennylaneClient({ token: 'x', fetchImpl });
+
+    const resultat = await executerCycleTva(pool, {
+      cabinetId: CABINET_ID,
+      dossierId: DOSSIER_ID,
+      periodeDebut: '2025-04-01',
+      periodeFin: '2025-04-30',
+      client,
+      // Pas de comptesTvaOverride : doit passer par la balance.
+      comptesVenteServiceOverride: ['706'],
+      comptesChargeServiceOverride: ['611'],
+      comptesCarburantOverride: ['6061'],
+      comptesEquipementOverride: ['6063'],
+    });
+
+    expect(appelBalance).toBe(true);
+    expect(comptesEnvoyesAuxEcritures).not.toContain('445721073');
+    expect(comptesEnvoyesAuxEcritures.sort()).toEqual(
+      ['4454', '44562', '44566', '445664', '445711', '445712', '445713'].sort()
+    );
+    expect(resultat.statut).toBe('calcule');
+    expect(resultat.statut).toBe('calcule');
   });
 });

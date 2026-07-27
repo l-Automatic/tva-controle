@@ -1,7 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
+import { PennylaneClient } from '@tva-controle/connector-pennylane';
 import {
   avecContexteCabinet,
+  executerCycleTva,
   resoudreAnomalie,
   justifierAnomalie,
   confirmerConvention,
@@ -13,12 +15,45 @@ import {
   listerConventions,
   listerTauxHistorique,
   listerCalculs,
+  listerAuditLog,
+  listerAuditLogPourExport,
+  type AuditEvenementDb,
 } from '@tva-controle/orchestrateur-module9';
 
 // Pas d'authentification construite à ce stade — le cabinet est identifié
 // par un header explicite plutôt que deviné. Stand-in volontaire en
 // attendant une vraie couche d'auth (hors scope de ce module).
 const HEADER_CABINET = 'x-cabinet-id';
+
+// Échappement CSV minimal (RFC 4180) : entoure de guillemets et double les
+// guillemets internes dès qu'une valeur contient une virgule, un guillemet
+// ou un retour à la ligne — sinon la valeur brute suffit.
+function celluleCsv(valeur: unknown): string {
+  if (valeur === null || valeur === undefined) return '';
+  const texte = typeof valeur === 'string' ? valeur : JSON.stringify(valeur);
+  if (/[",\n]/.test(texte)) {
+    return `"${texte.replace(/"/g, '""')}"`;
+  }
+  return texte;
+}
+
+function versCsv(evenements: AuditEvenementDb[]): string {
+  const entetes = [
+    'horodatage',
+    'type_evenement',
+    'module_source',
+    'acteur',
+    'acteur_nom',
+    'acteur_utilisateur_id',
+    'details',
+  ];
+  const lignes = evenements.map((e) =>
+    [e.horodatage, e.typeEvenement, e.moduleSource, e.acteur, e.acteurNom, e.acteurUtilisateurId, e.details]
+      .map(celluleCsv)
+      .join(',')
+  );
+  return [entetes.join(','), ...lignes].join('\n');
+}
 
 export function buildApp(pool: Pool): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -88,11 +123,16 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string } }>('/conventions/:id/rejeter', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
-    await avecContexteCabinet(pool, cabinetId, (client) => rejeterConvention(client, request.params.id));
-    reply.code(204).send();
-  });
+  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+    '/conventions/:id/rejeter',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        rejeterConvention(client, request.params.id, request.body.utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
 
   // --- Taux historique ---
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
@@ -116,11 +156,16 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string } }>('/taux-historique/:id/rejeter', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
-    await avecContexteCabinet(pool, cabinetId, (client) => rejeterTauxHistorique(client, request.params.id));
-    reply.code(204).send();
-  });
+  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+    '/taux-historique/:id/rejeter',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        rejeterTauxHistorique(client, request.params.id, request.body.utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
 
   // --- Calculs ---
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/calculs', async (request) => {
@@ -138,6 +183,87 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(204).send();
     }
   );
+
+  // --- Audit (Module 10) ---
+  app.get<{
+    Params: { dossierId: string };
+    Querystring: { typeEvenement?: string; acteur?: string; depuis?: string; jusqua?: string; limite?: string };
+  }>('/dossiers/:dossierId/audit', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { typeEvenement, acteur, depuis, jusqua, limite } = request.query;
+    return avecContexteCabinet(pool, cabinetId, (client) =>
+      listerAuditLog(client, request.params.dossierId, {
+        ...(typeEvenement ? { typeEvenement } : {}),
+        ...(acteur ? { acteur } : {}),
+        ...(depuis ? { depuis } : {}),
+        ...(jusqua ? { jusqua } : {}),
+        ...(limite ? { limite: Number.parseInt(limite, 10) } : {}),
+      })
+    );
+  });
+
+  app.get<{
+    Params: { dossierId: string };
+    Querystring: { typeEvenement?: string; acteur?: string; depuis?: string; jusqua?: string };
+  }>('/dossiers/:dossierId/audit/export', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { typeEvenement, acteur, depuis, jusqua } = request.query;
+    const evenements = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerAuditLogPourExport(client, request.params.dossierId, {
+        ...(typeEvenement ? { typeEvenement } : {}),
+        ...(acteur ? { acteur } : {}),
+        ...(depuis ? { depuis } : {}),
+        ...(jusqua ? { jusqua } : {}),
+      })
+    );
+    reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="audit-${request.params.dossierId}.csv"`)
+      .send(versCsv(evenements));
+  });
+
+  // --- Déclenchement d'un cycle réel (Module 9) ---
+  // Simplification v1 assumée : le token Pennylane est passé directement
+  // dans le corps de la requête, faute de résolution via connexions_api /
+  // secret manager (pas construit). Ne pas reproduire ce pattern une fois
+  // qu'une vraie gestion de secrets existera.
+  app.post<{
+    Params: { dossierId: string };
+    Body: {
+      periodeDebut: string;
+      periodeFin: string;
+      pennylaneToken: string;
+      comptesVenteService?: string[];
+      comptesChargeService?: string[];
+      comptesEquipement?: string[];
+      comptesCarburant?: string[];
+    };
+  }>('/dossiers/:dossierId/cycles', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { periodeDebut, periodeFin, pennylaneToken, ...overrides } = request.body;
+
+    if (!periodeDebut || !periodeFin || !pennylaneToken) {
+      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et pennylaneToken sont requis' });
+    }
+
+    const pennylaneClient = new PennylaneClient({ token: pennylaneToken });
+
+    const resultat = await executerCycleTva(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      periodeDebut,
+      periodeFin,
+      client: pennylaneClient,
+      ...(overrides.comptesVenteService ? { comptesVenteServiceOverride: overrides.comptesVenteService } : {}),
+      ...(overrides.comptesChargeService
+        ? { comptesChargeServiceOverride: overrides.comptesChargeService }
+        : {}),
+      ...(overrides.comptesEquipement ? { comptesEquipementOverride: overrides.comptesEquipement } : {}),
+      ...(overrides.comptesCarburant ? { comptesCarburantOverride: overrides.comptesCarburant } : {}),
+    });
+
+    return resultat;
+  });
 
   return app;
 }

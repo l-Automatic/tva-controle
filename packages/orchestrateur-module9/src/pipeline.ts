@@ -1,5 +1,10 @@
 import type { Pool } from 'pg';
-import { PennylaneClient, fetchEcrituresTvaCompletes } from '@tva-controle/connector-pennylane';
+import {
+  PennylaneClient,
+  fetchEcrituresTvaCompletes,
+  fetchTrialBalance,
+  filterComptesParPrefixe,
+} from '@tva-controle/connector-pennylane';
 import {
   executerPreControles,
   determinerExigibiliteTva,
@@ -10,7 +15,7 @@ import { calculerTva, type ResultatCalculTva } from '@tva-controle/calcul-module
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur, conventionListe } from './db/dossierRepository.js';
-import { enregistrerAnomalies, enregistrerCalcul } from './db/writeRepository.js';
+import { enregistrerAnomalies, enregistrerCalcul, enregistrerEvenementAudit } from './db/writeRepository.js';
 
 export interface ParametresCycleTva {
   cabinetId: string;
@@ -18,9 +23,19 @@ export interface ParametresCycleTva {
   periodeDebut: string;
   periodeFin: string;
   client: PennylaneClient;
-  // Simplification v1, non encore stockée en base (pas de convention dédiée
-  // à ce jour) — passée explicitement plutôt que devinée :
-  comptesTva: string[];
+  // Découvert automatiquement (comptes 445* ayant un vrai mouvement sur la
+  // période, via la balance) si non fourni — override possible pour les
+  // tests ou un besoin ponctuel de restreindre le périmètre.
+  //
+  // Historique : une première version découvrait via la liste brute des
+  // comptes (start_with '445'), mais Pennylane active par défaut des
+  // dizaines de sous-comptes TVA par pays jamais utilisés (ex: "TVA
+  // collectée Portugal à 16%") — même avec enabled=true. Résultat en test
+  // réel : un dossier avec de vraies écritures a produit un calcul vide.
+  // La balance (déjà scoppée à la période) ne remonte que les comptes avec
+  // un solde réellement mouvementé, éliminant ces faux positifs à la racine
+  // plutôt que par une liste d'exclusions fragile.
+  comptesTvaOverride?: string[];
   // Dérivés de conventions_dossier (comptes_vente_service,
   // comptes_charge_service, comptes_equipement, comptes_carburant) si non
   // fournis ici. Un override reste possible — utile en test, ou pour un
@@ -58,8 +73,21 @@ export async function executerCycleTva(
     chargerContexteDossier(client, params.dossierId)
   );
 
+  const comptesTva =
+    params.comptesTvaOverride ??
+    (await (async () => {
+      const balance = await fetchTrialBalance(params.client, {
+        dossierId: params.dossierId,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+      return filterComptesParPrefixe(balance, ['445'])
+        .filter((c) => c.debit !== 0 || c.credit !== 0)
+        .map((c) => c.numeroCompte);
+    })());
+
   const ecritures = await fetchEcrituresTvaCompletes(params.client, {
-    comptesTva: params.comptesTva,
+    comptesTva,
     periodeDebut: params.periodeDebut,
     periodeFin: params.periodeFin,
   });
@@ -111,11 +139,49 @@ export async function executerCycleTva(
     ...anomaliesImmobilisation,
   ];
 
-  await avecContexteCabinet(pool, params.cabinetId, (client) =>
-    enregistrerAnomalies(client, params.dossierId, params.periodeDebut, toutesAnomalies)
-  );
+  // enregistrerAnomalies retourne les lignes réellement insérées (avec leur
+  // id généré par Postgres) : nécessaire pour référencer les anomalies
+  // bloquantes par id dans l'événement d'audit, plutôt qu'un simple décompte.
+  const anomaliesInserees = await avecContexteCabinet(pool, params.cabinetId, async (client) => {
+    const inserees = await enregistrerAnomalies(client, params.dossierId, params.periodeDebut, toutesAnomalies);
 
-  if (toutesAnomalies.some((a) => a.gravite === 'bloquant')) {
+    const parGravite: Record<string, number> = {};
+    for (const a of inserees) {
+      parGravite[a.gravite] = (parGravite[a.gravite] ?? 0) + 1;
+    }
+
+    await enregistrerEvenementAudit(client, {
+      dossierId: params.dossierId,
+      typeEvenement: 'anomalies_detectees',
+      moduleSource: 'module4_controles',
+      acteur: 'systeme',
+      details: {
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+        total: inserees.length,
+        parGravite,
+        anomalieIds: inserees.map((a) => a.id),
+      },
+    });
+
+    return inserees;
+  });
+
+  const anomaliesBloquantes = anomaliesInserees.filter((a) => a.gravite === 'bloquant');
+  if (anomaliesBloquantes.length > 0) {
+    await avecContexteCabinet(pool, params.cabinetId, (client) =>
+      enregistrerEvenementAudit(client, {
+        dossierId: params.dossierId,
+        typeEvenement: 'calcul_bloque',
+        moduleSource: 'module9_orchestrateur',
+        acteur: 'systeme',
+        details: {
+          periodeDebut: params.periodeDebut,
+          periodeFin: params.periodeFin,
+          anomalieIds: anomaliesBloquantes.map((a) => a.id),
+        },
+      })
+    );
     return { statut: 'bloque', anomalies: toutesAnomalies };
   }
 
@@ -125,9 +191,25 @@ export async function executerCycleTva(
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
   });
 
-  const calculId = await avecContexteCabinet(pool, params.cabinetId, (client) =>
-    enregistrerCalcul(client, params.dossierId, params.periodeDebut, params.periodeFin, resultat)
-  );
+  const calculId = await avecContexteCabinet(pool, params.cabinetId, async (client) => {
+    const id = await enregistrerCalcul(client, params.dossierId, params.periodeDebut, params.periodeFin, resultat);
+
+    await enregistrerEvenementAudit(client, {
+      dossierId: params.dossierId,
+      typeEvenement: 'calcul_genere',
+      moduleSource: 'module7_calcul',
+      acteur: 'systeme',
+      details: {
+        calculId: id,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+        tvaNette: resultat.tvaNette,
+        sens: resultat.sens,
+      },
+    });
+
+    return id;
+  });
 
   return { statut: 'calcule', anomalies: toutesAnomalies, resultat, calculId };
 }

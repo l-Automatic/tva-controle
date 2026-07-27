@@ -7,6 +7,8 @@ export {
 } from './db/dossierRepository.js';
 export { executerCycleTva, type ParametresCycleTva, type ResultatCycleTva } from './pipeline.js';
 export {
+  enregistrerEvenementAudit,
+  type EvenementAudit,
   enregistrerAnomalies,
   resoudreAnomalie,
   justifierAnomalie,
@@ -24,7 +26,10 @@ export {
   listerConventions,
   listerTauxHistorique,
   listerCalculs,
+  listerAuditLog,
+  listerAuditLogPourExport,
   type AnomalieDb,
   type PropositionDb,
   type CalculDb,
+  type AuditEvenementDb,
 } from './db/readRepository.js';

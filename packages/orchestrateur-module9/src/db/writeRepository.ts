@@ -5,19 +5,64 @@ import type { PropositionTaux } from '@tva-controle/onboarding-module3';
 import type { ResultatCalculTva } from '@tva-controle/calcul-module7';
 
 // ============================================================================
+// AUDIT (Module 10)
+// ============================================================================
+// Point d'entrée unique pour toute écriture dans audit_log. Le cabinet_id
+// n'est jamais passé en paramètre explicite : on relit celui déjà positionné
+// par avecContexteCabinet (set_config, portée transaction) pour la
+// transaction en cours, pour garantir que la ligne d'audit est toujours
+// rattachée au même cabinet que le contexte RLS actif.
+//
+// À appeler TOUJOURS avec le même `client` que l'opération métier qu'elle
+// documente, pour que les deux fassent partie de la même transaction : soit
+// les deux sont commités ensemble, soit un rollback annule les deux.
+export interface EvenementAudit {
+  dossierId: string | null;
+  typeEvenement: string;
+  moduleSource: string;
+  acteur: 'agent' | 'utilisateur' | 'systeme';
+  acteurUtilisateurId?: string | null;
+  details?: Record<string, unknown> | null;
+}
+
+export async function enregistrerEvenementAudit(
+  client: PoolClient,
+  evenement: EvenementAudit
+): Promise<void> {
+  await client.query(
+    `INSERT INTO audit_log (cabinet_id, dossier_id, type_evenement, module_source, acteur, acteur_utilisateur_id, details)
+     VALUES (current_setting('app.current_cabinet_id', true)::UUID, $1, $2, $3, $4, $5, $6)`,
+    [
+      evenement.dossierId,
+      evenement.typeEvenement,
+      evenement.moduleSource,
+      evenement.acteur,
+      evenement.acteurUtilisateurId ?? null,
+      evenement.details ? JSON.stringify(evenement.details) : null,
+    ]
+  );
+}
+
+// ============================================================================
 // ANOMALIES
 // ============================================================================
 
+// Retourne les lignes insérées (avec leur id réel généré par Postgres) plutôt
+// que rien : le pipeline (Module 9) en a besoin pour tracer précisément
+// quelles anomalies ont bloqué un calcul dans l'événement d'audit
+// correspondant, plutôt que de se contenter d'un décompte.
 export async function enregistrerAnomalies(
   client: PoolClient,
   dossierId: string,
   periode: string, // YYYY-MM-DD, premier jour de la période contrôlée
   anomalies: Anomalie[]
-): Promise<void> {
+): Promise<{ id: string; type: string; gravite: string }[]> {
+  const inserees: { id: string; type: string; gravite: string }[] = [];
   for (const a of anomalies) {
-    await client.query(
-      `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, details, statut)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'ouvert')`,
+    const res = await client.query<{ id: string }>(
+      `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, details, compte, statut)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ouvert')
+       RETURNING id`,
       [
         dossierId,
         periode,
@@ -26,9 +71,12 @@ export async function enregistrerAnomalies(
         String(a.ledgerEntryId),
         a.description,
         a.details ? JSON.stringify(a.details) : null,
+        a.compte,
       ]
     );
+    inserees.push({ id: res.rows[0]!.id, type: a.type, gravite: a.gravite });
   }
+  return inserees;
 }
 
 export async function resoudreAnomalie(
@@ -37,11 +85,21 @@ export async function resoudreAnomalie(
   utilisateurId: string,
   commentaire?: string
 ): Promise<void> {
-  await client.query(
+  const res = await client.query<{ dossier_id: string; type_anomalie: string }>(
     `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), commentaire_traitement = $3
-     WHERE id = $1`,
+     WHERE id = $1
+     RETURNING dossier_id, type_anomalie`,
     [anomalieId, utilisateurId, commentaire ?? null]
   );
+  const ligne = res.rows[0];
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne?.dossier_id ?? null,
+    typeEvenement: 'anomalie_resolue',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, typeAnomalie: ligne?.type_anomalie, commentaire: commentaire ?? null },
+  });
 }
 
 export async function justifierAnomalie(
@@ -50,11 +108,21 @@ export async function justifierAnomalie(
   utilisateurId: string,
   commentaire: string
 ): Promise<void> {
-  await client.query(
+  const res = await client.query<{ dossier_id: string; type_anomalie: string }>(
     `UPDATE anomalies SET statut = 'justifie', traite_par = $2, date_traitement = now(), commentaire_traitement = $3
-     WHERE id = $1`,
+     WHERE id = $1
+     RETURNING dossier_id, type_anomalie`,
     [anomalieId, utilisateurId, commentaire]
   );
+  const ligne = res.rows[0];
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne?.dossier_id ?? null,
+    typeEvenement: 'anomalie_justifiee',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, typeAnomalie: ligne?.type_anomalie, commentaire },
+  });
 }
 
 // ============================================================================
@@ -103,10 +171,34 @@ export async function confirmerConvention(
      WHERE id = $1`,
     [conventionId, utilisateurId]
   );
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'convention_confirmee',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { conventionId, cle: ligne.cle },
+  });
 }
 
-export async function rejeterConvention(client: PoolClient, conventionId: string): Promise<void> {
-  await client.query(`UPDATE conventions_dossier SET statut = 'rejected' WHERE id = $1`, [conventionId]);
+export async function rejeterConvention(
+  client: PoolClient,
+  conventionId: string,
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string; cle: string }>(
+    `UPDATE conventions_dossier SET statut = 'rejected' WHERE id = $1 RETURNING dossier_id, cle`,
+    [conventionId]
+  );
+  const ligne = res.rows[0];
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne?.dossier_id ?? null,
+    typeEvenement: 'convention_rejetee',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { conventionId, cle: ligne?.cle },
+  });
 }
 
 // ============================================================================
@@ -151,10 +243,35 @@ export async function confirmerTauxHistorique(
     `UPDATE taux_historique SET statut = 'confirmed', confirmed_by = $2, confirmed_at = now() WHERE id = $1`,
     [tauxId, utilisateurId]
   );
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'taux_confirme',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { tauxId, compteProduitOuCharge: ligne.compte_produit_ou_charge },
+  });
 }
 
-export async function rejeterTauxHistorique(client: PoolClient, tauxId: string): Promise<void> {
-  await client.query(`UPDATE taux_historique SET statut = 'rejected' WHERE id = $1`, [tauxId]);
+export async function rejeterTauxHistorique(
+  client: PoolClient,
+  tauxId: string,
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string; compte_produit_ou_charge: string }>(
+    `UPDATE taux_historique SET statut = 'rejected' WHERE id = $1
+     RETURNING dossier_id, compte_produit_ou_charge`,
+    [tauxId]
+  );
+  const ligne = res.rows[0];
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne?.dossier_id ?? null,
+    typeEvenement: 'taux_rejete',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { tauxId, compteProduitOuCharge: ligne?.compte_produit_ou_charge },
+  });
 }
 
 // ============================================================================
@@ -200,8 +317,18 @@ export async function validerCalcul(
   calculId: string,
   utilisateurId: string
 ): Promise<void> {
-  await client.query(
-    `UPDATE calculs_tva SET statut = 'valide', valide_par = $2, date_validation = now() WHERE id = $1`,
+  const res = await client.query<{ dossier_id: string; tva_nette: string; sens: string }>(
+    `UPDATE calculs_tva SET statut = 'valide', valide_par = $2, date_validation = now() WHERE id = $1
+     RETURNING dossier_id, tva_nette, sens`,
     [calculId, utilisateurId]
   );
+  const ligne = res.rows[0];
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne?.dossier_id ?? null,
+    typeEvenement: 'calcul_valide',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { calculId, tvaNette: ligne?.tva_nette, sens: ligne?.sens },
+  });
 }

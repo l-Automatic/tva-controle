@@ -198,3 +198,97 @@ describe('API Module 6 — cycle de vie d’une convention candidate', () => {
     expect(resAncienne.json().some((c: { id: string }) => c.id === conventionId)).toBe(true);
   });
 });
+
+describe('API Module 6 — consultation et export de l’audit (Module 10)', () => {
+  // Ce fichier partage un seul dossierId entre tous les describe — les
+  // actions des tests précédents (résolution d'anomalie, confirmations de
+  // conventions) ont déjà généré des événements d'audit pour ce dossier.
+  // On filtre donc systématiquement par type_evenement pour ne vérifier que
+  // ce que CE test a produit, plutôt que de compter un total absolu fragile.
+
+  it('l’anomalie résolue plus haut est bien consultable via /audit, avec le nom de l’acteur résolu par jointure', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/audit?typeEvenement=anomalie_resolue`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(res.statusCode).toBe(200);
+    const evenements = res.json();
+    expect(evenements.length).toBeGreaterThanOrEqual(1);
+    expect(evenements[0]).toMatchObject({
+      typeEvenement: 'anomalie_resolue',
+      acteur: 'utilisateur',
+      acteurUtilisateurId: utilisateurId,
+      acteurNom: 'Collaborateur Test',
+    });
+  });
+
+  it('le filtre acteur=utilisateur exclut les événements systeme, et inversement', async () => {
+    const resUtilisateur = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/audit?acteur=utilisateur`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    const evenementsUtilisateur = resUtilisateur.json();
+    expect(evenementsUtilisateur.length).toBeGreaterThan(0);
+    expect(evenementsUtilisateur.every((e: { acteur: string }) => e.acteur === 'utilisateur')).toBe(true);
+
+    const resSysteme = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/audit?acteur=systeme`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(resSysteme.json()).toEqual([]); // aucun cycle pipeline lancé dans ce test file
+  });
+
+  it('exporte au format CSV, avec les en-têtes attendus et le bon Content-Type', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/audit/export?typeEvenement=convention_confirmee`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain(`audit-${dossierId}.csv`);
+
+    const lignes = res.body.trim().split('\n');
+    expect(lignes[0]).toBe('horodatage,type_evenement,module_source,acteur,acteur_nom,acteur_utilisateur_id,details');
+    expect(lignes.length).toBeGreaterThanOrEqual(2); // en-tête + au moins une ligne
+    expect(lignes.some((l) => l.includes('convention_confirmee'))).toBe(true);
+  });
+
+  it('refuse un typeEvenement inconnu en renvoyant une liste vide plutôt qu’une erreur — filtre exact, pas de correspondance partielle', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/audit?typeEvenement=type_qui_nexiste_pas`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
+});
+
+describe('API Module 6 — POST /dossiers/:id/cycles — validation seulement', () => {
+  // Le succès réel de cette route dépend d'un vrai appel réseau à Pennylane,
+  // impossible à tester depuis ce bac à sable (réseau restreint). Seule la
+  // validation des champs requis est testée ici — le chemin de succès doit
+  // être vérifié en conditions réelles (VPS avec accès réseau + vrai token).
+  it('refuse sans periodeDebut/periodeFin/pennylaneToken', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/dossiers/${dossierId}/cycles`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuse sans header x-cabinet-id, comme toutes les autres routes', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/dossiers/${dossierId}/cycles`,
+      payload: { periodeDebut: '2025-01-01', periodeFin: '2025-01-31', pennylaneToken: 'x' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});

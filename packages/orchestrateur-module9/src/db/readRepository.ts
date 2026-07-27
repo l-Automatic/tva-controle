@@ -7,6 +7,7 @@ export interface AnomalieDb {
   typeAnomalie: string;
   gravite: 'bloquant' | 'signale' | 'info';
   referencePiece: string | null;
+  compte: string | null;
   description: string;
   details: unknown;
   statut: 'ouvert' | 'resolu' | 'justifie';
@@ -31,7 +32,7 @@ export async function listerAnomalies(
   }
 
   const res = await client.query(
-    `SELECT id, dossier_id, periode, type_anomalie, gravite, reference_piece, description, details, statut, created_at
+    `SELECT id, dossier_id, periode, type_anomalie, gravite, reference_piece, compte, description, details, statut, created_at
      FROM anomalies WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`,
     params
   );
@@ -43,6 +44,7 @@ export async function listerAnomalies(
     typeAnomalie: r.type_anomalie,
     gravite: r.gravite,
     referencePiece: r.reference_piece,
+    compte: r.compte,
     description: r.description,
     details: r.details,
     statut: r.statut,
@@ -142,4 +144,92 @@ export async function listerCalculs(client: PoolClient, dossierId: string): Prom
     tvaNette: Number.parseFloat(r.tva_nette),
     sens: r.sens,
   }));
+}
+
+// ============================================================================
+// AUDIT (Module 10)
+// ============================================================================
+
+export interface AuditEvenementDb {
+  id: string;
+  dossierId: string | null;
+  typeEvenement: string;
+  moduleSource: string;
+  acteur: 'agent' | 'utilisateur' | 'systeme';
+  acteurUtilisateurId: string | null;
+  acteurNom: string | null; // null si acteur = 'systeme'/'agent', ou si l'utilisateur a depuis été supprimé
+  details: unknown;
+  horodatage: string;
+}
+
+// LIMITE_DEFAUT volontairement basse : ce endpoint alimente une vue humaine
+// (module 6/10), pas un export complet — voir listerAuditLogExport pour le
+// CSV sans limite, qui sert justement de contournement pour l'export complet.
+const LIMITE_DEFAUT_AUDIT = 200;
+const LIMITE_MAX_AUDIT = 1000;
+
+export async function listerAuditLog(
+  client: PoolClient,
+  dossierId: string,
+  filtres: { typeEvenement?: string; acteur?: string; depuis?: string; jusqua?: string; limite?: number } = {}
+): Promise<AuditEvenementDb[]> {
+  const conditions = ['a.dossier_id = $1'];
+  const params: unknown[] = [dossierId];
+
+  if (filtres.typeEvenement) {
+    params.push(filtres.typeEvenement);
+    conditions.push(`a.type_evenement = $${params.length}`);
+  }
+  if (filtres.acteur) {
+    params.push(filtres.acteur);
+    conditions.push(`a.acteur = $${params.length}`);
+  }
+  if (filtres.depuis) {
+    params.push(filtres.depuis);
+    conditions.push(`a.horodatage >= $${params.length}`);
+  }
+  if (filtres.jusqua) {
+    params.push(filtres.jusqua);
+    conditions.push(`a.horodatage <= $${params.length}`);
+  }
+
+  const limite = Math.min(filtres.limite ?? LIMITE_DEFAUT_AUDIT, LIMITE_MAX_AUDIT);
+  params.push(limite);
+
+  const res = await client.query(
+    `SELECT a.id, a.dossier_id, a.type_evenement, a.module_source, a.acteur,
+            a.acteur_utilisateur_id, u.nom AS acteur_nom, a.details, a.horodatage
+     FROM audit_log a
+     LEFT JOIN utilisateurs u ON u.id = a.acteur_utilisateur_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY a.horodatage DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  return res.rows.map((r) => ({
+    id: r.id,
+    dossierId: r.dossier_id,
+    typeEvenement: r.type_evenement,
+    moduleSource: r.module_source,
+    acteur: r.acteur,
+    acteurUtilisateurId: r.acteur_utilisateur_id,
+    acteurNom: r.acteur_nom,
+    details: r.details,
+    horodatage: r.horodatage,
+  }));
+}
+
+// Export complet : plafond de sécurité large (pas 200) car destiné à
+// produire un fichier téléchargé pour preuve DGFIP, pas un affichage écran.
+// Le plafond existe quand même pour éviter qu'un dossier avec des années
+// d'historique ne fasse exploser la mémoire du process API en un seul appel.
+const LIMITE_EXPORT_AUDIT = 20_000;
+
+export async function listerAuditLogPourExport(
+  client: PoolClient,
+  dossierId: string,
+  filtres: { typeEvenement?: string; acteur?: string; depuis?: string; jusqua?: string } = {}
+): Promise<AuditEvenementDb[]> {
+  return listerAuditLog(client, dossierId, { ...filtres, limite: LIMITE_EXPORT_AUDIT });
 }

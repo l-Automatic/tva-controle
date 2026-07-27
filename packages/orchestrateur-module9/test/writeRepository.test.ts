@@ -4,10 +4,12 @@ import type { Anomalie } from '@tva-controle/core';
 import type { ResultatCalculTva } from '@tva-controle/calcul-module7';
 import {
   enregistrerAnomalies,
+  enregistrerEvenementAudit,
   enregistrerPropositionsConventions,
   enregistrerPropositionsTaux,
   enregistrerCalcul,
   validerCalcul,
+  resoudreAnomalie,
 } from '../src/db/writeRepository.js';
 import { listerAnomalies, listerConventions, listerTauxHistorique, listerCalculs } from '../src/db/readRepository.js';
 
@@ -71,14 +73,42 @@ describe('enregistrerAnomalies', () => {
   it('insère plusieurs anomalies en une fois, toutes en statut ouvert', async () => {
     const anomalies: Anomalie[] = [
       { type: 'taux_incoherent', gravite: 'bloquant', ledgerEntryId: 1, compte: '445711', description: 'a' },
-      { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 2, compte: '445711', description: 'b' },
+      {
+        type: 'paiement_partiel_a_verifier',
+        gravite: 'signale',
+        ledgerEntryId: 2,
+        compte: '411000',
+        description: 'b',
+        details: { groupeIds: [10, 11, 12] },
+      },
     ];
 
-    await avecClient((client) => enregistrerAnomalies(client, dossierId, '2025-02-01', anomalies));
+    const inserees = await avecClient((client) =>
+      enregistrerAnomalies(client, dossierId, '2025-02-01', anomalies)
+    );
+
+    // Le pipeline (Module 9) a besoin de ces ids réels pour tracer les
+    // anomalies bloquantes dans l'audit — la fonction ne doit plus renvoyer
+    // void silencieusement.
+    expect(inserees).toHaveLength(2);
+    expect(inserees.every((a) => typeof a.id === 'string' && a.id.length > 0)).toBe(true);
+    expect(inserees.map((a) => a.gravite).sort()).toEqual(['bloquant', 'signale']);
 
     const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode: '2025-02-01' }));
     expect(liste).toHaveLength(2);
     expect(liste.every((a) => a.statut === 'ouvert')).toBe(true);
+
+    // Bug corrigé : `compte` était calculé par le Module 4 pour chaque
+    // anomalie mais jamais persisté (colonne absente + non repris dans
+    // l'INSERT) — invisible pour le collaborateur qui traite l'anomalie.
+    const tauxIncoherent = liste.find((a) => a.typeAnomalie === 'taux_incoherent');
+    expect(tauxIncoherent?.compte).toBe('445711');
+
+    // Idem pour `details` : stocké et renvoyé, mais jusqu'ici jamais affiché
+    // côté frontend — on vérifie ici la couche donnée, pas l'affichage.
+    const paiementPartiel = liste.find((a) => a.typeAnomalie === 'paiement_partiel_a_verifier');
+    expect(paiementPartiel?.compte).toBe('411000');
+    expect(paiementPartiel?.details).toEqual({ groupeIds: [10, 11, 12] });
   });
 });
 
@@ -147,5 +177,71 @@ describe('enregistrerCalcul et validerCalcul', () => {
         client.query(`UPDATE calculs_tva SET tva_nette = 999 WHERE id = $1`, [calculId])
       )
     ).rejects.toThrow();
+
+    // Le Module 10 doit avoir tracé la validation, avec le bon acteur et le
+    // bon utilisateur — pas juste que le statut a changé en base.
+    const audit = await avecClient((client) =>
+      client.query(
+        `SELECT * FROM audit_log WHERE type_evenement = 'calcul_valide' AND details->>'calculId' = $1`,
+        [calculId]
+      )
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0].acteur).toBe('utilisateur');
+    expect(audit.rows[0].acteur_utilisateur_id).toBe(utilisateurId);
+    expect(audit.rows[0].dossier_id).toBe(dossierId);
+  });
+});
+
+describe('enregistrerEvenementAudit (Module 10)', () => {
+  it('insère une ligne dans audit_log rattachée au cabinet du contexte transactionnel courant', async () => {
+    await avecClient((client) =>
+      enregistrerEvenementAudit(client, {
+        dossierId,
+        typeEvenement: 'evenement_test',
+        moduleSource: 'test_suite',
+        acteur: 'systeme',
+        details: { exemple: 'valeur' },
+      })
+    );
+
+    const res = await avecClient((client) =>
+      client.query(`SELECT * FROM audit_log WHERE type_evenement = 'evenement_test'`)
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].cabinet_id).toBe(cabinetId);
+    expect(res.rows[0].dossier_id).toBe(dossierId);
+    expect(res.rows[0].acteur).toBe('systeme');
+    expect(res.rows[0].acteur_utilisateur_id).toBeNull();
+    expect(res.rows[0].details).toEqual({ exemple: 'valeur' });
+  });
+
+  it('resoudreAnomalie trace un événement anomalie_resolue avec l’utilisateur qui a résolu', async () => {
+    const inserees = await avecClient((client) =>
+      enregistrerAnomalies(client, dossierId, '2025-04-01', [
+        { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 42, compte: '445711', description: 'test' },
+      ])
+    );
+    const anomalieId = inserees[0]!.id;
+
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u2-${Date.now()}@test.fr`]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+
+    await avecClient((client) => resoudreAnomalie(client, anomalieId, utilisateurId, 'traitée'));
+
+    const audit = await avecClient((client) =>
+      client.query(
+        `SELECT * FROM audit_log WHERE type_evenement = 'anomalie_resolue' AND details->>'anomalieId' = $1`,
+        [anomalieId]
+      )
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0].acteur).toBe('utilisateur');
+    expect(audit.rows[0].acteur_utilisateur_id).toBe(utilisateurId);
   });
 });
