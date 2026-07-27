@@ -10,6 +10,7 @@ import {
   enregistrerCalcul,
   validerCalcul,
   resoudreAnomalie,
+  CalculDejaValideError,
 } from '../src/db/writeRepository.js';
 import { listerAnomalies, listerConventions, listerTauxHistorique, listerCalculs } from '../src/db/readRepository.js';
 
@@ -110,6 +111,35 @@ describe('enregistrerAnomalies', () => {
     expect(paiementPartiel?.compte).toBe('411000');
     expect(paiementPartiel?.details).toEqual({ groupeIds: [10, 11, 12] });
   });
+
+  it('relancer un cycle sur la même période remplace les anomalies ouvertes sans les accumuler, mais préserve celles déjà traitées', async () => {
+    const periode = '2025-05-01';
+    const premierLot: Anomalie[] = [
+      { type: 'taux_incoherent', gravite: 'bloquant', ledgerEntryId: 100, compte: '445711', description: 'x' },
+      { type: 'nouveau_tiers_a_verifier', gravite: 'signale', ledgerEntryId: 101, compte: '411000', description: 'y' },
+    ];
+    const premiereInsertion = await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, premierLot));
+
+    // Un collaborateur traite une des deux anomalies avant la relance.
+    const aTraitee = premiereInsertion.find((a) => a.type === 'nouveau_tiers_a_verifier')!;
+    await avecClient((client) =>
+      client.query(`UPDATE anomalies SET statut = 'resolu' WHERE id = $1`, [aTraitee.id])
+    );
+
+    // Relance du cycle sur la même période : cette fois une seule anomalie détectée.
+    const secondLot: Anomalie[] = [
+      { type: 'taux_incoherent', gravite: 'bloquant', ledgerEntryId: 100, compte: '445711', description: 'x2' },
+    ];
+    await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, secondLot));
+
+    const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode }));
+
+    // Pas d'accumulation : l'ancienne anomalie 'ouvert' a été remplacée, pas
+    // dupliquée à côté de la nouvelle.
+    expect(liste.filter((a) => a.statut === 'ouvert')).toHaveLength(1);
+    // L'anomalie déjà traitée par un humain reste en base, intacte.
+    expect(liste.find((a) => a.id === aTraitee.id)?.statut).toBe('resolu');
+  });
 });
 
 describe('enregistrerPropositionsConventions et enregistrerPropositionsTaux', () => {
@@ -190,6 +220,58 @@ describe('enregistrerCalcul et validerCalcul', () => {
     expect(audit.rows[0].acteur).toBe('utilisateur');
     expect(audit.rows[0].acteur_utilisateur_id).toBe(utilisateurId);
     expect(audit.rows[0].dossier_id).toBe(dossierId);
+  });
+
+  it('relancer un cycle sur un calcul encore en brouillon le remplace au lieu de violer la contrainte unique', async () => {
+    const premier: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 100, referencesPieces: [1] }],
+      tvaNette: 100,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const premierCalculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-06-01', '2025-06-30', premier)
+    );
+
+    const second: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 250, referencesPieces: [2] }],
+      tvaNette: 250,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const secondCalculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-06-01', '2025-06-30', second)
+    );
+
+    // Un seul calcul pour cette période, avec les valeurs de la relance, pas
+    // celles du premier passage.
+    const calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    const surCettePeriode = calculs.filter((c) => c.id === premierCalculId || c.id === secondCalculId);
+    expect(surCettePeriode).toHaveLength(1);
+    expect(surCettePeriode[0]).toMatchObject({ id: secondCalculId, tvaNette: 250 });
+  });
+
+  it('refuse de relancer un cycle sur une période déjà validée plutôt que de laisser remonter une erreur de contrainte brute', async () => {
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 50, referencesPieces: [3] }],
+      tvaNette: 50,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-07-01', '2025-07-31', resultat)
+    );
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u2-${Date.now()}@test.fr`]
+      )
+    );
+    await avecClient((client) => validerCalcul(client, calculId, resUser.rows[0]!.id));
+
+    await expect(
+      avecClient((client) => enregistrerCalcul(client, dossierId, '2025-07-01', '2025-07-31', resultat))
+    ).rejects.toThrow(CalculDejaValideError);
   });
 });
 
