@@ -12,6 +12,7 @@ import {
   confirmerTauxHistorique,
   rejeterTauxHistorique,
   validerCalcul,
+  rejeterCalcul,
   listerAnomalies,
   listerConventions,
   listerTauxHistorique,
@@ -19,6 +20,7 @@ import {
   listerAuditLog,
   listerAuditLogPourExport,
   CalculDejaValideError,
+  CalculPasEnBrouillonError,
   type AuditEvenementDb,
 } from '@tva-controle/orchestrateur-module9';
 
@@ -198,10 +200,38 @@ export function buildApp(pool: Pool): FastifyInstance {
     '/calculs/:id/valider',
     async (request, reply) => {
       const cabinetId = request.headers[HEADER_CABINET] as string;
-      await avecContexteCabinet(pool, cabinetId, (client) =>
-        validerCalcul(client, request.params.id, request.body.utilisateurId)
-      );
-      reply.code(204).send();
+      try {
+        await avecContexteCabinet(pool, cabinetId, (client) =>
+          validerCalcul(client, request.params.id, request.body.utilisateurId)
+        );
+        reply.code(204).send();
+      } catch (err) {
+        if (err instanceof CalculPasEnBrouillonError) {
+          return reply.code(409).send({ erreur: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: { utilisateurId: string; motif: string } }>(
+    '/calculs/:id/rejeter',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      if (!request.body.motif) {
+        return reply.code(400).send({ erreur: 'motif requis pour rejeter un calcul' });
+      }
+      try {
+        await avecContexteCabinet(pool, cabinetId, (client) =>
+          rejeterCalcul(client, request.params.id, request.body.utilisateurId, request.body.motif)
+        );
+        reply.code(204).send();
+      } catch (err) {
+        if (err instanceof CalculPasEnBrouillonError) {
+          return reply.code(409).send({ erreur: err.message });
+        }
+        throw err;
+      }
     }
   );
 
@@ -265,6 +295,9 @@ export function buildApp(pool: Pool): FastifyInstance {
 
     if (!periodeDebut || !periodeFin || !pennylaneToken) {
       return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et pennylaneToken sont requis' });
+    }
+    if (periodeFin < periodeDebut) {
+      return reply.code(400).send({ erreur: 'periodeFin ne peut pas être antérieure à periodeDebut' });
     }
 
     const pennylaneClient = new PennylaneClient({ token: pennylaneToken });
