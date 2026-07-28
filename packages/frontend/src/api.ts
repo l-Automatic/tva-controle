@@ -211,9 +211,23 @@ export function fetchCalculs(cabinetId: string, dossierId: string): Promise<Calc
   return request<Calcul[]>(`/dossiers/${dossierId}/calculs`, cabinetId);
 }
 
+// 409 (ApiError.status) si le calcul n'est plus en brouillon (déjà
+// validé/rejeté entre-temps par quelqu'un d'autre) — géré par l'appelant.
 export function validerCalcul(cabinetId: string, id: string, utilisateurId: string): Promise<void> {
   return request<void>(`/calculs/${id}/valider`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId }),
+  });
+}
+
+export function rejeterCalcul(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  motif: string
+): Promise<void> {
+  return request<void>(`/calculs/${id}/rejeter`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, motif }),
   });
 }

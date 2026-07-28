@@ -131,7 +131,7 @@ export interface CalculDb {
   id: string;
   periodeDebut: string;
   periodeFin: string;
-  statut: 'brouillon' | 'valide' | 'declare';
+  statut: 'brouillon' | 'valide' | 'declare' | 'rejete';
   tvaNette: number;
   sens: 'a_decaisser' | 'credit';
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ApiError, fetchCalculs, validerCalcul } from '../api';
+import { ApiError, fetchCalculs, rejeterCalcul, validerCalcul } from '../api';
 import type { Calcul, StatutCalcul } from '../types';
 
 interface CalculsPanelProps {
@@ -12,6 +12,7 @@ const LIBELLE_STATUT: Record<StatutCalcul, string> = {
   brouillon: 'Brouillon',
   valide: 'Validé',
   declare: 'Déclaré',
+  rejete: 'Rejeté',
 };
 
 function formatMontant(montant: number): string {
@@ -35,19 +36,60 @@ function CalculRow({
   utilisateurId: string;
   onChanged: () => void;
 }) {
-  const [submitting, setSubmitting] = useState(false);
+  const [motif, setMotif] = useState('');
+  const [submitting, setSubmitting] = useState<'valider' | 'rejeter' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conflit, setConflit] = useState(false);
 
   async function handleValider() {
-    setSubmitting(true);
+    if (
+      !window.confirm(
+        'Valider ce calcul ? Cette action est définitive : plus aucune modification ne sera possible ensuite (immuabilité).'
+      )
+    ) {
+      return;
+    }
+    setSubmitting('valider');
     setError(null);
+    setConflit(false);
     try {
       await validerCalcul(cabinetId, calcul.id, utilisateurId);
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Échec de la validation');
+      if (err instanceof ApiError && err.status === 409) {
+        setConflit(true);
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Échec de la validation');
+      }
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
+    }
+  }
+
+  async function handleRejeter() {
+    if (!motif.trim()) {
+      setError('Un motif est requis pour rejeter un calcul');
+      return;
+    }
+    if (!window.confirm('Rejeter ce calcul ? Il redeviendra un brouillon éditable si un cycle est relancé sur la même période.')) {
+      return;
+    }
+    setSubmitting('rejeter');
+    setError(null);
+    setConflit(false);
+    try {
+      await rejeterCalcul(cabinetId, calcul.id, utilisateurId, motif.trim());
+      onChanged();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setConflit(true);
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Échec du rejet');
+      }
+    } finally {
+      setSubmitting(null);
     }
   }
 
@@ -68,14 +110,26 @@ function CalculRow({
 
       {estBrouillon ? (
         <div className="actions">
-          <button onClick={() => void handleValider()} disabled={submitting}>
-            {submitting ? '…' : 'Valider'}
+          <input
+            type="text"
+            placeholder="Motif (requis pour rejeter)"
+            value={motif}
+            onChange={(e) => setMotif(e.target.value)}
+            disabled={submitting !== null}
+          />
+          <button onClick={() => void handleValider()} disabled={submitting !== null}>
+            {submitting === 'valider' ? '…' : 'Valider'}
+          </button>
+          <button onClick={() => void handleRejeter()} disabled={submitting !== null} className="secondary">
+            {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>
         </div>
+      ) : calcul.statut === 'rejete' ? (
+        <p className="reference">Rejeté — redeviendra brouillon si un cycle est relancé sur cette période.</p>
       ) : (
         <p className="reference">Immuable — plus aucune modification possible après validation.</p>
       )}
-      {error && <p className="error">{error}</p>}
+      {error && <p className={conflit ? 'error error-409' : 'error'}>{error}</p>}
     </li>
   );
 }

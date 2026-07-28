@@ -88,7 +88,7 @@ export type ResultatCycle =
 
 // --- Calculs persistés (panneau "Calculs") ---
 
-export type StatutCalcul = 'brouillon' | 'valide' | 'declare';
+export type StatutCalcul = 'brouillon' | 'valide' | 'declare' | 'rejete';
 
 export interface Calcul {
   id: string;

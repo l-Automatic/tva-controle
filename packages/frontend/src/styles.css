@@ -178,6 +178,9 @@ select {
 .card.statut-carte-declare {
   border-left-color: #2f4fa3;
 }
+.card.statut-carte-rejete {
+  border-left-color: #8a6a6a;
+}
 
 .card-header {
   display: flex;
@@ -237,6 +240,10 @@ select {
 .statut-declare {
   background: #dde6f9;
   color: #2f4fa3;
+}
+.statut-rejete {
+  background: #ece3e3;
+  color: #7a4a4a;
 }
 
 .gravite-badge-bloquant {
