@@ -29,11 +29,14 @@ function detailsLisibles(details: unknown): string | null {
   if (!details || typeof details !== 'object') return null;
   const d = details as Record<string, unknown>;
   // Cas concret : anomalies de groupe de lettrage (paiement_partiel_a_verifier)
-  // — les autres pièces du groupe sont la seule info qui permette d'aller
-  // vérifier manuellement dans Pennylane, donc on les met en avant plutôt
-  // que de les enterrer dans un bloc JSON générique.
+  // — le compte tiers (411/401) et les autres pièces du groupe sont la seule
+  // info qui permette d'aller vérifier manuellement dans Pennylane ; le champ
+  // `compte` de l'anomalie est le compte TVA, pas le compte tiers, d'où le
+  // besoin de l'afficher séparément plutôt que de laisser croire que
+  // "Compte : 445711" est le compte client/fournisseur concerné.
   if (Array.isArray(d.groupeIds)) {
-    return `Autres pièces du même groupe de lettrage : ${d.groupeIds.join(', ')}`;
+    const compteTiers = typeof d.compteTiers === 'string' ? `Compte tiers : ${d.compteTiers} — ` : '';
+    return `${compteTiers}Autres pièces du même groupe de lettrage : ${d.groupeIds.join(', ')}`;
   }
   return JSON.stringify(details, null, 2);
 }
