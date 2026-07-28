@@ -10,8 +10,10 @@ import {
   enregistrerPropositionsTaux,
   enregistrerCalcul,
   validerCalcul,
+  rejeterCalcul,
   resoudreAnomalie,
   CalculDejaValideError,
+  CalculPasEnBrouillonError,
 } from '../src/db/writeRepository.js';
 import { listerAnomalies, listerConventions, listerTauxHistorique, listerCalculs } from '../src/db/readRepository.js';
 
@@ -322,6 +324,88 @@ describe('enregistrerCalcul et validerCalcul', () => {
     await expect(
       avecClient((client) => enregistrerCalcul(client, dossierId, '2025-07-01', '2025-07-31', resultat))
     ).rejects.toThrow(CalculDejaValideError);
+  });
+
+  it('rejette un calcul en brouillon (erreur de saisie) sans le supprimer', async () => {
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 10, referencesPieces: [4] }],
+      tvaNette: 10,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-08-01', '2025-07-31', resultat)
+    );
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U3', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u3-${Date.now()}@test.fr`]
+      )
+    );
+
+    await avecClient((client) =>
+      rejeterCalcul(client, calculId, resUser.rows[0]!.id, 'periode inversee, erreur de saisie')
+    );
+
+    const calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    expect(calculs.find((c) => c.id === calculId)).toMatchObject({ statut: 'rejete' });
+  });
+
+  it('refuse de rejeter un calcul qui n’est plus en brouillon', async () => {
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 15, referencesPieces: [5] }],
+      tvaNette: 15,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-09-01', '2025-09-30', resultat)
+    );
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U4', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u4-${Date.now()}@test.fr`]
+      )
+    );
+    const uid = resUser.rows[0]!.id;
+    await avecClient((client) => validerCalcul(client, calculId, uid));
+
+    await expect(
+      avecClient((client) => rejeterCalcul(client, calculId, uid, 'tentative apres validation'))
+    ).rejects.toThrow(CalculPasEnBrouillonError);
+  });
+
+  it('relancer un cycle sur un calcul rejeté le repasse en brouillon avec les nouvelles valeurs', async () => {
+    const errone: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 999, referencesPieces: [6] }],
+      tvaNette: 999,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-10-01', '2025-10-31', errone)
+    );
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U5', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u5-${Date.now()}@test.fr`]
+      )
+    );
+    await avecClient((client) => rejeterCalcul(client, calculId, resUser.rows[0]!.id, 'mauvais parametrage'));
+
+    const corrige: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 42, referencesPieces: [7] }],
+      tvaNette: 42,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const relanceId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, '2025-10-01', '2025-10-31', corrige)
+    );
+
+    expect(relanceId).toBe(calculId);
+    const calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    expect(calculs.find((c) => c.id === calculId)).toMatchObject({ statut: 'brouillon', tvaNette: 42 });
   });
 });
 
