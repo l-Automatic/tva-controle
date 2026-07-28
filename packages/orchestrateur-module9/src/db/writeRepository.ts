@@ -155,37 +155,6 @@ export async function enregistrerPropositionsConventions(
   }
 }
 
-// Ajout manuel d'une convention via l'interface (Module 6) — même table et
-// même statut de départ ('candidate') que les propositions automatiques du
-// Module 3, mais source distincte pour la traçabilité. Reste 'candidate'
-// comme toute proposition : même une saisie manuelle doit être confirmée
-// explicitement, pas de raccourci qui court-circuiterait la règle "jamais de
-// confirmation automatique".
-export async function ajouterConventionManuelle(
-  client: PoolClient,
-  dossierId: string,
-  utilisateurId: string,
-  cle: string,
-  valeur: unknown
-): Promise<string> {
-  const res = await client.query<{ id: string }>(
-    `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut, source)
-     VALUES ($1, $2, $3, 'candidate', 'saisie_manuelle')
-     RETURNING id`,
-    [dossierId, cle, JSON.stringify(valeur)]
-  );
-  const id = res.rows[0]!.id;
-  await enregistrerEvenementAudit(client, {
-    dossierId,
-    typeEvenement: 'convention_ajoutee_manuellement',
-    moduleSource: 'module6_validation',
-    acteur: 'utilisateur',
-    acteurUtilisateurId: utilisateurId,
-    details: { conventionId: id, cle, valeur },
-  });
-  return id;
-}
-
 // Confirmer une candidate neutralise automatiquement l'ancienne confirmed du
 // même (dossier, cle) — sans ça, la contrainte d'unicité de 001 empêcherait
 // la confirmation. C'est le remplacement explicite d'une convention par une
@@ -353,16 +322,20 @@ export async function enregistrerCalcul(
 
   if (existant.rows.length > 0) {
     const { id, statut } = existant.rows[0]!;
-    if (statut !== 'brouillon') {
+    if (statut === 'valide' || statut === 'declare') {
       throw new CalculDejaValideError(statut);
     }
-    // Brouillon existant : on le met à jour en place plutôt que de le
-    // recréer (pas de DELETE possible sur calculs_tva). Les lignes, elles,
-    // peuvent être supprimées : DELETE exceptionnel accordé sur
-    // calculs_tva_lignes tant que le header reste 'brouillon' (002/section 5),
-    // ce qui est encore le cas ici puisqu'on ne fait que l'UPDATE du header.
+    // Brouillon ou rejete existant : on le met à jour en place plutôt que de
+    // le recréer (pas de DELETE possible sur calculs_tva). Un calcul rejeté
+    // redevient 'brouillon' à la relance — le rejet n'est pas un état
+    // terminal, juste une façon d'écarter un brouillon erroné en attendant
+    // de le refaire. Les lignes, elles, peuvent être supprimées : DELETE
+    // exceptionnel accordé sur calculs_tva_lignes tant que le header reste
+    // 'brouillon' (002/section 5) — pas encore le cas juste avant cet UPDATE
+    // si le calcul était 'rejete', d'où l'ordre : header d'abord, lignes
+    // ensuite.
     await client.query(
-      `UPDATE calculs_tva SET tva_nette = $2, sens = $3, date_calcul = now() WHERE id = $1`,
+      `UPDATE calculs_tva SET statut = 'brouillon', tva_nette = $2, sens = $3, date_calcul = now() WHERE id = $1`,
       [id, resultat.tvaNette, resultat.sens]
     );
     await client.query(`DELETE FROM calculs_tva_lignes WHERE calcul_id = $1`, [id]);
@@ -394,6 +367,16 @@ export async function enregistrerCalcul(
   return calculId;
 }
 
+// Levée par validerCalcul/rejeterCalcul quand le calcul visé n'est pas (ou
+// plus) en 'brouillon' — évite qu'un appel API direct (hors UI, qui masque
+// déjà le bouton) ne valide/rejette silencieusement un calcul déjà traité.
+export class CalculPasEnBrouillonError extends Error {
+  constructor(calculId: string) {
+    super(`Calcul ${calculId} : introuvable ou plus en statut 'brouillon' (déjà validé, déclaré ou rejeté).`);
+    this.name = 'CalculPasEnBrouillonError';
+  }
+}
+
 // Passe le calcul en 'valide' — le trigger d'immuabilité (002) garantit que
 // plus rien ne peut modifier son montant après ce point.
 export async function validerCalcul(
@@ -402,17 +385,51 @@ export async function validerCalcul(
   utilisateurId: string
 ): Promise<void> {
   const res = await client.query<{ dossier_id: string; tva_nette: string; sens: string }>(
-    `UPDATE calculs_tva SET statut = 'valide', valide_par = $2, date_validation = now() WHERE id = $1
+    `UPDATE calculs_tva SET statut = 'valide', valide_par = $2, date_validation = now()
+     WHERE id = $1 AND statut = 'brouillon'
      RETURNING dossier_id, tva_nette, sens`,
     [calculId, utilisateurId]
   );
   const ligne = res.rows[0];
+  if (!ligne) {
+    throw new CalculPasEnBrouillonError(calculId);
+  }
   await enregistrerEvenementAudit(client, {
-    dossierId: ligne?.dossier_id ?? null,
+    dossierId: ligne.dossier_id,
     typeEvenement: 'calcul_valide',
     moduleSource: 'module6_validation',
     acteur: 'utilisateur',
     acteurUtilisateurId: utilisateurId,
-    details: { calculId, tvaNette: ligne?.tva_nette, sens: ligne?.sens },
+    details: { calculId, tvaNette: ligne.tva_nette, sens: ligne.sens },
+  });
+}
+
+// Passe le calcul en 'rejete' — pour écarter un brouillon erroné (ex :
+// mauvaise période saisie) sans le supprimer (pas de DELETE possible sur
+// calculs_tva). Reste en base pour la trace, redevient 'brouillon' si le
+// cycle est relancé sur la même période (cf. enregistrerCalcul).
+export async function rejeterCalcul(
+  client: PoolClient,
+  calculId: string,
+  utilisateurId: string,
+  motif: string
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE calculs_tva SET statut = 'rejete'
+     WHERE id = $1 AND statut = 'brouillon'
+     RETURNING dossier_id`,
+    [calculId]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new CalculPasEnBrouillonError(calculId);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'calcul_rejete',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { calculId, motif },
   });
 }
