@@ -159,6 +159,37 @@ export async function enregistrerPropositionsConventions(
 // même (dossier, cle) — sans ça, la contrainte d'unicité de 001 empêcherait
 // la confirmation. C'est le remplacement explicite d'une convention par une
 // nouvelle, pas un ajout en parallèle.
+// Ajout manuel d'une convention via l'interface (Module 6) — même table et
+// même statut de départ ('candidate') que les propositions automatiques du
+// Module 3, mais source distincte pour la traçabilité. Reste 'candidate'
+// comme toute proposition : même une saisie manuelle doit être confirmée
+// explicitement, pas de raccourci qui court-circuiterait la règle "jamais de
+// confirmation automatique".
+export async function ajouterConventionManuelle(
+  client: PoolClient,
+  dossierId: string,
+  utilisateurId: string,
+  cle: string,
+  valeur: unknown
+): Promise<string> {
+  const res = await client.query<{ id: string }>(
+    `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut, source)
+     VALUES ($1, $2, $3, 'candidate', 'saisie_manuelle')
+     RETURNING id`,
+    [dossierId, cle, JSON.stringify(valeur)]
+  );
+  const id = res.rows[0]!.id;
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'convention_ajoutee_manuellement',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { conventionId: id, cle, valeur },
+  });
+  return id;
+}
+
 export async function confirmerConvention(
   client: PoolClient,
   conventionId: string,
