@@ -185,11 +185,39 @@ export async function executerCycleTva(
     return { statut: 'bloque', anomalies: toutesAnomalies };
   }
 
+  if (process.env.DEBUG_CYCLE) {
+    console.error(`[DEBUG_CYCLE] comptesTva découverts : ${JSON.stringify(comptesTva)}`);
+    console.error(`[DEBUG_CYCLE] ecritures.length = ${ecritures.length}`);
+    console.error(
+      `[DEBUG_CYCLE] comptes TVA vus dans ecritures : ${JSON.stringify(
+        [...new Set(ecritures.map((e) => e.ligneTva.compte))]
+      )}`
+    );
+    console.error(
+      `[DEBUG_CYCLE] statutsExigibilite : ${JSON.stringify(
+        statutsExigibilite.map((s) => ({ compte: s.compte, exigible: s.exigible, motif: s.motif }))
+      )}`
+    );
+    console.error(
+      `[DEBUG_CYCLE] statutsCarburant : ${JSON.stringify(statutsCarburant)}`
+    );
+    console.error(
+      `[DEBUG_CYCLE] toutesAnomalies (type/compte) : ${JSON.stringify(
+        toutesAnomalies.map((a) => ({ type: a.type, compte: a.compte, gravite: a.gravite }))
+      )}`
+    );
+  }
+
   const resultat = calculerTva(ecritures, toutesAnomalies, statutsExigibilite, statutsCarburant, {
     contexteDossier,
     ...(compteAutoliquidationDue !== undefined ? { compteAutoliquidationDue } : {}),
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
   });
+
+  if (process.env.DEBUG_CYCLE) {
+    console.error(`[DEBUG_CYCLE] resultat.lignes : ${JSON.stringify(resultat.lignes)}`);
+    console.error(`[DEBUG_CYCLE] resultat.ecrituresExclues : ${JSON.stringify(resultat.ecrituresExclues)}`);
+  }
 
   const calculId = await avecContexteCabinet(pool, params.cabinetId, async (client) => {
     const id = await enregistrerCalcul(client, params.dossierId, params.periodeDebut, params.periodeFin, resultat);
