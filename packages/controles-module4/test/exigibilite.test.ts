@@ -140,6 +140,10 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('paiement_partiel_a_verifier');
     expect(anomalies[0]?.gravite).toBe('signale');
+    // Le compte affiché sur l'anomalie (`compte`) est le compte TVA, pas le
+    // compte tiers concerné par le lettrage — sans ce champ, impossible de
+    // savoir quel compte client/fournisseur aller vérifier dans Pennylane.
+    expect(anomalies[0]?.details).toMatchObject({ compteTiers: ecriture.lignesTiers[0]!.compte });
     expect(statuts[0]?.exigible).toBe(true); // lettrée quand même, juste à vérifier le montant exact
   });
 
