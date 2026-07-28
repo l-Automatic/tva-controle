@@ -21,7 +21,9 @@ export {
   rejeterTauxHistorique,
   enregistrerCalcul,
   validerCalcul,
+  rejeterCalcul,
   CalculDejaValideError,
+  CalculPasEnBrouillonError,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,
