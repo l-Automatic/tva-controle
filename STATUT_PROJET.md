@@ -49,7 +49,7 @@ déterministe, nécessiterait Module 5).
 | 9 | Orchestrateur global | 🟢 | `orchestrateur-module9` |
 | 10 | Audit & Traçabilité | 🟢 | intégré dans `orchestrateur-module9`/`api-module6`/`frontend` |
 
-**118 tests** sur le backend (6 packages testables), `npm test` à la racine.
+**126 tests** sur le backend (7 packages testables), `npm test` à la racine.
 Frontend vérifié manuellement en conditions réelles (navigateur, actions
 réelles, captures d'écran) par Claude Code – pas de suite automatisée dessus.
 
@@ -114,24 +114,29 @@ tva-controle/
   volontairement le fix pour prouver que le test le détecte.
 - Distinction à trois voies nécessaire dans les écritures composées
   (`ligneTva` / `lignesTiers` / `autresLignes`), pas juste deux.
+- **Aucun DELETE possible sur `anomalies`/`calculs_tva` par le rôle
+  applicatif** (choix délibéré, 002 – traçabilité fiscale) : la première
+  tentative de fix pour la déduplication des anomalies utilisait `DELETE`,
+  a cassé toute la suite de tests en environnement réel avec `permission
+  denied`. Corrigé sans DELETE : statut `obsolete` (anomalies) et `UPDATE`
+  en place (calcul brouillon). Toujours tester contre la vraie base avec le
+  vrai rôle applicatif, pas juste en local avec un rôle superuser.
 - **Désynchronisation entre conversations** (celle-ci) – voir avertissement
   en tête de document.
 
 ## Ce qui reste en suspens, par urgence
 
 **Fonctionnel, pas juste cosmétique :**
-- Pas de déduplication des anomalies – relancer un cycle sur une période déjà
-  calculée échoue sur une contrainte d'unicité plutôt que d'écraser (voulu,
-  mais implique un nettoyage SQL manuel pour retester une même période)
-- Le frontend ne permet pas encore de configurer les 4 conventions de
-  comptes (vente/charge service, équipement, carburant) ni de déclencher un
-  cycle depuis l'écran (existe en HTTP direct, `POST /dossiers/:id/cycles`,
-  jamais relié à un bouton)
+- Le cas 409 (relance sur calcul déjà validé) et le cycle de succès n'ont été
+  vérifiés côté frontend que par interception réseau (Playwright, pas de
+  vrai token Pennylane disponible pour Claude Code) – à revalider en
+  conditions réelles sur le VPS avec un vrai token
 
 **Technique, connu et documenté :**
 - Pas d'authentification – header `x-cabinet-id` en clair, stand-in temporaire
 - Le token Pennylane est passé en clair dans le corps de la requête HTTP
-  (pas de résolution via secret manager / `connexions_api`)
+  (accepté pour l'instant : test en mode sandbox Pennylane `company`, pas
+  encore `firm` — à revoir avant tout usage multi-cabinets réel)
 - Proxy Vite en dev uniquement – pas déployable tel quel en production (CORS)
 
 **Mis de côté consciemment :**
