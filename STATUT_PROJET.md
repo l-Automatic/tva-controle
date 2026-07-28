@@ -184,3 +184,56 @@ tva-controle/
 - **VPS** : `92.113.31.90`, connexion `root@`. Base de test :
   `tva_orchestrateur_test`. Rami utilise VS Code + Remote-SSH + extension
   Claude Code (pas le terminal SSH nu, sauf quand nécessaire).
+
+## Backlog — Module 5 et extensions (pas commencé, pour plus tard)
+
+### Module 5 — nécessite un LLM (déterministe insuffisant), 3 tâches identifiées
+1. **Motif de numérotation des factures** par dossier — trop de formats
+   différents selon les cabinets pour une règle déterministe fiable.
+2. **Classification véhicule tourisme/utilitaire** à partir des libellés
+   d'immobilisation.
+3. **Nouveau fournisseur à risque** — table `tiers_reference` déjà en base,
+   jamais alimentée ni exploitée.
+
+### Compte 471 (attente) et encaissements clients sans facture en face
+Problème : tout encaissement en 471, ou en compte client sans facture
+identifiée (acompte, facture non transmise), doit générer de la TVA
+collectée — mais à quel taux n'est pas déterminable automatiquement, et le
+montant reçu est en TTC (il faut en déduire le HT selon le taux retenu).
+
+Piste de résolution du taux (à trancher avec Rami avant dev, probablement
+paramétrable par dossier) :
+- laisser le comptable choisir le taux au cas par cas, ou
+- taux par défaut = taux le plus élevé du dossier (pas toujours 20 % —
+  certains dossiers n'ont que du 10 % en taux max), ou
+- si le client a un profil à taux mixte connu, prendre le taux le plus haut
+  sauf info contraire.
+
+Piège à ne pas rater sur les 471 spécifiquement : tous les encaissements en
+471 ne sont pas liés à une vente (remboursement d'assurance, remboursement
+d'impôts...). Distinguer ça nécessite un LLM qui juge sur le libellé de
+l'opération — donc rattaché au Module 5, pas un contrôle déterministe.
+
+### Paramétrage par dossier et par cabinet (transverse, pas encore construit)
+- Pouvoir modifier/override des données aujourd'hui considérées comme
+  acquises et validées.
+- Pouvoir désactiver certains contrôles ou fonctionnalités, par dossier.
+- `conventions_dossier` couvre une partie du besoin (comptes) mais pas la
+  désactivation de contrôles — à étendre.
+
+### Véhicules tourisme/utilitaire — arbitrage à faire avant de développer
+Deux approches en balance, pas encore tranché :
+a. Détection automatique par LLM (Module 5) à partir des libellés
+   d'immobilisation, validée ensuite par le collaborateur.
+b. Saisie manuelle : le collaborateur liste les immobilisations concernées
+   dans un paramètre dédié et coche tourisme/utilitaire lui-même.
+
+Contrainte commune aux deux : immobilisations parfois anciennes, incertitude
+sur la capacité des API (Pennylane et autres) à toujours exposer la liste
+complète des immos d'un dossier.
+
+### Déductibilité carburant 80 %/100 %
+Le contrôle carburant actuel se contente de signaler "parc de véhicules non
+renseigné" sans permettre de trancher. À ajouter : un paramètre par dossier
+pour choisir 80 % ou 100 % de déductibilité quand le dossier a un mix
+tourisme + utilitaire.
