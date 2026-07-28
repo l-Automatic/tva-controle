@@ -137,8 +137,8 @@ export function determinerExigibiliteTva(
         gravite: 'signale',
         ledgerEntryId,
         compte,
-        description: `Groupe de lettrage à ${ligneTiers.lettrage.groupeIds.length} lignes — possible paiement partiel, montant exigible à vérifier manuellement (calcul extracomptable de la TVA non encore déductible/collectée).`,
-        details: { groupeIds: ligneTiers.lettrage.groupeIds },
+        description: `Compte tiers ${ligneTiers.compte} : groupe de lettrage à ${ligneTiers.lettrage.groupeIds.length} lignes — possible paiement partiel, montant exigible à vérifier manuellement (calcul extracomptable de la TVA non encore déductible/collectée).`,
+        details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds },
       });
     }
 
