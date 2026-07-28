@@ -169,6 +169,15 @@ select {
 .card.acteur-agent {
   border-left-color: #7a3fd6;
 }
+.card.statut-carte-brouillon {
+  border-left-color: #8a5a00;
+}
+.card.statut-carte-valide {
+  border-left-color: #1e7a3c;
+}
+.card.statut-carte-declare {
+  border-left-color: #2f4fa3;
+}
 
 .card-header {
   display: flex;
@@ -216,6 +225,18 @@ select {
 .statut-rejected {
   background: #f9dede;
   color: #a32f2f;
+}
+.statut-brouillon {
+  background: #fdf1d6;
+  color: #8a5a00;
+}
+.statut-valide {
+  background: #ddf3e4;
+  color: #1e7a3c;
+}
+.statut-declare {
+  background: #dde6f9;
+  color: #2f4fa3;
 }
 
 .gravite-badge-bloquant {

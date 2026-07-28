@@ -86,6 +86,19 @@ export type ResultatCycle =
   | { statut: 'bloque'; anomalies: AnomalieCycle[] }
   | { statut: 'calcule'; anomalies: AnomalieCycle[]; resultat: ResultatCalculCycle; calculId: string };
 
+// --- Calculs persistés (panneau "Calculs") ---
+
+export type StatutCalcul = 'brouillon' | 'valide' | 'declare';
+
+export interface Calcul {
+  id: string;
+  periodeDebut: string;
+  periodeFin: string;
+  statut: StatutCalcul;
+  tvaNette: number;
+  sens: 'a_decaisser' | 'credit';
+}
+
 export type ActeurAudit = 'agent' | 'utilisateur' | 'systeme';
 
 export interface AuditEvenement {

@@ -1,4 +1,4 @@
-import type { Anomalie, AuditEvenement, Proposition, ResultatCycle } from './types';
+import type { Anomalie, AuditEvenement, Calcul, Proposition, ResultatCycle } from './types';
 
 const BASE_URL = '/api';
 
@@ -204,5 +204,16 @@ export function lancerCycle(
   return request<ResultatCycle>(`/dossiers/${dossierId}/cycles`, cabinetId, {
     method: 'POST',
     body: JSON.stringify(parametres),
+  });
+}
+
+export function fetchCalculs(cabinetId: string, dossierId: string): Promise<Calcul[]> {
+  return request<Calcul[]>(`/dossiers/${dossierId}/calculs`, cabinetId);
+}
+
+export function validerCalcul(cabinetId: string, id: string, utilisateurId: string): Promise<void> {
+  return request<void>(`/calculs/${id}/valider`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
   });
 }

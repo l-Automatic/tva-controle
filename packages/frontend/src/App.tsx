@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AnomaliesPanel } from './components/AnomaliesPanel';
 import { AuditPanel } from './components/AuditPanel';
+import { CalculsPanel } from './components/CalculsPanel';
 import { ConventionsComptesPanel } from './components/ConventionsComptesPanel';
 import { CycleForm } from './components/CycleForm';
 import { PropositionsPanel } from './components/PropositionsPanel';
@@ -104,6 +105,7 @@ export function App() {
       ) : (
         <main className="app-main">
           <CycleForm cabinetId={cabinetId} dossierId={dossierId} />
+          <CalculsPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
           <AnomaliesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
           <ConventionsComptesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
           <PropositionsPanel
