@@ -524,3 +524,60 @@ export async function rejeterCalcul(
     details: { calculId, motif },
   });
 }
+
+// ============================================================================
+// PARAMÉTRAGE (cabinet et dossier)
+// ============================================================================
+// Pas de workflow candidate/confirmed comme conventions_dossier : un
+// paramètre est une décision directe du cabinet/collaborateur (ex: une clé
+// API), pas une proposition détectée automatiquement à valider.
+
+// Jamais la valeur elle-même dans l'audit pour ces clés — seul le fait
+// qu'un secret ait été modifié est tracé, jamais son contenu.
+const CLES_SECRETES = new Set(['mistral_api_key']);
+
+export async function definirParametreCabinet(
+  client: PoolClient,
+  cabinetId: string,
+  cle: string,
+  valeur: unknown,
+  utilisateurId: string
+): Promise<void> {
+  await client.query(
+    `INSERT INTO parametres_cabinet (cabinet_id, cle, valeur)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (cabinet_id, cle) DO UPDATE SET valeur = EXCLUDED.valeur, updated_at = now()`,
+    [cabinetId, cle, JSON.stringify(valeur)]
+  );
+  await enregistrerEvenementAudit(client, {
+    dossierId: null,
+    typeEvenement: 'parametre_cabinet_modifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: CLES_SECRETES.has(cle) ? { cle, secret: true } : { cle, valeur },
+  });
+}
+
+export async function definirParametreDossier(
+  client: PoolClient,
+  dossierId: string,
+  cle: string,
+  valeur: unknown,
+  utilisateurId: string
+): Promise<void> {
+  await client.query(
+    `INSERT INTO parametres_dossier (dossier_id, cle, valeur)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (dossier_id, cle) DO UPDATE SET valeur = EXCLUDED.valeur, updated_at = now()`,
+    [dossierId, cle, JSON.stringify(valeur)]
+  );
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'parametre_dossier_modifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: CLES_SECRETES.has(cle) ? { cle, secret: true } : { cle, valeur },
+  });
+}
