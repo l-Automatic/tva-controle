@@ -7,6 +7,7 @@ import {
   resoudreAnomalie,
   justifierAnomalie,
   qualifierEncaissementNonAffecte,
+  AnomalieNonQualifiableError,
   ajouterConventionManuelle,
   confirmerConvention,
   rejeterConvention,
@@ -130,7 +131,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       );
       reply.code(204).send();
     } catch (err) {
-      if (err instanceof Error && err.message.includes('encaissement_non_affecte')) {
+      if (err instanceof AnomalieNonQualifiableError) {
         return reply.code(409).send({ erreur: err.message });
       }
       throw err;

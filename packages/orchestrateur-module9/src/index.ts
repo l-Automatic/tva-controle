@@ -26,6 +26,7 @@ export {
   CalculPasEnBrouillonError,
   qualifierEncaissementNonAffecte,
   type QualificationEncaissement,
+  AnomalieNonQualifiableError,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,

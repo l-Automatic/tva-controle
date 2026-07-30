@@ -122,6 +122,116 @@ describe('API Module 6 — cycle de vie d’une anomalie', () => {
   });
 });
 
+describe('API Module 6 — qualification d’un encaissement non affecté (compte 471)', () => {
+  async function creerAnomalieEncaissement(referencePiece: string) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [cabinetId]);
+      const res = await client.query<{ id: string }>(
+        `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, details, statut)
+         VALUES ($1, '2025-09-01', 'encaissement_non_affecte', 'bloquant', $2, 'test',
+                 '{"montantTTC": 250, "libelle": "VIR RECU", "date": "2025-09-10"}', 'ouvert')
+         RETURNING id`,
+        [dossierId, referencePiece]
+      );
+      await client.query('COMMIT');
+      return res.rows[0]!.id;
+    } finally {
+      client.release();
+    }
+  }
+
+  it('refuse une décision "vente" sans taux', async () => {
+    const anomalieId = await creerAnomalieEncaissement('471-1');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieId}/qualifier`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, decision: 'vente' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuse une décision "hors_vente" sans motif', async () => {
+    const anomalieId = await creerAnomalieEncaissement('471-2');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieId}/qualifier`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, decision: 'hors_vente' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('qualifie "vente" avec un taux, visible ensuite comme résolue avec le taux en resolution', async () => {
+    const anomalieId = await creerAnomalieEncaissement('471-3');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieId}/qualifier`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, decision: 'vente', taux: 20 },
+    });
+    expect(res.statusCode).toBe(204);
+
+    const resListe = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/anomalies?statut=resolu`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    const ligne = resListe.json().find((a: { id: string }) => a.id === anomalieId);
+    expect(ligne).toMatchObject({ statut: 'resolu', resolution: { taux: 20 } });
+  });
+
+  it('qualifie "hors_vente" avec un motif, visible ensuite comme justifiée', async () => {
+    const anomalieId = await creerAnomalieEncaissement('471-4');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieId}/qualifier`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, decision: 'hors_vente', motif: 'Remboursement assurance' },
+    });
+    expect(res.statusCode).toBe(204);
+
+    const resListe = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/anomalies?statut=justifie`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    const ligne = resListe.json().find((a: { id: string }) => a.id === anomalieId);
+    expect(ligne?.statut).toBe('justifie');
+  });
+
+  it('renvoie 409 si l’anomalie a déjà été qualifiée par quelqu’un d’autre entre-temps', async () => {
+    const anomalieId = await creerAnomalieEncaissement('471-5');
+    const premiere = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieId}/qualifier`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, decision: 'vente', taux: 10 },
+    });
+    expect(premiere.statusCode).toBe(204);
+
+    const seconde = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieId}/qualifier`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId, decision: 'hors_vente', motif: 'tentative concurrente' },
+    });
+    expect(seconde.statusCode).toBe(409);
+
+    // La première qualification doit rester intacte, pas écrasée par la
+    // tentative rejetée.
+    const resListe = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/anomalies?statut=resolu`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    const ligne = resListe.json().find((a: { id: string }) => a.id === anomalieId);
+    expect(ligne).toMatchObject({ statut: 'resolu', resolution: { taux: 10 } });
+  });
+});
+
 describe('API Module 6 — cycle de vie d’une convention candidate', () => {
   let conventionId = '';
 

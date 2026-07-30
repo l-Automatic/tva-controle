@@ -149,6 +149,20 @@ export type QualificationEncaissement =
   | { decision: 'vente'; taux: number }
   | { decision: 'hors_vente'; motif: string };
 
+// Levée par qualifierEncaissementNonAffecte quand l'anomalie visée n'est pas
+// (ou plus) en 'ouvert' — même famille que CalculPasEnBrouillonError : évite
+// qu'un second appel (onglet dupliqué, collègue plus rapide) n'écrase
+// silencieusement une qualification déjà posée par quelqu'un d'autre.
+export class AnomalieNonQualifiableError extends Error {
+  constructor(anomalieId: string) {
+    super(
+      `Anomalie ${anomalieId} : introuvable, pas de type 'encaissement_non_affecte', ` +
+        `ou déjà traitée (statut différent de 'ouvert').`
+    );
+    this.name = 'AnomalieNonQualifiableError';
+  }
+}
+
 export async function qualifierEncaissementNonAffecte(
   client: PoolClient,
   anomalieId: string,
@@ -165,15 +179,13 @@ export async function qualifierEncaissementNonAffecte(
   const res = await client.query<{ dossier_id: string }>(
     `UPDATE anomalies SET statut = $2, traite_par = $3, date_traitement = now(),
        commentaire_traitement = $4, resolution = $5
-     WHERE id = $1 AND type_anomalie = 'encaissement_non_affecte'
+     WHERE id = $1 AND type_anomalie = 'encaissement_non_affecte' AND statut = 'ouvert'
      RETURNING dossier_id`,
     [anomalieId, statut, utilisateurId, commentaire, resolution ? JSON.stringify(resolution) : null]
   );
   const ligne = res.rows[0];
   if (!ligne) {
-    throw new Error(
-      `Anomalie ${anomalieId} introuvable, ou n'est pas une anomalie 'encaissement_non_affecte'.`
-    );
+    throw new AnomalieNonQualifiableError(anomalieId);
   }
   await enregistrerEvenementAudit(client, {
     dossierId: ligne.dossier_id,

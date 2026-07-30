@@ -15,6 +15,7 @@ import {
   qualifierEncaissementNonAffecte,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
+  AnomalieNonQualifiableError,
 } from '../src/db/writeRepository.js';
 import {
   listerAnomalies,
@@ -484,6 +485,27 @@ describe('qualifierEncaissementNonAffecte (compte 471)', () => {
     return inseree!.id;
   }
 
+  // Plusieurs anomalies sur la MÊME période doivent être insérées en un seul
+  // appel : enregistrerAnomalies marque les anomalies 'ouvert' existantes de
+  // la période comme 'obsolete' avant d'insérer (dédup, cf. commentaire de
+  // la fonction) — les insérer une par une via creerAnomalieEncaissement se
+  // ferait donc obsoléter les précédentes à chaque nouvel appel.
+  async function creerAnomaliesEncaissement(
+    periode: string,
+    specs: { montantTTC: number; ledgerEntryId: number }[]
+  ) {
+    const anomalies: Anomalie[] = specs.map((s) => ({
+      type: 'encaissement_non_affecte',
+      gravite: 'bloquant',
+      ledgerEntryId: s.ledgerEntryId,
+      compte: '471000',
+      description: 'test',
+      details: { montantTTC: s.montantTTC, libelle: 'Virement', date: periode },
+    }));
+    const inserees = await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, anomalies));
+    return inserees.map((a) => a.id);
+  }
+
   async function creerUtilisateur(label: string) {
     const res = await avecClient((client) =>
       client.query<{ id: string }>(
@@ -543,10 +565,38 @@ describe('qualifierEncaissementNonAffecte (compte 471)', () => {
     ).rejects.toThrow(/encaissement_non_affecte/);
   });
 
+  it('refuse de re-qualifier une anomalie déjà traitée plutôt que d’écraser silencieusement la première décision', async () => {
+    const anomalieId = await creerAnomalieEncaissement('2025-11-06', 800, 5010);
+    const utilisateurId = await creerUtilisateur('Q6');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, anomalieId, utilisateurId, { decision: 'vente', taux: 20 })
+    );
+
+    // Un collègue (ou un second clic) tente de qualifier la même anomalie
+    // différemment — doit être rejeté, pas silencieusement accepté.
+    await expect(
+      avecClient((client) =>
+        qualifierEncaissementNonAffecte(client, anomalieId, utilisateurId, {
+          decision: 'hors_vente',
+          motif: 'remboursement',
+        })
+      )
+    ).rejects.toThrow(AnomalieNonQualifiableError);
+
+    // La première décision doit être intacte, pas écrasée par la tentative refusée.
+    const anomalies = await avecClient((client) => listerAnomalies(client, dossierId, { periode: '2025-11-06' }));
+    const ligne = anomalies.find((a) => a.id === anomalieId);
+    expect(ligne?.statut).toBe('resolu');
+    expect(ligne?.resolution).toEqual({ taux: 20 });
+  });
+
   it('listerLedgerEntryIdsQualifies retourne les pièces déjà résolues ou justifiées, pas les ouvertes', async () => {
-    const idVente = await creerAnomalieEncaissement('2025-11-04', 100, 6001);
-    const idHorsVente = await creerAnomalieEncaissement('2025-11-04', 200, 6002);
-    await creerAnomalieEncaissement('2025-11-04', 300, 6003); // reste ouverte, volontairement
+    const [idVente, idHorsVente] = await creerAnomaliesEncaissement('2025-11-04', [
+      { montantTTC: 100, ledgerEntryId: 6001 },
+      { montantTTC: 200, ledgerEntryId: 6002 },
+      { montantTTC: 300, ledgerEntryId: 6003 }, // reste ouverte, volontairement
+    ]);
     const utilisateurId = await creerUtilisateur('Q4');
 
     await avecClient((client) =>
@@ -567,8 +617,10 @@ describe('qualifierEncaissementNonAffecte (compte 471)', () => {
   });
 
   it('listerRegularisationsAIntegrer ne retourne que les qualifications "vente" de la période demandée', async () => {
-    const idVente = await creerAnomalieEncaissement('2025-11-05', 1200, 7001);
-    const idHorsVente = await creerAnomalieEncaissement('2025-11-05', 500, 7002);
+    const [idVente, idHorsVente] = await creerAnomaliesEncaissement('2025-11-05', [
+      { montantTTC: 1200, ledgerEntryId: 7001 },
+      { montantTTC: 500, ledgerEntryId: 7002 },
+    ]);
     const idAutrePeriode = await creerAnomalieEncaissement('2025-12-01', 600, 7003);
     const utilisateurId = await creerUtilisateur('Q5');
 
