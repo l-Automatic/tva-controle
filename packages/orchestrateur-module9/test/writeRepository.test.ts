@@ -15,6 +15,7 @@ import {
   qualifierEncaissementNonAffecte,
   definirParametreCabinet,
   definirParametreDossier,
+  synchroniserTiersReference,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
   AnomalieNonQualifiableError,
@@ -730,5 +731,142 @@ describe('paramétrage cabinet et dossier', () => {
 
     const parametresCabinet = await avecClient((client) => listerParametresCabinet(client, cabinetId));
     expect(parametresCabinet.find((p) => p.cle === 'controle_carburant_actif')).toBeUndefined();
+  });
+});
+
+describe('synchroniserTiersReference', () => {
+  it('un tiers nouveau est inséré en statut nouveau', async () => {
+    const compte = `401NOUVEAU${Date.now()}`;
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Fournisseur Neuf', estNouveau: true }],
+        '2025-06-30'
+      )
+    );
+
+    const res = await avecClient((client) =>
+      client.query(`SELECT * FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0]).toMatchObject({
+      niveau_confiance: 'nouveau',
+      nb_controles_sans_anomalie: 0,
+      nom_tiers: 'Fournisseur Neuf',
+    });
+  });
+
+  it('un tiers déjà nouveau : la relance n’écrase pas la ligne existante (ON CONFLICT DO NOTHING)', async () => {
+    const compte = `401DEJA${Date.now()}`;
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Premier nom', estNouveau: true }],
+        '2025-06-30'
+      )
+    );
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Autre nom', estNouveau: true }],
+        '2025-07-31'
+      )
+    );
+
+    const res = await avecClient((client) =>
+      client.query(`SELECT * FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].nom_tiers).toBe('Premier nom');
+  });
+
+  it('un tiers déjà connu progresse : compteur incrémenté, niveau_confiance avance aux seuils', async () => {
+    const compte = `401PROGRESSE${Date.now()}`;
+    // D'abord un cycle où il est nouveau.
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Test Progression', estNouveau: true }],
+        '2025-01-31'
+      )
+    );
+
+    // Puis 3 cycles où il n'est plus nouveau -> doit atteindre 'a_surveiller' (seuil 3).
+    for (const periode of ['2025-02-28', '2025-03-31', '2025-04-30']) {
+      await avecClient((client) =>
+        synchroniserTiersReference(
+          client,
+          dossierId,
+          [{ numeroCompteTiers: compte, nomTiers: null, estNouveau: false }],
+          periode
+        )
+      );
+    }
+
+    let res = await avecClient((client) =>
+      client.query(`SELECT * FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(res.rows[0]).toMatchObject({ nb_controles_sans_anomalie: 3, niveau_confiance: 'a_surveiller' });
+
+    // 3 cycles de plus -> 6 au total -> 'confiance' (seuil 6).
+    for (const periode of ['2025-05-31', '2025-06-30', '2025-07-31']) {
+      await avecClient((client) =>
+        synchroniserTiersReference(
+          client,
+          dossierId,
+          [{ numeroCompteTiers: compte, nomTiers: null, estNouveau: false }],
+          periode
+        )
+      );
+    }
+
+    res = await avecClient((client) =>
+      client.query(`SELECT * FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(res.rows[0]).toMatchObject({ nb_controles_sans_anomalie: 6, niveau_confiance: 'confiance' });
+  });
+
+  it('ne remplace jamais un nom déjà connu par null (COALESCE)', async () => {
+    const compte = `401NOMPRESERVE${Date.now()}`;
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Nom Original', estNouveau: true }],
+        '2025-01-31'
+      )
+    );
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: null, estNouveau: false }],
+        '2025-02-28'
+      )
+    );
+
+    const res = await avecClient((client) =>
+      client.query(`SELECT nom_tiers FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(res.rows[0].nom_tiers).toBe('Nom Original');
   });
 });
