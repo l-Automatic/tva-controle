@@ -29,6 +29,12 @@ export interface ContexteDossier {
   tauxHistorique: TauxHistorique[];
   conventions: ConventionDossier[];
   parcVehicules: Vehicule[]; // miroir de la table immobilisations, filtré véhicules
+  // Miroir de tiers_reference.numero_compte_tiers pour ce dossier — tiers
+  // déjà rencontrés lors d'un cycle précédent, quel que soit leur niveau de
+  // confiance actuel. Absence d'un compte ici (ou champ non fourni du tout,
+  // ex: dossier tout juste onboardé) = jamais vu = nouveau. Optionnel,
+  // comme parcVehicules l'est implicitement via le même raisonnement.
+  tiersConnus?: string[];
 }
 
 export function tauxHabituelPour(
