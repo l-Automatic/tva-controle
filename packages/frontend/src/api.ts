@@ -1,4 +1,4 @@
-import type { Anomalie, AuditEvenement, Calcul, Proposition, ResultatCycle } from './types';
+import type { Anomalie, AuditEvenement, Calcul, Proposition, QualificationEncaissement, ResultatCycle } from './types';
 
 const BASE_URL = '/api';
 
@@ -73,6 +73,20 @@ export function justifierAnomalie(
   return request<void>(`/anomalies/${id}/justifier`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId, commentaire }),
+  });
+}
+
+// 409 (ApiError.status) si l'anomalie n'est plus qualifiable (déjà traitée
+// entre le chargement de la liste et le clic) — géré par l'appelant.
+export function qualifierEncaissement(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  qualification: QualificationEncaissement
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, ...qualification }),
   });
 }
 

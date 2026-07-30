@@ -12,8 +12,15 @@ export interface Anomalie {
   description: string;
   details: unknown;
   statut: StatutAnomalie;
+  resolution: unknown;
   createdAt: string;
 }
+
+// Qualification dédiée aux anomalies 'encaissement_non_affecte' (compte
+// d'attente 471) — décision structurée, pas un simple commentaire libre.
+export type QualificationEncaissement =
+  | { decision: 'vente'; taux: number }
+  | { decision: 'hors_vente'; motif: string };
 
 export type StatutProposition = 'candidate' | 'confirmed' | 'rejected';
 
