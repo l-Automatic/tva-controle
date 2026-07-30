@@ -13,6 +13,8 @@ import {
   rejeterCalcul,
   resoudreAnomalie,
   qualifierEncaissementNonAffecte,
+  definirParametreCabinet,
+  definirParametreDossier,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
   AnomalieNonQualifiableError,
@@ -24,6 +26,9 @@ import {
   listerCalculs,
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
+  listerParametresCabinet,
+  parametreCabinetValeur,
+  listerParametresDossier,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -642,5 +647,88 @@ describe('qualifierEncaissementNonAffecte (compte 471)', () => {
     );
 
     expect(regularisations).toEqual([{ ledgerEntryId: 7001, montantTTC: 1200, taux: 20 }]);
+  });
+});
+
+describe('paramétrage cabinet et dossier', () => {
+  async function creerUtilisateur(label: string) {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, $2, $3, 'collaborateur') RETURNING id`,
+        [cabinetId, label, `${label}-${Date.now()}@test.fr`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('définit puis relit un paramètre cabinet non secret en clair', async () => {
+    const utilisateurId = await creerUtilisateur('P1');
+
+    await avecClient((client) =>
+      definirParametreCabinet(client, cabinetId, 'unite_devise', 'EUR', utilisateurId)
+    );
+
+    const parametres = await avecClient((client) => listerParametresCabinet(client, cabinetId));
+    expect(parametres.find((p) => p.cle === 'unite_devise')?.valeur).toBe('EUR');
+  });
+
+  it('masque la valeur d’un paramètre secret (mistral_api_key) dans listerParametresCabinet, mais parametreCabinetValeur la retourne en clair', async () => {
+    const utilisateurId = await creerUtilisateur('P2');
+
+    await avecClient((client) =>
+      definirParametreCabinet(client, cabinetId, 'mistral_api_key', 'sk-test-abc123', utilisateurId)
+    );
+
+    const parametres = await avecClient((client) => listerParametresCabinet(client, cabinetId));
+    const cle = parametres.find((p) => p.cle === 'mistral_api_key');
+    expect(cle?.valeur).toBe('••••••••');
+    expect(cle?.valeur).not.toContain('sk-test-abc123');
+
+    // Usage interne serveur (résolution pour un appel LLM) : valeur en clair.
+    const valeurReelle = await avecClient((client) => parametreCabinetValeur(client, cabinetId, 'mistral_api_key'));
+    expect(valeurReelle).toBe('sk-test-abc123');
+  });
+
+  it('ne trace jamais la valeur d’un paramètre secret dans l’audit, seulement son nom', async () => {
+    const utilisateurId = await creerUtilisateur('P3');
+
+    await avecClient((client) =>
+      definirParametreCabinet(client, cabinetId, 'mistral_api_key', 'sk-secret-xyz', utilisateurId)
+    );
+
+    const audit = await avecClient((client) =>
+      client.query(
+        `SELECT details FROM audit_log WHERE type_evenement = 'parametre_cabinet_modifie' AND acteur_utilisateur_id = $1`,
+        [utilisateurId]
+      )
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(JSON.stringify(audit.rows[0].details)).not.toContain('sk-secret-xyz');
+    expect(audit.rows[0].details).toEqual({ cle: 'mistral_api_key', secret: true });
+  });
+
+  it('redéfinir la même clé met à jour la valeur plutôt que d’en créer une seconde (upsert)', async () => {
+    const utilisateurId = await creerUtilisateur('P4');
+
+    await avecClient((client) => definirParametreCabinet(client, cabinetId, 'test_upsert', 'v1', utilisateurId));
+    await avecClient((client) => definirParametreCabinet(client, cabinetId, 'test_upsert', 'v2', utilisateurId));
+
+    const parametres = await avecClient((client) => listerParametresCabinet(client, cabinetId));
+    expect(parametres.filter((p) => p.cle === 'test_upsert')).toHaveLength(1);
+    expect(parametres.find((p) => p.cle === 'test_upsert')?.valeur).toBe('v2');
+  });
+
+  it('paramètre dossier : indépendant du paramètre cabinet de même nom', async () => {
+    const utilisateurId = await creerUtilisateur('P5');
+
+    await avecClient((client) =>
+      definirParametreDossier(client, dossierId, 'controle_carburant_actif', false, utilisateurId)
+    );
+
+    const parametresDossier = await avecClient((client) => listerParametresDossier(client, dossierId));
+    expect(parametresDossier.find((p) => p.cle === 'controle_carburant_actif')?.valeur).toBe(false);
+
+    const parametresCabinet = await avecClient((client) => listerParametresCabinet(client, cabinetId));
+    expect(parametresCabinet.find((p) => p.cle === 'controle_carburant_actif')).toBeUndefined();
   });
 });
