@@ -4,18 +4,26 @@ import {
   fetchEcrituresTvaCompletes,
   fetchTrialBalance,
   filterComptesParPrefixe,
+  fetchLignesParCompte,
+  decouvrirComptesParPrefixe,
 } from '@tva-controle/connector-pennylane';
 import {
   executerPreControles,
   determinerExigibiliteTva,
   determinerDeductibiliteCarburant,
   detecterImmobilisationManquee,
+  detecterEncaissementsNonAffectes,
 } from '@tva-controle/controles-module4';
-import { calculerTva, type ResultatCalculTva } from '@tva-controle/calcul-module7';
+import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur, conventionListe } from './db/dossierRepository.js';
-import { enregistrerAnomalies, enregistrerCalcul, enregistrerEvenementAudit } from './db/writeRepository.js';
+import {
+  enregistrerAnomalies,
+  enregistrerCalcul,
+  enregistrerEvenementAudit,
+} from './db/writeRepository.js';
+import { listerLedgerEntryIdsQualifies, listerRegularisationsAIntegrer } from './db/readRepository.js';
 
 export interface ParametresCycleTva {
   cabinetId: string;
@@ -44,6 +52,10 @@ export interface ParametresCycleTva {
   comptesChargeServiceOverride?: string[];
   comptesEquipementOverride?: string[];
   comptesCarburantOverride?: string[];
+  // Comptes d'attente (471 par défaut) sur lesquels chercher des encaissements
+  // non identifiés — préfixes, pas numéros exacts (comme comptesTva), car un
+  // dossier peut subdiviser en plusieurs sous-comptes 471x.
+  comptesAttenteOverride?: string[];
 }
 
 export type ResultatCycleTva =
@@ -57,10 +69,10 @@ export type ResultatCycleTva =
 //
 // Les anomalies sont TOUJOURS persistées, même en cas de blocage — c'est
 // justement ce qui permet à Module 6 (validation humaine) de les voir et de
-// les traiter. Comme rien ne marque encore une anomalie "résolue" avant le
-// prochain cycle, relancer executerCycleTva sur la même période sans avoir
-// traité les anomalies precédentes les insère à nouveau (pas de
-// déduplication en v1 — limitation connue, pas un oubli).
+// les traiter. Relancer executerCycleTva sur la même période marque les
+// anciennes anomalies encore 'ouvert' comme 'obsolete' avant d'insérer le
+// nouveau lot (enregistrerAnomalies) — les anomalies déjà traitées
+// ('resolu'/'justifie') ne sont, elles, jamais touchées par une relance.
 //
 // La persistance se fait dans des transactions séparées de la lecture du
 // contexte et de l'appel réseau Pennylane, pour ne jamais garder une
@@ -112,6 +124,8 @@ export async function executerCycleTva(
     params.comptesEquipementOverride ?? conventionListe(contexteDossier, 'comptes_equipement') ?? [];
   const comptesCarburant =
     params.comptesCarburantOverride ?? conventionListe(contexteDossier, 'comptes_carburant') ?? [];
+  const comptesAttentePrefixes =
+    params.comptesAttenteOverride ?? conventionListe(contexteDossier, 'comptes_attente') ?? ['471'];
 
   const anomaliesPreControles = executerPreControles(ecritures, {
     contexteDossier,
@@ -132,11 +146,39 @@ export async function executerCycleTva(
 
   const anomaliesImmobilisation = detecterImmobilisationManquee(ecritures, { comptesEquipement });
 
+  // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
+  // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
+  // par définition aucune ligne TVA associée (c'est justement le problème),
+  // donc invisibles pour un fetch ancré sur les comptes 445*.
+  const comptesAttente = (
+    await Promise.all(comptesAttentePrefixes.map((prefixe) => decouvrirComptesParPrefixe(params.client, prefixe)))
+  ).flat();
+  const lignesAttente =
+    comptesAttente.length > 0
+      ? await fetchLignesParCompte(params.client, {
+          compteIds: comptesAttente.map((c) => c.id),
+          periodeDebut: params.periodeDebut,
+          periodeFin: params.periodeFin,
+        })
+      : [];
+
+  // Filtre les pièces déjà qualifiées lors d'un cycle précédent : sinon,
+  // comme la détection relit les mêmes lignes Pennylane à chaque relance
+  // (elle ne sait rien de nos décisions passées), un encaissement déjà
+  // qualifié re-bloquerait indéfiniment tout nouveau cycle sur la période.
+  const ledgerEntryIdsQualifies = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerLedgerEntryIdsQualifies(client, params.dossierId)
+  );
+  const anomaliesEncaissements = detecterEncaissementsNonAffectes(lignesAttente).filter(
+    (a) => !ledgerEntryIdsQualifies.has(a.ledgerEntryId)
+  );
+
   const toutesAnomalies: Anomalie[] = [
     ...anomaliesPreControles,
     ...anomaliesExigibilite,
     ...anomaliesCarburant,
     ...anomaliesImmobilisation,
+    ...anomaliesEncaissements,
   ];
 
   // enregistrerAnomalies retourne les lignes réellement insérées (avec leur
@@ -208,13 +250,23 @@ export async function executerCycleTva(
     );
   }
 
-  const resultat = calculerTva(ecritures, toutesAnomalies, statutsExigibilite, statutsCarburant, {
+  const resultatBrut = calculerTva(ecritures, toutesAnomalies, statutsExigibilite, statutsCarburant, {
     contexteDossier,
     ...(compteAutoliquidationDue !== undefined ? { compteAutoliquidationDue } : {}),
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
   });
 
+  // Encaissements en compte d'attente déjà qualifiés 'vente' par un humain
+  // (lors d'un cycle précédent, cf. anomaliesEncaissements plus haut) :
+  // intégrés après coup, pas dans calculerTva lui-même — la donnée ne vient
+  // pas de `ecritures` mais d'une décision stockée en base.
+  const regularisations = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerRegularisationsAIntegrer(client, params.dossierId, params.periodeDebut)
+  );
+  const resultat = integrerRegularisations(resultatBrut, regularisations);
+
   if (process.env.DEBUG_CYCLE) {
+    console.error(`[DEBUG_CYCLE] regularisations 471 integrees : ${JSON.stringify(regularisations)}`);
     console.error(`[DEBUG_CYCLE] resultat.lignes : ${JSON.stringify(resultat.lignes)}`);
     console.error(`[DEBUG_CYCLE] resultat.ecrituresExclues : ${JSON.stringify(resultat.ecrituresExclues)}`);
   }
