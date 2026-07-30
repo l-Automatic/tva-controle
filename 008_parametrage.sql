@@ -59,7 +59,9 @@ GRANT SELECT, INSERT, UPDATE ON parametres_cabinet TO pennylane_tva_app;
 GRANT SELECT, INSERT, UPDATE ON parametres_dossier TO pennylane_tva_app;
 
 ALTER TABLE parametres_cabinet ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parametres_cabinet FORCE ROW LEVEL SECURITY;
 ALTER TABLE parametres_dossier ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parametres_dossier FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY isolation_cabinet ON parametres_cabinet
     USING (cabinet_id = current_setting('app.current_cabinet_id', true)::UUID);
