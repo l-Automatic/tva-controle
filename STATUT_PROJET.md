@@ -42,14 +42,19 @@ déterministe, nécessiterait Module 5).
 | 2 | Mémoire de Dossier (Postgres) | 🟢 | `00X_*.sql` (racine) |
 | 3 | Onboarding (découverte déterministe) | 🟢 | `onboarding-module3` |
 | 4 | Pré-contrôles Déterministes | 🟢 | `controles-module4` |
-| 5 | Résolution par Jugement (LLM) | ⬜ | pas commencé |
+| 5 | Résolution par Jugement (LLM) | 🟡 | pas commencé — mais partie déterministe de la tâche 3 (nouveaux tiers) faite dans `controles-module4`/`orchestrateur-module9` |
 | 6 | Validation Humaine (backend + frontend) | 🟢 | `api-module6` + `packages/frontend` |
 | 7 | Calcul TVA | 🟢 | `calcul-module7` |
 | 8 | Génération Déclaration (CA3) | ⬜ | explicitement reporté |
 | 9 | Orchestrateur global | 🟢 | `orchestrateur-module9` |
 | 10 | Audit & Traçabilité | 🟢 | intégré dans `orchestrateur-module9`/`api-module6`/`frontend` |
 
-**126 tests** sur le backend (7 packages testables), `npm test` à la racine.
+**Tests backend** (7 packages testables), `npm test` à la racine — comptes
+confirmés individuellement aujourd'hui : `controles-module4` 51,
+`calcul-module7` 15, `orchestrateur-module9` 39. Total agrégé pas revérifié
+depuis (`api-module6` et `onboarding-module3` non retouchés dans cette
+session) — lancer `npm test` à la racine pour le chiffre exact plutôt que de
+se fier à un total périmé ici.
 Frontend vérifié manuellement en conditions réelles (navigateur, actions
 réelles, captures d'écran) par Claude Code – pas de suite automatisée dessus.
 
@@ -140,7 +145,13 @@ tva-controle/
 - Proxy Vite en dev uniquement – pas déployable tel quel en production (CORS)
 
 **Mis de côté consciemment :**
-- Module 5 (LLM) – numérotation facture, classification véhicule, lecture OCR
+- Module 5 (LLM) — 2 des 3 tâches restantes : numérotation facture,
+  classification véhicule tourisme/utilitaire. La 3ᵉ (nouveau fournisseur à
+  risque) a sa partie déterministe faite (détection + `tiers_reference`
+  alimentée) ; seul le jugement de risque par LLM reste à faire.
+- Paramétrage : la clé Mistral se configure déjà (panneau Paramètres,
+  `parametres_cabinet`), mais aucun appel LLM réel n'est câblé dessus —
+  aucune des tâches Module 5 ne consomme encore cette clé.
 - Module 8 (génération CA3) – cases officielles déjà vérifiées si repris un
   jour (08–20%, 9B–10%, 09–5,5%, T6–2,1%, 19–immo, 20–abs)
 - Intracom – détecté (`compte_tva_non_reconnu`, bloquant) mais pas traité
@@ -187,13 +198,29 @@ tva-controle/
 
 ## Backlog — Module 5 et extensions (pas commencé, pour plus tard)
 
-### Module 5 — nécessite un LLM (déterministe insuffisant), 3 tâches identifiées
+### Module 5 — nécessite un LLM (déterministe insuffisant), 2 tâches restantes
 1. **Motif de numérotation des factures** par dossier — trop de formats
    différents selon les cabinets pour une règle déterministe fiable.
 2. **Classification véhicule tourisme/utilitaire** à partir des libellés
    d'immobilisation.
-3. **Nouveau fournisseur à risque** — table `tiers_reference` déjà en base,
-   jamais alimentée ni exploitée.
+
+~~3. Nouveau fournisseur à risque~~ — partie déterministe faite (voir
+"Nouveaux tiers" ci-dessous). Reste : jugement de risque par LLM sur le nom
+du tiers (pattern de fraude, fournisseur fictif...), pas encore câblé.
+
+### Nouveaux tiers — implémenté (partie déterministe)
+Fait : `verifierNouveauxTiers` (controles-module4) détecte tout compte
+client/fournisseur jamais vu pour ce dossier, anomalie `signale` (pas
+bloquante). `synchroniserTiersReference` (orchestrateur-module9) alimente
+enfin `tiers_reference` (existait depuis le schéma initial, jamais utilisée) :
+progression `nouveau` → `a_surveiller` (3 cycles) → `confiance` (6 cycles),
+seuils arbitraires en dur, documentés comme tels — bons candidats pour
+devenir un paramètre dossier/cabinet si le besoin se confirme à l'usage.
+
+Pas fait : rien côté frontend pour visualiser la progression de confiance
+d'un tiers dans le temps (consultable en base uniquement pour l'instant).
+Le jugement de risque par LLM (voir ci-dessus) reste la partie manquante
+de la tâche originale.
 
 ### Compte 471 (attente) — implémenté
 Fait : détection (tout encaissement non lettré sur compte(s) préfixe 471,
@@ -213,12 +240,18 @@ ligne 411 non lettrée peut simplement être une facture impayée normale,
 pas un encaissement à qualifier). Pas encore traité — nécessite de
 distinguer les deux cas avant de dupliquer le mécanisme.
 
-### Paramétrage par dossier et par cabinet (transverse, pas encore construit)
-- Pouvoir modifier/override des données aujourd'hui considérées comme
-  acquises et validées.
-- Pouvoir désactiver certains contrôles ou fonctionnalités, par dossier.
-- `conventions_dossier` couvre une partie du besoin (comptes) mais pas la
-  désactivation de contrôles — à étendre.
+### Paramétrage par dossier et par cabinet — socle implémenté
+Fait : tables `parametres_cabinet`/`parametres_dossier` (migration 008,
+clé-valeur, pas de workflow candidate/confirmed — décision directe, pas une
+proposition à valider), API GET/PUT, panneau frontend. Sert aujourd'hui à
+la clé Mistral (`mistral_api_key`, présence = LLM activé pour ce cabinet,
+masquée à l'affichage, jamais tracée en clair dans l'audit — mais stockée
+en clair en base, même compromis que le token Pennylane, à revoir avant
+tout usage multi-cabinets réel).
+
+Pas fait : aucun contrôle ne lit encore `parametres_dossier` pour se
+désactiver. La table existe, l'API existe, le câblage dans le pipeline
+(vérifier un paramètre avant de lancer chaque contrôle) reste à faire.
 
 ### Véhicules tourisme/utilitaire — arbitrage à faire avant de développer
 Deux approches en balance, pas encore tranché :
