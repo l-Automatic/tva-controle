@@ -12,10 +12,18 @@ import {
   validerCalcul,
   rejeterCalcul,
   resoudreAnomalie,
+  qualifierEncaissementNonAffecte,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
 } from '../src/db/writeRepository.js';
-import { listerAnomalies, listerConventions, listerTauxHistorique, listerCalculs } from '../src/db/readRepository.js';
+import {
+  listerAnomalies,
+  listerConventions,
+  listerTauxHistorique,
+  listerCalculs,
+  listerLedgerEntryIdsQualifies,
+  listerRegularisationsAIntegrer,
+} from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
   process.env.DATABASE_URL ?? 'postgresql://pennylane_tva_app:CHANGE_ME_APP@localhost:5432/tva_orchestrateur_test';
@@ -459,5 +467,128 @@ describe('enregistrerEvenementAudit (Module 10)', () => {
     expect(audit.rows).toHaveLength(1);
     expect(audit.rows[0].acteur).toBe('utilisateur');
     expect(audit.rows[0].acteur_utilisateur_id).toBe(utilisateurId);
+  });
+});
+
+describe('qualifierEncaissementNonAffecte (compte 471)', () => {
+  async function creerAnomalieEncaissement(periode: string, montantTTC: number, ledgerEntryId: number) {
+    const anomalie: Anomalie = {
+      type: 'encaissement_non_affecte',
+      gravite: 'bloquant',
+      ledgerEntryId,
+      compte: '471000',
+      description: 'test',
+      details: { montantTTC, libelle: 'Virement', date: periode },
+    };
+    const [inseree] = await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, [anomalie]));
+    return inseree!.id;
+  }
+
+  async function creerUtilisateur(label: string) {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, $2, $3, 'collaborateur') RETURNING id`,
+        [cabinetId, label, `${label}-${Date.now()}@test.fr`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('qualification "vente" : passe en resolu, stocke le taux dans resolution', async () => {
+    const anomalieId = await creerAnomalieEncaissement('2025-11-01', 1200, 5001);
+    const utilisateurId = await creerUtilisateur('Q1');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, anomalieId, utilisateurId, { decision: 'vente', taux: 20 })
+    );
+
+    const anomalies = await avecClient((client) => listerAnomalies(client, dossierId, { periode: '2025-11-01' }));
+    const ligne = anomalies.find((a) => a.id === anomalieId);
+    expect(ligne?.statut).toBe('resolu');
+    expect(ligne?.resolution).toEqual({ taux: 20 });
+  });
+
+  it('qualification "hors_vente" : passe en justifie, resolution reste vide', async () => {
+    const anomalieId = await creerAnomalieEncaissement('2025-11-02', 300, 5002);
+    const utilisateurId = await creerUtilisateur('Q2');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, anomalieId, utilisateurId, {
+        decision: 'hors_vente',
+        motif: 'Remboursement assurance dégât des eaux',
+      })
+    );
+
+    const anomalies = await avecClient((client) => listerAnomalies(client, dossierId, { periode: '2025-11-02' }));
+    const ligne = anomalies.find((a) => a.id === anomalieId);
+    expect(ligne?.statut).toBe('justifie');
+    expect(ligne?.resolution).toBeNull();
+  });
+
+  it('refuse de qualifier une anomalie qui n’est pas de type encaissement_non_affecte', async () => {
+    const autre: Anomalie = {
+      type: 'taux_incoherent',
+      gravite: 'bloquant',
+      ledgerEntryId: 5003,
+      compte: '445711',
+      description: 'test',
+    };
+    const [inseree] = await avecClient((client) => enregistrerAnomalies(client, dossierId, '2025-11-03', [autre]));
+    const utilisateurId = await creerUtilisateur('Q3');
+
+    await expect(
+      avecClient((client) =>
+        qualifierEncaissementNonAffecte(client, inseree!.id, utilisateurId, { decision: 'vente', taux: 20 })
+      )
+    ).rejects.toThrow(/encaissement_non_affecte/);
+  });
+
+  it('listerLedgerEntryIdsQualifies retourne les pièces déjà résolues ou justifiées, pas les ouvertes', async () => {
+    const idVente = await creerAnomalieEncaissement('2025-11-04', 100, 6001);
+    const idHorsVente = await creerAnomalieEncaissement('2025-11-04', 200, 6002);
+    await creerAnomalieEncaissement('2025-11-04', 300, 6003); // reste ouverte, volontairement
+    const utilisateurId = await creerUtilisateur('Q4');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, idVente, utilisateurId, { decision: 'vente', taux: 10 })
+    );
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, idHorsVente, utilisateurId, {
+        decision: 'hors_vente',
+        motif: 'remboursement',
+      })
+    );
+
+    const qualifies = await avecClient((client) => listerLedgerEntryIdsQualifies(client, dossierId));
+
+    expect(qualifies.has(6001)).toBe(true);
+    expect(qualifies.has(6002)).toBe(true);
+    expect(qualifies.has(6003)).toBe(false);
+  });
+
+  it('listerRegularisationsAIntegrer ne retourne que les qualifications "vente" de la période demandée', async () => {
+    const idVente = await creerAnomalieEncaissement('2025-11-05', 1200, 7001);
+    const idHorsVente = await creerAnomalieEncaissement('2025-11-05', 500, 7002);
+    const idAutrePeriode = await creerAnomalieEncaissement('2025-12-01', 600, 7003);
+    const utilisateurId = await creerUtilisateur('Q5');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, idVente, utilisateurId, { decision: 'vente', taux: 20 })
+    );
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, idHorsVente, utilisateurId, {
+        decision: 'hors_vente',
+        motif: 'remboursement',
+      })
+    );
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, idAutrePeriode, utilisateurId, { decision: 'vente', taux: 10 })
+    );
+
+    const regularisations = await avecClient((client) =>
+      listerRegularisationsAIntegrer(client, dossierId, '2025-11-05')
+    );
+
+    expect(regularisations).toEqual([{ ledgerEntryId: 7001, montantTTC: 1200, taux: 20 }]);
   });
 });
