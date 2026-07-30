@@ -338,6 +338,23 @@ select {
   margin: 0 0 0.5rem;
 }
 
+.parametres-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .parametres-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.parametres-section h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+}
+
 .card.compte-confirme {
   border-left-color: #1e7a3c;
 }

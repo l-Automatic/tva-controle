@@ -4,6 +4,7 @@ import { AuditPanel } from './components/AuditPanel';
 import { CalculsPanel } from './components/CalculsPanel';
 import { ConventionsComptesPanel } from './components/ConventionsComptesPanel';
 import { CycleForm } from './components/CycleForm';
+import { ParametresPanel } from './components/ParametresPanel';
 import { PropositionsPanel } from './components/PropositionsPanel';
 import {
   confirmerConvention,
@@ -128,6 +129,7 @@ export function App() {
             rejeter={rejeterTauxHistorique}
             renderLabel={libelleTaux}
           />
+          <ParametresPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
           <AuditPanel cabinetId={cabinetId} dossierId={dossierId} />
         </main>
       )}

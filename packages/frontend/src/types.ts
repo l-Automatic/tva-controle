@@ -106,6 +106,14 @@ export interface Calcul {
   sens: 'a_decaisser' | 'credit';
 }
 
+// --- Paramétrage (cabinet + dossier) ---
+
+export interface Parametre {
+  cle: string;
+  valeur: unknown;
+  updatedAt: string;
+}
+
 export type ActeurAudit = 'agent' | 'utilisateur' | 'systeme';
 
 export interface AuditEvenement {

@@ -1,4 +1,12 @@
-import type { Anomalie, AuditEvenement, Calcul, Proposition, QualificationEncaissement, ResultatCycle } from './types';
+import type {
+  Anomalie,
+  AuditEvenement,
+  Calcul,
+  Parametre,
+  Proposition,
+  QualificationEncaissement,
+  ResultatCycle,
+} from './types';
 
 const BASE_URL = '/api';
 
@@ -243,5 +251,43 @@ export function rejeterCalcul(
   return request<void>(`/calculs/${id}/rejeter`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId, motif }),
+  });
+}
+
+// --- Paramétrage ---
+// Les valeurs secrètes (ex : mistral_api_key) sont déjà masquées par l'API
+// avant de sortir de la couche DB (renvoyées comme '••••••••') — jamais de
+// valeur en clair à masquer ici, ni de tentative de déchiffrement.
+
+export function fetchParametresCabinet(cabinetId: string): Promise<Parametre[]> {
+  return request<Parametre[]>('/parametres-cabinet', cabinetId);
+}
+
+export function definirParametreCabinet(
+  cabinetId: string,
+  utilisateurId: string,
+  cle: string,
+  valeur: unknown
+): Promise<void> {
+  return request<void>('/parametres-cabinet', cabinetId, {
+    method: 'PUT',
+    body: JSON.stringify({ utilisateurId, cle, valeur }),
+  });
+}
+
+export function fetchParametresDossier(cabinetId: string, dossierId: string): Promise<Parametre[]> {
+  return request<Parametre[]>(`/dossiers/${dossierId}/parametres`, cabinetId);
+}
+
+export function definirParametreDossier(
+  cabinetId: string,
+  dossierId: string,
+  utilisateurId: string,
+  cle: string,
+  valeur: unknown
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/parametres`, cabinetId, {
+    method: 'PUT',
+    body: JSON.stringify({ utilisateurId, cle, valeur }),
   });
 }
