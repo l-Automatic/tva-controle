@@ -10,7 +10,8 @@ export interface AnomalieDb {
   compte: string | null;
   description: string;
   details: unknown;
-  statut: 'ouvert' | 'resolu' | 'justifie';
+  statut: 'ouvert' | 'resolu' | 'justifie' | 'obsolete';
+  resolution: unknown;
   createdAt: string;
 }
 
@@ -38,7 +39,7 @@ export async function listerAnomalies(
   }
 
   const res = await client.query(
-    `SELECT id, dossier_id, periode, type_anomalie, gravite, reference_piece, compte, description, details, statut, created_at
+    `SELECT id, dossier_id, periode, type_anomalie, gravite, reference_piece, compte, description, details, statut, resolution, created_at
      FROM anomalies WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`,
     params
   );
@@ -54,7 +55,52 @@ export async function listerAnomalies(
     description: r.description,
     details: r.details,
     statut: r.statut,
+    resolution: r.resolution,
     createdAt: r.created_at,
+  }));
+}
+
+// Ledger entry ids déjà qualifiés (résolus ou justifiés) pour ce dossier —
+// sert à ce que la détection (encaissementNonAffecte, stateless, relit les
+// mêmes lignes Pennylane à chaque cycle) ne re-signale pas indéfiniment un
+// encaissement déjà traité par un humain lors d'un cycle précédent : sans ce
+// filtre, la relance d'un cycle re-bloquerait systématiquement sur les mêmes
+// pièces déjà qualifiées, dans une boucle sans issue.
+export async function listerLedgerEntryIdsQualifies(client: PoolClient, dossierId: string): Promise<Set<number>> {
+  const res = await client.query<{ reference_piece: string }>(
+    `SELECT reference_piece FROM anomalies
+     WHERE dossier_id = $1 AND type_anomalie = 'encaissement_non_affecte'
+       AND statut IN ('resolu', 'justifie') AND reference_piece IS NOT NULL`,
+    [dossierId]
+  );
+  return new Set(res.rows.map((r) => Number(r.reference_piece)));
+}
+
+export interface RegularisationDb {
+  ledgerEntryId: number;
+  montantTTC: number;
+  taux: number;
+}
+
+// Régularisations à intégrer au calcul de la période : encaissements
+// 'encaissement_non_affecte' qualifiés 'vente' (statut='resolu', taux dans
+// resolution) pour ce dossier et cette période précisément — un encaissement
+// qualifié sur une autre période n'a pas à impacter celle-ci.
+export async function listerRegularisationsAIntegrer(
+  client: PoolClient,
+  dossierId: string,
+  periode: string
+): Promise<RegularisationDb[]> {
+  const res = await client.query<{ reference_piece: string; details: { montantTTC: number }; resolution: { taux: number } }>(
+    `SELECT reference_piece, details, resolution FROM anomalies
+     WHERE dossier_id = $1 AND periode = $2 AND type_anomalie = 'encaissement_non_affecte'
+       AND statut = 'resolu' AND resolution IS NOT NULL`,
+    [dossierId, periode]
+  );
+  return res.rows.map((r) => ({
+    ledgerEntryId: Number(r.reference_piece),
+    montantTTC: Number(r.details.montantTTC),
+    taux: Number(r.resolution.taux),
   }));
 }
 
