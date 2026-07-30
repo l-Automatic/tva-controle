@@ -20,6 +20,7 @@ export {
   type StatutCarburant,
 } from './carburant.js';
 export { detecterComptesTvaNonReconnus, type ConfigComptesTva } from './comptesNonReconnus.js';
+export { detecterEncaissementsNonAffectes } from './encaissementNonAffecte.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
