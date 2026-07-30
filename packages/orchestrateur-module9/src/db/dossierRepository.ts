@@ -59,6 +59,9 @@ export async function chargerContexteDossier(client: PoolClient, dossierId: stri
      WHERE dossier_id = $1 AND statut = 'confirmed' AND type_bien IS NOT NULL`,
     [dossierId]
   );
+  const tiersRes = await client.query(`SELECT numero_compte_tiers FROM tiers_reference WHERE dossier_id = $1`, [
+    dossierId,
+  ]);
 
   const tauxHistorique: TauxHistorique[] = tauxRes.rows.map(
     (r: { compte_produit_ou_charge: string; taux_habituel: string; nb_occurrences: number }) => ({
@@ -80,7 +83,9 @@ export async function chargerContexteDossier(client: PoolClient, dossierId: stri
     type: r.type_bien as TypeVehicule,
   }));
 
-  return { tauxHistorique, conventions, parcVehicules };
+  const tiersConnus: string[] = tiersRes.rows.map((r: { numero_compte_tiers: string }) => r.numero_compte_tiers);
+
+  return { tauxHistorique, conventions, parcVehicules, tiersConnus };
 }
 
 // Convention confirmée dont la valeur est une simple chaîne (ex: numéro de
