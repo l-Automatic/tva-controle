@@ -27,6 +27,8 @@ export {
   qualifierEncaissementNonAffecte,
   type QualificationEncaissement,
   AnomalieNonQualifiableError,
+  definirParametreCabinet,
+  definirParametreDossier,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,
@@ -37,9 +39,13 @@ export {
   listerAuditLogPourExport,
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
+  listerParametresCabinet,
+  parametreCabinetValeur,
+  listerParametresDossier,
   type AnomalieDb,
   type PropositionDb,
   type CalculDb,
   type AuditEvenementDb,
   type RegularisationDb,
+  type ParametreDb,
 } from './db/readRepository.js';
