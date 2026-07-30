@@ -6,6 +6,7 @@ import {
   executerCycleTva,
   resoudreAnomalie,
   justifierAnomalie,
+  qualifierEncaissementNonAffecte,
   ajouterConventionManuelle,
   confirmerConvention,
   rejeterConvention,
@@ -104,6 +105,37 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(204).send();
     }
   );
+
+  // Qualification spécifique aux anomalies 'encaissement_non_affecte'
+  // (compte d'attente 471) : décision structurée (vente+taux, ou hors
+  // vente+motif), pas juste un commentaire libre — cf. qualifierEncaissementNonAffecte.
+  app.post<{
+    Params: { id: string };
+    Body: { utilisateurId: string } & (
+      | { decision: 'vente'; taux: number }
+      | { decision: 'hors_vente'; motif: string }
+    );
+  }>('/anomalies/:id/qualifier', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { utilisateurId, ...qualification } = request.body;
+    if (qualification.decision === 'vente' && typeof qualification.taux !== 'number') {
+      return reply.code(400).send({ erreur: 'taux (nombre) requis pour une qualification "vente"' });
+    }
+    if (qualification.decision === 'hors_vente' && !qualification.motif) {
+      return reply.code(400).send({ erreur: 'motif requis pour une qualification "hors_vente"' });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        qualifierEncaissementNonAffecte(client, request.params.id, utilisateurId, qualification)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('encaissement_non_affecte')) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
 
   // --- Conventions dossier ---
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
