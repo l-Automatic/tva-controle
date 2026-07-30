@@ -285,3 +285,46 @@ export async function listerAuditLogPourExport(
 ): Promise<AuditEvenementDb[]> {
   return listerAuditLog(client, dossierId, { ...filtres, limite: LIMITE_EXPORT_AUDIT });
 }
+
+// ============================================================================
+// PARAMÉTRAGE (cabinet et dossier)
+// ============================================================================
+
+export interface ParametreDb {
+  cle: string;
+  valeur: unknown;
+  updatedAt: string;
+}
+
+// Clés dont la valeur ne doit jamais transiter en clair vers le frontend une
+// fois définie (secrets). listerParametresCabinet la masque systématiquement
+// — parametreCabinetValeur, elle, la retourne en clair : usage strictement
+// serveur (ex: résoudre la clé pour un appel LLM), jamais exposée par une
+// route qui renvoie son résultat tel quel au client.
+const CLES_SECRETES = new Set(['mistral_api_key']);
+
+export async function listerParametresCabinet(client: PoolClient, cabinetId: string): Promise<ParametreDb[]> {
+  const res = await client.query(`SELECT cle, valeur, updated_at FROM parametres_cabinet WHERE cabinet_id = $1`, [
+    cabinetId,
+  ]);
+  return res.rows.map((r) => ({
+    cle: r.cle,
+    valeur: CLES_SECRETES.has(r.cle) ? (r.valeur ? '••••••••' : null) : r.valeur,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function parametreCabinetValeur(client: PoolClient, cabinetId: string, cle: string): Promise<unknown> {
+  const res = await client.query(`SELECT valeur FROM parametres_cabinet WHERE cabinet_id = $1 AND cle = $2`, [
+    cabinetId,
+    cle,
+  ]);
+  return res.rows[0]?.valeur ?? null;
+}
+
+export async function listerParametresDossier(client: PoolClient, dossierId: string): Promise<ParametreDb[]> {
+  const res = await client.query(`SELECT cle, valeur, updated_at FROM parametres_dossier WHERE dossier_id = $1`, [
+    dossierId,
+  ]);
+  return res.rows.map((r) => ({ cle: r.cle, valeur: r.valeur, updatedAt: r.updated_at }));
+}
