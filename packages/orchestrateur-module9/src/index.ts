@@ -29,6 +29,8 @@ export {
   AnomalieNonQualifiableError,
   definirParametreCabinet,
   definirParametreDossier,
+  synchroniserTiersReference,
+  type StatutTiersASynchroniser,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,
