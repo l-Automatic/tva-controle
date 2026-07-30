@@ -85,6 +85,10 @@ function fakeFetchRouteur(): typeof fetch {
     const filtre = url.searchParams.get('filter') ?? '';
 
     if (url.pathname === '/api/external/v2/ledger_accounts') {
+      // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
+      // existantes, réponse vide explicite pour ne pas hériter par erreur des
+      // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
+      if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
       if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
       if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
     }
@@ -232,6 +236,10 @@ describe('executerCycleTva — dérivation des comptes depuis conventions_dossie
       const url = new URL(rawUrl);
       const filtre = url.searchParams.get('filter') ?? '';
       if (url.pathname === '/api/external/v2/ledger_accounts') {
+        // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
+        // existantes, réponse vide explicite pour ne pas hériter par erreur des
+        // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
+        if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
         if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
         if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
       }
@@ -313,6 +321,10 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
       const url = new URL(rawUrl);
       const filtre = url.searchParams.get('filter') ?? '';
       if (url.pathname === '/api/external/v2/ledger_accounts') {
+        // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
+        // existantes, réponse vide explicite pour ne pas hériter par erreur des
+        // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
+        if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
         if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
         if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
       }
@@ -441,6 +453,10 @@ describe('executerCycleTva — découverte automatique des comptes via la balanc
 
       const filtre = url.searchParams.get('filter') ?? '';
       if (url.pathname === '/api/external/v2/ledger_accounts') {
+        // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
+        // existantes, réponse vide explicite pour ne pas hériter par erreur des
+        // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
+        if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
         if (filtre.includes('"field":"number"') && filtre.includes('"operator":"in"')) {
           // Capture les comptes réellement transmis pour la résolution —
           // le fantôme à solde nul ne doit PAS y figurer.
