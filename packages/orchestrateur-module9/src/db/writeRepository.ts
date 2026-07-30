@@ -137,6 +137,54 @@ export async function justifierAnomalie(
   });
 }
 
+// Qualification d'une anomalie 'encaissement_non_affecte' (compte d'attente,
+// cf. controles-module4/encaissementNonAffecte) : contrairement à
+// resoudreAnomalie/justifierAnomalie, cette décision porte un résultat
+// numérique (le taux de TVA retenu) que Module 7 doit pouvoir relire pour
+// intégrer la régularisation au calcul — d'où une fonction dédiée plutôt
+// qu'un paramètre de plus sur les fonctions génériques. Restreinte par le
+// WHERE au bon type d'anomalie : évite qu'un appel API mal formé n'attache
+// un taux à une anomalie qui n'en a pas l'usage.
+export type QualificationEncaissement =
+  | { decision: 'vente'; taux: number }
+  | { decision: 'hors_vente'; motif: string };
+
+export async function qualifierEncaissementNonAffecte(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  qualification: QualificationEncaissement
+): Promise<void> {
+  const statut = qualification.decision === 'vente' ? 'resolu' : 'justifie';
+  const commentaire =
+    qualification.decision === 'vente'
+      ? `Qualifié comme lié à une vente — TVA collectée au taux de ${qualification.taux}%.`
+      : qualification.motif;
+  const resolution = qualification.decision === 'vente' ? { taux: qualification.taux } : null;
+
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE anomalies SET statut = $2, traite_par = $3, date_traitement = now(),
+       commentaire_traitement = $4, resolution = $5
+     WHERE id = $1 AND type_anomalie = 'encaissement_non_affecte'
+     RETURNING dossier_id`,
+    [anomalieId, statut, utilisateurId, commentaire, resolution ? JSON.stringify(resolution) : null]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new Error(
+      `Anomalie ${anomalieId} introuvable, ou n'est pas une anomalie 'encaissement_non_affecte'.`
+    );
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'encaissement_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, ...qualification },
+  });
+}
+
 // ============================================================================
 // CONVENTIONS DOSSIER (propositions du Module 3, ou saisie manuelle)
 // ============================================================================
