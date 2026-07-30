@@ -581,3 +581,61 @@ export async function definirParametreDossier(
     details: CLES_SECRETES.has(cle) ? { cle, secret: true } : { cle, valeur },
   });
 }
+
+// ============================================================================
+// TIERS_REFERENCE (mémoire de confiance des tiers)
+// ============================================================================
+// Progression volontairement simple pour cette v1 : un compteur de cycles
+// où le tiers est apparu, sans croiser avec les autres anomalies du cycle
+// (ex: un tiers impliqué dans une anomalie sans rapport avec lui-même ne
+// voit pas sa progression bloquée) — croiser les deux ajouterait une
+// dépendance complexe pour un bénéfice pas démontré. Seuils arbitraires,
+// documentés comme tels : à ajuster une fois qu'on aura du recul réel,
+// bon candidat pour devenir un paramètre dossier/cabinet (cf. 008) plutôt
+// qu'une constante en dur si le besoin se confirme.
+const SEUIL_A_SURVEILLER = 3;
+const SEUIL_CONFIANCE = 6;
+
+export interface StatutTiersASynchroniser {
+  numeroCompteTiers: string;
+  nomTiers: string | null;
+  estNouveau: boolean;
+}
+
+// Pas de DELETE (comme partout ailleurs) : un tiers nouveau est un INSERT,
+// un tiers déjà connu progresse par UPDATE. Idempotent en pratique — appelé
+// une fois par cycle réussi, jamais deux fois pour la même période avec les
+// mêmes lignes (le pipeline ne rappelle cette fonction qu'une fois par
+// exécution de cycle).
+export async function synchroniserTiersReference(
+  client: PoolClient,
+  dossierId: string,
+  statuts: StatutTiersASynchroniser[],
+  periodeFin: string
+): Promise<void> {
+  for (const s of statuts) {
+    if (s.estNouveau) {
+      await client.query(
+        `INSERT INTO tiers_reference
+           (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie, derniere_date_controle)
+         VALUES ($1, $2, $3, 'nouveau', 0, $4)
+         ON CONFLICT (dossier_id, numero_compte_tiers) DO NOTHING`,
+        [dossierId, s.numeroCompteTiers, s.nomTiers, periodeFin]
+      );
+    } else {
+      await client.query(
+        `UPDATE tiers_reference
+         SET nb_controles_sans_anomalie = nb_controles_sans_anomalie + 1,
+             derniere_date_controle = $3,
+             nom_tiers = COALESCE(nom_tiers, $4),
+             niveau_confiance = CASE
+               WHEN nb_controles_sans_anomalie + 1 >= $5 THEN 'confiance'
+               WHEN nb_controles_sans_anomalie + 1 >= $6 THEN 'a_surveiller'
+               ELSE niveau_confiance
+             END
+         WHERE dossier_id = $1 AND numero_compte_tiers = $2`,
+        [dossierId, s.numeroCompteTiers, periodeFin, s.nomTiers, SEUIL_CONFIANCE, SEUIL_A_SURVEILLER]
+      );
+    }
+  }
+}
