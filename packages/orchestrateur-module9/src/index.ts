@@ -24,6 +24,8 @@ export {
   rejeterCalcul,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
+  qualifierEncaissementNonAffecte,
+  type QualificationEncaissement,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,
@@ -32,8 +34,11 @@ export {
   listerCalculs,
   listerAuditLog,
   listerAuditLogPourExport,
+  listerLedgerEntryIdsQualifies,
+  listerRegularisationsAIntegrer,
   type AnomalieDb,
   type PropositionDb,
   type CalculDb,
   type AuditEvenementDb,
+  type RegularisationDb,
 } from './db/readRepository.js';
