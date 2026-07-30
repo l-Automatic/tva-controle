@@ -23,6 +23,10 @@ import {
   listerAuditLogPourExport,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
+  definirParametreCabinet,
+  definirParametreDossier,
+  listerParametresCabinet,
+  listerParametresDossier,
   type AuditEvenementDb,
 } from '@tva-controle/orchestrateur-module9';
 
@@ -358,6 +362,53 @@ export function buildApp(pool: Pool): FastifyInstance {
       throw err;
     }
   });
+
+  // --- Paramétrage cabinet (ex: clé API Mistral — présence = LLM activé) ---
+  app.get('/parametres-cabinet', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    // listerParametresCabinet masque déjà les valeurs secrètes (ex:
+    // mistral_api_key) avant de sortir de la couche DB — jamais de valeur en
+    // clair à masquer ici, la garantie vient d'une seule source.
+    return avecContexteCabinet(pool, cabinetId, (client) => listerParametresCabinet(client, cabinetId));
+  });
+
+  app.put<{ Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
+    '/parametres-cabinet',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const { utilisateurId, cle, valeur } = request.body;
+      if (!cle) {
+        return reply.code(400).send({ erreur: 'cle requise' });
+      }
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        definirParametreCabinet(client, cabinetId, cle, valeur, utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
+
+  // --- Paramétrage dossier (ex: désactivation d'un contrôle pour ce dossier) ---
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/parametres', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) =>
+      listerParametresDossier(client, request.params.dossierId)
+    );
+  });
+
+  app.put<{ Params: { dossierId: string }; Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
+    '/dossiers/:dossierId/parametres',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const { utilisateurId, cle, valeur } = request.body;
+      if (!cle) {
+        return reply.code(400).send({ erreur: 'cle requise' });
+      }
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        definirParametreDossier(client, request.params.dossierId, cle, valeur, utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
 
   return app;
 }
