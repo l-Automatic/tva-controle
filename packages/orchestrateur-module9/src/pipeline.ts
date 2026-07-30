@@ -13,6 +13,7 @@ import {
   determinerDeductibiliteCarburant,
   detecterImmobilisationManquee,
   detecterEncaissementsNonAffectes,
+  verifierNouveauxTiers,
 } from '@tva-controle/controles-module4';
 import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
 import type { Anomalie } from '@tva-controle/core';
@@ -22,6 +23,7 @@ import {
   enregistrerAnomalies,
   enregistrerCalcul,
   enregistrerEvenementAudit,
+  synchroniserTiersReference,
 } from './db/writeRepository.js';
 import { listerLedgerEntryIdsQualifies, listerRegularisationsAIntegrer } from './db/readRepository.js';
 
@@ -173,12 +175,15 @@ export async function executerCycleTva(
     (a) => !ledgerEntryIdsQualifies.has(a.ledgerEntryId)
   );
 
+  const { statuts: statutsTiers, anomalies: anomaliesTiers } = verifierNouveauxTiers(ecritures, contexteDossier);
+
   const toutesAnomalies: Anomalie[] = [
     ...anomaliesPreControles,
     ...anomaliesExigibilite,
     ...anomaliesCarburant,
     ...anomaliesImmobilisation,
     ...anomaliesEncaissements,
+    ...anomaliesTiers,
   ];
 
   // enregistrerAnomalies retourne les lignes réellement insérées (avec leur
@@ -186,6 +191,12 @@ export async function executerCycleTva(
   // bloquantes par id dans l'événement d'audit, plutôt qu'un simple décompte.
   const anomaliesInserees = await avecContexteCabinet(pool, params.cabinetId, async (client) => {
     const inserees = await enregistrerAnomalies(client, params.dossierId, params.periodeDebut, toutesAnomalies);
+
+    // Même transaction, volontairement : la mémoire de confiance des tiers
+    // avance dès que le contrôle a tourné, indépendamment du fait que le
+    // cycle bloque ensuite pour une autre raison (ex: 471 non qualifié) —
+    // ce n'est pas lié, pas de raison d'attendre un calcul réussi pour ça.
+    await synchroniserTiersReference(client, params.dossierId, statutsTiers, params.periodeFin);
 
     const parGravite: Record<string, number> = {};
     for (const a of inserees) {
