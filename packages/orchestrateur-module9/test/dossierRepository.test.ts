@@ -53,6 +53,11 @@ beforeAll(async () => {
        VALUES ($1, '218100', 'Camionnette Renault Trafic', 18000, 'vehicule_utilitaire', 'confirmed', 'onboarding')`,
       [dossierId]
     );
+    await client.query(
+      `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie)
+       VALUES ($1, '401CONNU', 'Fournisseur Connu SARL', 'confiance', 8)`,
+      [dossierId]
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -96,6 +101,14 @@ describe('chargerContexteDossier — contre la vraie base', () => {
     expect(contexte.parcVehicules).toEqual([{ type: 'vehicule_utilitaire' }]);
   });
 
+  it('charge les tiers déjà connus (tiers_reference)', async () => {
+    const contexte = await avecContexteCabinet(pool, cabinetId, (client) =>
+      chargerContexteDossier(client, dossierId)
+    );
+
+    expect(contexte.tiersConnus).toEqual(['401CONNU']);
+  });
+
   it('charge les infos du dossier lui-même', async () => {
     const dossier = await avecContexteCabinet(pool, cabinetId, (client) =>
       chargerDossier(client, dossierId)
@@ -119,5 +132,6 @@ describe('chargerContexteDossier — contre la vraie base', () => {
     expect(contexte.tauxHistorique).toEqual([]);
     expect(contexte.conventions).toEqual([]);
     expect(contexte.parcVehicules).toEqual([]);
+    expect(contexte.tiersConnus).toEqual([]);
   });
 });
