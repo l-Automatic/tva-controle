@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
 import type { StatutExigibilite, StatutCarburant } from '@tva-controle/controles-module4';
-import { calculerTva } from '../src/calcul.js';
+import { calculerTva, integrerRegularisations } from '../src/calcul.js';
 
 function ligneTva(overrides: Partial<EcritureTvaComplete['ligneTva']> = {}): EcritureTvaComplete['ligneTva'] {
   return {
@@ -154,5 +154,58 @@ describe('calculerTva — sens du résultat', () => {
     const resultat = calculerTva([eCollecte, eDeductible], [], [], []);
     expect(resultat.sens).toBe('credit');
     expect(resultat.tvaNette).toBe(400);
+  });
+});
+
+describe('integrerRegularisations — encaissements 471 qualifiés comme vente', () => {
+  it('déduit la TVA du montant TTC et l’ajoute à la bonne catégorie de taux', () => {
+    const base = calculerTva([], [], [], []); // rien au départ
+
+    const resultat = integrerRegularisations(base, [
+      { ledgerEntryId: 999, montantTTC: 1200, taux: 20 },
+    ]);
+
+    // 1200 TTC à 20% -> HT = 1000, TVA = 200
+    expect(resultat.lignes).toEqual([
+      { categorie: 'collectee_20', montant: 200, referencesPieces: [999] },
+    ]);
+    expect(resultat.tvaNette).toBe(200);
+    expect(resultat.sens).toBe('a_decaisser');
+  });
+
+  it('cumule avec les lignes déjà calculées de la même catégorie plutôt que de les dupliquer', () => {
+    const base = calculerTva(
+      [ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 100, ledgerEntryId: 1 }) })],
+      [],
+      [],
+      []
+    );
+
+    const resultat = integrerRegularisations(base, [
+      { ledgerEntryId: 999, montantTTC: 120, taux: 20 }, // TVA = 20
+    ]);
+
+    const ligneCollectee = resultat.lignes.find((l) => l.categorie === 'collectee_20');
+    expect(ligneCollectee?.montant).toBe(120); // 100 (existant) + 20 (régularisation)
+    expect(ligneCollectee?.referencesPieces.sort()).toEqual([1, 999]);
+  });
+
+  it('ne modifie rien si la liste de régularisations est vide', () => {
+    const base = calculerTva(
+      [ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 100, ledgerEntryId: 1 }) })],
+      [],
+      [],
+      []
+    );
+
+    expect(integrerRegularisations(base, [])).toEqual(base);
+  });
+
+  it('refuse un taux non reconnu plutôt que de le laisser silencieusement disparaître', () => {
+    const base = calculerTva([], [], [], []);
+
+    expect(() => integrerRegularisations(base, [{ ledgerEntryId: 1, montantTTC: 100, taux: 15 }])).toThrow(
+      /taux 15%/
+    );
   });
 });
