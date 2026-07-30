@@ -194,10 +194,75 @@ export function calculerTva(
   };
 }
 
-function sommeCategories(lignes: LigneCalculTva[], categories: CategorieLigneCalcul[]): number {
+export function sommeCategories(lignes: LigneCalculTva[], categories: CategorieLigneCalcul[]): number {
   return lignes.filter((l) => categories.includes(l.categorie)).reduce((acc, l) => acc + l.montant, 0);
 }
 
-function arrondir(valeur: number): number {
+export function arrondir(valeur: number): number {
   return Math.round(valeur * 100) / 100;
+}
+
+// Encaissement en compte d'attente (471) qualifié manuellement par le
+// comptable comme lié à une vente — cf. controles-module4/encaissementNonAffecte
+// pour la détection, et le processus de qualification humaine côté API (pas
+// de LLM/Module 5 pour trancher automatiquement à ce stade). Le montant reçu
+// est TTC ; on en déduit la TVA collectée au taux retenu.
+export interface RegularisationEncaissement {
+  ledgerEntryId: number;
+  montantTTC: number;
+  taux: number; // 20, 10, 5.5 ou 2.1 — un des taux nationaux, cf. CATEGORIE_PAR_TAUX
+}
+
+// Fonction séparée de calculerTva plutôt qu'un paramètre de plus : ces
+// régularisations ne viennent pas des `ecritures` Pennylane (calculerTva
+// reste une fonction pure sur ce seul type d'entrée), mais d'une décision
+// humaine stockée en base (anomalies.resolution) — une source de données
+// fondamentalement différente, assemblée par l'orchestrateur (Module 9).
+export function integrerRegularisations(
+  resultat: ResultatCalculTva,
+  regularisations: RegularisationEncaissement[]
+): ResultatCalculTva {
+  if (regularisations.length === 0) {
+    return resultat;
+  }
+
+  const accumulateur = new Map<CategorieLigneCalcul, { montant: number; pieces: Set<number> }>();
+  for (const ligne of resultat.lignes) {
+    accumulateur.set(ligne.categorie, { montant: ligne.montant, pieces: new Set(ligne.referencesPieces) });
+  }
+
+  for (const r of regularisations) {
+    const categorie = CATEGORIE_PAR_TAUX[r.taux];
+    if (!categorie) {
+      throw new Error(
+        `Régularisation d'encaissement (pièce ${r.ledgerEntryId}) : taux ${r.taux}% non reconnu ` +
+          `(attendu : 20, 10, 5.5 ou 2.1).`
+      );
+    }
+    // TTC -> TVA : montant reçu = HT + TVA = HT * (1 + taux/100).
+    const tva = r.montantTTC - r.montantTTC / (1 + r.taux / 100);
+    const entree = accumulateur.get(categorie) ?? { montant: 0, pieces: new Set<number>() };
+    entree.montant += tva;
+    entree.pieces.add(r.ledgerEntryId);
+    accumulateur.set(categorie, entree);
+  }
+
+  const lignes: LigneCalculTva[] = [...accumulateur.entries()].map(([categorie, { montant, pieces }]) => ({
+    categorie,
+    montant: arrondir(montant),
+    referencesPieces: [...pieces],
+  }));
+
+  const collecte = sommeCategories(lignes, ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1']);
+  const deductible = sommeCategories(lignes, ['deductible_abs', 'deductible_immo']);
+  const autoliquidationDue = sommeCategories(lignes, ['autoliquidation_due']);
+  const autoliquidationDeductible = sommeCategories(lignes, ['autoliquidation_deductible']);
+  const tvaNette = arrondir(collecte - deductible + autoliquidationDue - autoliquidationDeductible);
+
+  return {
+    lignes,
+    tvaNette: Math.abs(tvaNette),
+    sens: tvaNette >= 0 ? 'a_decaisser' : 'credit',
+    ecrituresExclues: resultat.ecrituresExclues,
+  };
 }
