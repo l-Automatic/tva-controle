@@ -195,24 +195,23 @@ tva-controle/
 3. **Nouveau fournisseur à risque** — table `tiers_reference` déjà en base,
    jamais alimentée ni exploitée.
 
-### Compte 471 (attente) et encaissements clients sans facture en face
-Problème : tout encaissement en 471, ou en compte client sans facture
-identifiée (acompte, facture non transmise), doit générer de la TVA
-collectée — mais à quel taux n'est pas déterminable automatiquement, et le
-montant reçu est en TTC (il faut en déduire le HT selon le taux retenu).
+### Compte 471 (attente) — implémenté
+Fait : détection (tout encaissement non lettré sur compte(s) préfixe 471,
+paramétrable par dossier via convention `comptes_attente`), anomalie
+bloquante, qualification manuelle (`POST /anomalies/:id/qualifier` :
+vente+taux ou hors-vente+motif), intégration au calcul de la période une
+fois qualifié vente (`integrerRegularisations`, calcul-module7). UI dans
+`AnomaliesPanel.tsx`. Distinction automatique vente/hors-vente reste un
+jugement humain à chaque fois — le LLM qui pourrait juger sur le libellé
+(Module 5) n'est pas construit.
 
-Piste de résolution du taux (à trancher avec Rami avant dev, probablement
-paramétrable par dossier) :
-- laisser le comptable choisir le taux au cas par cas, ou
-- taux par défaut = taux le plus élevé du dossier (pas toujours 20 % —
-  certains dossiers n'ont que du 10 % en taux max), ou
-- si le client a un profil à taux mixte connu, prendre le taux le plus haut
-  sauf info contraire.
-
-Piège à ne pas rater sur les 471 spécifiquement : tous les encaissements en
-471 ne sont pas liés à une vente (remboursement d'assurance, remboursement
-d'impôts...). Distinguer ça nécessite un LLM qui juge sur le libellé de
-l'opération — donc rattaché au Module 5, pas un contrôle déterministe.
+Volontairement pas fait : les encaissements clients (411) sans facture en
+face (acomptes, factures non transmises) suivent la même logique métier
+mais n'ont pas le même marqueur déterministe qu'un compte d'attente (une
+ligne créditrice non lettrée en 471 EST par nature non identifiée ; une
+ligne 411 non lettrée peut simplement être une facture impayée normale,
+pas un encaissement à qualifier). Pas encore traité — nécessite de
+distinguer les deux cas avant de dupliquer le mécanisme.
 
 ### Paramétrage par dossier et par cabinet (transverse, pas encore construit)
 - Pouvoir modifier/override des données aujourd'hui considérées comme
