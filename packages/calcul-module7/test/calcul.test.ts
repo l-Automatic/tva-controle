@@ -177,6 +177,41 @@ describe('calculerTva — sens du résultat', () => {
   });
 });
 
+describe('calculerTva — avoirs (débit sur compte collecte, crédit sur compte déductible)', () => {
+  it('un avoir sur un compte de TVA collectée RETRANCHE du total, ne s’y additionne pas', () => {
+    // Bug réel trouvé le 02/08 : Math.abs(credit - debit) faisait perdre le
+    // signe, donc un avoir (débit sur un compte normalement à sens crédit)
+    // s'additionnait au lieu de se soustraire.
+    const vente = ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 200, ledgerEntryId: 1 }) });
+    const avoir = ecriture({ ligneTva: ligneTva({ compte: '445711', debit: 50, ledgerEntryId: 2 }) });
+
+    const resultat = calculerTva([vente, avoir], [], [], []);
+
+    // 200 (vente) - 50 (avoir) = 150, pas 200 + 50 = 250.
+    expect(resultat.lignes).toEqual([{ categorie: 'collectee_20', montant: 150, referencesPieces: [1, 2] }]);
+  });
+
+  it('un avoir reçu d’un fournisseur (crédit sur un compte déductible) RETRANCHE du total', () => {
+    const achat = ecriture({ ligneTva: ligneTva({ compte: '44566', debit: 300, ledgerEntryId: 1 }) });
+    const avoirFournisseur = ecriture({ ligneTva: ligneTva({ compte: '44566', credit: 80, ledgerEntryId: 2 }) });
+
+    const resultat = calculerTva([achat, avoirFournisseur], [], [], []);
+
+    // 300 (achat) - 80 (avoir reçu) = 220, pas 300 + 80 = 380.
+    expect(resultat.lignes).toEqual([{ categorie: 'deductible_abs', montant: 220, referencesPieces: [1, 2] }]);
+  });
+
+  it('même correction de signe pour l’autoliquidation (due et déductible)', () => {
+    const due = ecriture({ ligneTva: ligneTva({ compte: '4454', credit: 1200, ledgerEntryId: 1 }) });
+    const avoirDue = ecriture({ ligneTva: ligneTva({ compte: '4454', debit: 120, ledgerEntryId: 2 }) });
+
+    const resultat = calculerTva([due, avoirDue], [], [], []);
+
+    // Net = 1200 - 120 = 1080 TTC-équivalent -> TVA = 1080/6 = 180.
+    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due', montant: 180, referencesPieces: [1, 2] }]);
+  });
+});
+
 describe('integrerRegularisations — encaissements 471 qualifiés comme vente', () => {
   it('déduit la TVA du montant TTC et l’ajoute à la bonne catégorie de taux', () => {
     const base = calculerTva([], [], [], []); // rien au départ
