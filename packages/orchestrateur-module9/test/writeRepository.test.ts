@@ -7,6 +7,7 @@ import {
   enregistrerEvenementAudit,
   enregistrerPropositionsConventions,
   ajouterConventionManuelle,
+  confirmerConvention,
   enregistrerPropositionsTaux,
   enregistrerCalcul,
   validerCalcul,
@@ -230,6 +231,36 @@ describe('ajouterConventionManuelle', () => {
 
     const confirmees = await avecClient((client) => listerConventions(client, dossierId, 'confirmed'));
     expect(confirmees.some((c) => c.id === conventionId)).toBe(false);
+  });
+
+  it('ajouter un second lot de comptes séparément fusionne avec la liste déjà confirmée, ne l’écrase pas', async () => {
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U6', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u6-${Date.now()}@test.fr`]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+    const cle = `comptes_test_fusion_${Date.now()}`;
+
+    const id1 = await avecClient((client) => ajouterConventionManuelle(client, dossierId, utilisateurId, cle, ['706']));
+    await avecClient((client) => confirmerConvention(client, id1, utilisateurId));
+
+    // Second lot, ajouté séparément (pas dans le même appel) — sans la
+    // fusion, ceci écraserait '706' au lieu de donner ['706', '611'].
+    const id2 = await avecClient((client) => ajouterConventionManuelle(client, dossierId, utilisateurId, cle, ['611']));
+
+    const candidates = await avecClient((client) => listerConventions(client, dossierId, 'candidate'));
+    const nouvelleCandidate = candidates.find((c) => c.id === id2);
+    expect(nouvelleCandidate?.valeur).toEqual(['706', '611']);
+
+    await avecClient((client) => confirmerConvention(client, id2, utilisateurId));
+
+    const confirmees = await avecClient((client) => listerConventions(client, dossierId, 'confirmed'));
+    const confirmee = confirmees.find((c) => c.cle === cle);
+    expect(confirmee?.valeur).toEqual(['706', '611']);
+    // Un seul confirmed pour cette clé, comme partout ailleurs.
+    expect(confirmees.filter((c) => c.cle === cle)).toHaveLength(1);
   });
 });
 
