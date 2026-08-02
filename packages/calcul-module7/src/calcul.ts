@@ -108,7 +108,20 @@ export function calculerTva(
 
   for (const ecriture of ecritures) {
     const { compte, ledgerEntryId, debit, credit } = ecriture.ligneTva;
-    const montantAbsolu = Math.abs(credit - debit);
+    // Deux nets signés, un par sens normal de compte. PAS de Math.abs()
+    // unique en amont : un avoir (qui inverse le sens habituel d'un compte)
+    // doit RETRANCHER du total de sa catégorie, pas s'y additionner. Prendre
+    // la valeur absolue avant d'accumuler détruisait cette information de
+    // signe — bug réel trouvé le 02/08 en conditions réelles (avoirs
+    // comptés comme des ventes normales au lieu de les compenser).
+    //   - netSensCredit : sens normal des comptes à sens crédit (TVA
+    //     collectée, TVA due en autoliquidation) — une vente crédite, un
+    //     avoir débite et doit donc réduire le total.
+    //   - netSensDebit : sens normal des comptes à sens débit (TVA
+    //     déductible, TVA déductible en autoliquidation) — un achat débite,
+    //     un avoir reçu du fournisseur crédite et doit réduire le total.
+    const netSensCredit = credit - debit;
+    const netSensDebit = debit - credit;
     const cle = `${ledgerEntryId}:${compte}`;
 
     // --- Autoliquidation : hors bucketing par taux, hors question d'exigibilité ---
@@ -117,14 +130,16 @@ export function calculerTva(
     // française dessus), pas la TVA elle-même — contrairement à une lecture
     // naïve du compte. Il faut donc en extraire la TVA au taux applicable,
     // exactement comme pour une régularisation d'encaissement (cf.
-    // integrerRegularisations) : montant - montant/(1+taux/100).
+    // integrerRegularisations) : montant - montant/(1+taux/100). La formule
+    // est linéaire, donc s'applique correctement même à un net négatif
+    // (régularisation) sans traitement particulier.
     if (compte === compteDue) {
-      const tva = montantAbsolu - montantAbsolu / (1 + tauxAutoliquidation / 100);
+      const tva = netSensCredit - netSensCredit / (1 + tauxAutoliquidation / 100);
       ajouter('autoliquidation_due', tva, ledgerEntryId);
       continue;
     }
     if (compte === compteDeductible) {
-      const tva = montantAbsolu - montantAbsolu / (1 + tauxAutoliquidation / 100);
+      const tva = netSensDebit - netSensDebit / (1 + tauxAutoliquidation / 100);
       ajouter('autoliquidation_deductible', tva, ledgerEntryId);
       continue;
     }
@@ -140,6 +155,8 @@ export function calculerTva(
       continue;
     }
 
+    const montantSigne = estCollecte ? netSensCredit : netSensDebit;
+
     // --- Exigibilité (bien/service, TVA sur encaissement) ---
     const statutExig = exigibiliteParPiece.get(cle);
     if (statutExig && !statutExig.exigible) {
@@ -152,7 +169,7 @@ export function calculerTva(
 
     // --- Carburant : peut réduire le montant déductible, ou l'exclure si indéterminé ---
     const statutCarb = carburantParPiece.get(cle);
-    let montantAjuste = montantAbsolu;
+    let montantAjuste = montantSigne;
     if (statutCarb) {
       if (statutCarb.tauxDeductible === null) {
         if (politique === 'exclure') {
@@ -162,7 +179,7 @@ export function calculerTva(
         // politique 'inclure' : on inclut au montant plein, à charge du
         // collaborateur de corriger après coup si l'anomalie est confirmée.
       } else {
-        montantAjuste = montantAbsolu * (statutCarb.tauxDeductible / 100);
+        montantAjuste = montantSigne * (statutCarb.tauxDeductible / 100);
       }
     }
 
