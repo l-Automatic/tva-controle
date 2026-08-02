@@ -102,6 +102,26 @@ describe('calculerTva — autoliquidation', () => {
     expect(categories).toEqual(['autoliquidation_deductible', 'autoliquidation_due']);
     expect(resultat.tvaNette).toBe(0);
   });
+
+  it('extrait la TVA du montant porté sur le compte (TTC-équivalent), pas le montant brut lui-même', () => {
+    // Le montant sur 4454/445664 est le TTC-équivalent facturé par le
+    // fournisseur étranger, pas la TVA déjà isolée. À 20%, TVA = TTC/6,
+    // pas TTC/5 (confirmé avec Rami — cf. conversation du 30/07).
+    const eDue = ecriture({ ligneTva: ligneTva({ compte: '4454', credit: 1200, ledgerEntryId: 1 }) });
+
+    const resultat = calculerTva([eDue], [], [], []);
+
+    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due', montant: 200, referencesPieces: [1] }]);
+  });
+
+  it('taux configurable via tauxAutoliquidation, défaut 20%', () => {
+    const eDue = ecriture({ ligneTva: ligneTva({ compte: '4454', credit: 1100, ledgerEntryId: 1 }) });
+
+    const resultat = calculerTva([eDue], [], [], [], { tauxAutoliquidation: 10 });
+
+    // 1100 TTC à 10% -> HT = 1000, TVA = 100
+    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due', montant: 100, referencesPieces: [1] }]);
+  });
 });
 
 describe('calculerTva — carburant', () => {
