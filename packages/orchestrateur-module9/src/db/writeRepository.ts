@@ -232,11 +232,30 @@ export async function ajouterConventionManuelle(
   cle: string,
   valeur: unknown
 ): Promise<string> {
+  let valeurFinale = valeur;
+  if (Array.isArray(valeur)) {
+    // Clé de type liste (ex: comptes_vente_service) : confirmerConvention
+    // rejette la ligne confirmée existante à chaque nouvelle confirmation
+    // plutôt que de la compléter (un seul 'confirmed' par clé à la fois,
+    // invariant délibéré côté confirmerConvention — cf. son propre code).
+    // Sans fusion ici, ajouter un second lot de comptes séparément écrasait
+    // silencieusement le premier lot déjà confirmé. Bug réel trouvé le
+    // 02/08 en conditions réelles.
+    const existant = await client.query<{ valeur: unknown }>(
+      `SELECT valeur FROM conventions_dossier WHERE dossier_id = $1 AND cle = $2 AND statut = 'confirmed'`,
+      [dossierId, cle]
+    );
+    const dejaConfirme = existant.rows[0]?.valeur;
+    if (Array.isArray(dejaConfirme)) {
+      valeurFinale = [...new Set([...dejaConfirme, ...valeur])];
+    }
+  }
+
   const res = await client.query<{ id: string }>(
     `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut, source)
      VALUES ($1, $2, $3, 'candidate', 'saisie_manuelle')
      RETURNING id`,
-    [dossierId, cle, JSON.stringify(valeur)]
+    [dossierId, cle, JSON.stringify(valeurFinale)]
   );
   const id = res.rows[0]!.id;
   await enregistrerEvenementAudit(client, {
@@ -245,7 +264,7 @@ export async function ajouterConventionManuelle(
     moduleSource: 'module6_validation',
     acteur: 'utilisateur',
     acteurUtilisateurId: utilisateurId,
-    details: { conventionId: id, cle, valeur },
+    details: { conventionId: id, cle, valeur: valeurFinale },
   });
   return id;
 }
