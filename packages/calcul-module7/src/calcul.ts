@@ -42,6 +42,13 @@ export interface ConfigCalculTva {
   contexteDossier?: ContexteDossier;
   compteAutoliquidationDue?: string;
   compteAutoliquidationDeductible?: string;
+  // Taux appliqué pour extraire la TVA du montant porté sur les comptes
+  // d'autoliquidation (4454/445664...). Défaut 20% : quasi systématique en
+  // pratique pour l'autoliquidation générale sur prestations de services
+  // intracommunautaires (le cas de loin le plus fréquent), donc un défaut
+  // raisonnable plutôt qu'un champ obligatoire à chaque fois — mais
+  // configurable, un dossier avec un cas à taux réduit reste possible.
+  tauxAutoliquidation?: number;
   // Politique fiscale, pas un fait technique : que faire d'une ligne dont
   // l'exigibilité ou la déductibilité n'a pas pu être déterminée (flotte
   // mixte, nature d'opération ambiguë...). Défaut prudent : exclure plutôt
@@ -83,6 +90,7 @@ export function calculerTva(
   const politique = config.politiqueIndetermine ?? 'exclure';
   const compteDue = config.compteAutoliquidationDue ?? '4454';
   const compteDeductible = config.compteAutoliquidationDeductible ?? '445664';
+  const tauxAutoliquidation = config.tauxAutoliquidation ?? 20;
   const tauxNominalParCompte = config.tauxNominalParCompte ?? TAUX_NATIONAL_PAR_DEFAUT;
 
   const exigibiliteParPiece = new Map(statutsExigibilite.map((s) => [`${s.ledgerEntryId}:${s.compte}`, s]));
@@ -104,12 +112,20 @@ export function calculerTva(
     const cle = `${ledgerEntryId}:${compte}`;
 
     // --- Autoliquidation : hors bucketing par taux, hors question d'exigibilité ---
+    // Le montant porté sur ces comptes est le TTC-équivalent de la
+    // prestation (ce que le fournisseur étranger a facturé, sans TVA
+    // française dessus), pas la TVA elle-même — contrairement à une lecture
+    // naïve du compte. Il faut donc en extraire la TVA au taux applicable,
+    // exactement comme pour une régularisation d'encaissement (cf.
+    // integrerRegularisations) : montant - montant/(1+taux/100).
     if (compte === compteDue) {
-      ajouter('autoliquidation_due', montantAbsolu, ledgerEntryId);
+      const tva = montantAbsolu - montantAbsolu / (1 + tauxAutoliquidation / 100);
+      ajouter('autoliquidation_due', tva, ledgerEntryId);
       continue;
     }
     if (compte === compteDeductible) {
-      ajouter('autoliquidation_deductible', montantAbsolu, ledgerEntryId);
+      const tva = montantAbsolu - montantAbsolu / (1 + tauxAutoliquidation / 100);
+      ajouter('autoliquidation_deductible', tva, ledgerEntryId);
       continue;
     }
 
