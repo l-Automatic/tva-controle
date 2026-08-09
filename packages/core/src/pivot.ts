@@ -80,3 +80,18 @@ export interface LigneEcritureBrute {
   credit: number;
 }
 
+
+// Détail complet d'une ligne appartenant à un groupe de lettrage — au-delà
+// du simple id (Lettrage.groupeIds), nécessaire pour calculer un prorata de
+// paiement partiel (ex: facture 1200€, paiement 600€ -> 50% de TVA
+// déductible). fetchLettrage seul ne donne que les ids du groupe, pas leurs
+// montants — cf. connector-pennylane/lettering.fetchLignesGroupeLettrage.
+export interface LigneGroupeLettrage {
+  id: number;
+  compte: string;
+  compteId: number;
+  libelle: string | null;
+  debit: number;
+  credit: number;
+  date: string;
+}
