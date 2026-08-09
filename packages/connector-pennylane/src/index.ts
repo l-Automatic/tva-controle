@@ -15,7 +15,7 @@ export {
   type FetchLignesParCompteParams,
 } from './connectors/pennylane/tvaLedgerLines.js';
 export { fetchLignesDePiece, type LignePiece } from './connectors/pennylane/pieceLines.js';
-export { fetchLettrage } from './connectors/pennylane/lettering.js';
+export { fetchLettrage, fetchLignesGroupeLettrage } from './connectors/pennylane/lettering.js';
 export {
   fetchEcrituresTvaCompletes,
   type FetchEcrituresTvaComptletesParams,
