@@ -14,8 +14,14 @@ import {
   detecterImmobilisationManquee,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
+  identifierFournisseursService,
 } from '@tva-controle/controles-module4';
-import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
+import {
+  calculerTva,
+  integrerRegularisations,
+  corrigerDeductibleParSoldeFournisseurService,
+  type ResultatCalculTva,
+} from '@tva-controle/calcul-module7';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur, conventionListe } from './db/dossierRepository.js';
@@ -26,6 +32,15 @@ import {
   synchroniserTiersReference,
 } from './db/writeRepository.js';
 import { listerLedgerEntryIdsQualifies, listerRegularisationsAIntegrer } from './db/readRepository.js';
+
+// Date de départ pour le calcul du solde fournisseur cumulé (correction
+// déductible par solde, cf. plus bas) — volontairement très en amont : un
+// solde impayé à la clôture peut dater d'avant le début de la période TVA
+// elle-même, donc on ne peut pas se contenter de periodeDebut du cycle en
+// cours pour ce calcul précis. Pas une vraie date de création de dossier
+// (pas encore trackée) — hypothèse assumée à revoir si un dossier a un
+// historique antérieur à cette date.
+const SOLDE_FOURNISSEUR_DEPUIS = '2015-01-01';
 
 export interface ParametresCycleTva {
   cabinetId: string;
@@ -137,7 +152,7 @@ export async function executerCycleTva(
 
   const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
     ecritures,
-    { comptesVenteService, comptesChargeService }
+    { comptesVenteService }
   );
 
   const { statuts: statutsCarburant, anomalies: anomaliesCarburant } = determinerDeductibiliteCarburant(
@@ -274,7 +289,32 @@ export async function executerCycleTva(
   const regularisations = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     listerRegularisationsAIntegrer(client, params.dossierId, params.periodeDebut)
   );
-  const resultat = integrerRegularisations(resultatBrut, regularisations);
+  const resultatAvecRegularisations = integrerRegularisations(resultatBrut, regularisations);
+
+  // Correction déductible par solde fournisseur (remplace le lettrage ligne
+  // à ligne côté achat de service, retiré de exigibilite.ts le 04/08 —
+  // décision de Rami). Le solde doit être le solde CUMULÉ à la clôture de
+  // la période, pas juste les mouvements de la période elle-même (une
+  // facture impayée peut dater d'avant) — d'où periodeDebut fixé très en
+  // amont plutôt que params.periodeDebut pour cet appel précis.
+  const fournisseursService = identifierFournisseursService(ecritures, { comptesChargeService });
+  let resultat = resultatAvecRegularisations;
+  if (fournisseursService.length > 0) {
+    const balanceFournisseurs = await fetchTrialBalance(params.client, {
+      dossierId: params.dossierId,
+      periodeDebut: SOLDE_FOURNISSEUR_DEPUIS,
+      periodeFin: params.periodeFin,
+    });
+    const soldes = balanceFournisseurs.comptes
+      .filter((c) => fournisseursService.includes(c.numeroCompte))
+      .map((c) => ({ compteFournisseur: c.numeroCompte, soldeTTC: c.credit - c.debit }));
+    resultat = corrigerDeductibleParSoldeFournisseurService(resultatAvecRegularisations, soldes);
+
+    if (process.env.DEBUG_CYCLE) {
+      console.error(`[DEBUG_CYCLE] fournisseurs service identifies : ${JSON.stringify(fournisseursService)}`);
+      console.error(`[DEBUG_CYCLE] soldes fournisseurs (TTC) : ${JSON.stringify(soldes)}`);
+    }
+  }
 
   if (process.env.DEBUG_CYCLE) {
     console.error(`[DEBUG_CYCLE] regularisations 471 integrees : ${JSON.stringify(regularisations)}`);
