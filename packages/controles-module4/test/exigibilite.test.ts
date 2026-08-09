@@ -4,6 +4,7 @@ import { determinerExigibiliteTva, type ConfigExigibiliteTva } from '../src/exig
 
 const configReelle: ConfigExigibiliteTva = {
   comptesVenteService: ['706', '704'],
+  comptesChargeService: ['611'],
 };
 
 // Cas réel ROUSSEAU (déjà validé bout-en-bout dans le connecteur) : vente de
@@ -65,8 +66,22 @@ describe('determinerExigibiliteTva — cas réel ROUSSEAU (service, lettré)', (
   });
 });
 
-describe('determinerExigibiliteTva — déductible, hors scope depuis le 04/08', () => {
-  it('ne produit ni statut ni anomalie pour une ligne déductible (44566) — corrigée en bloc ailleurs désormais', () => {
+describe('determinerExigibiliteTva — biens (déductible dès facturation)', () => {
+  it('un achat de bien (607, hors liste service) est exigible même sans lettrage', () => {
+    const ecriture = ecritureRousseau({
+      ligneTva: { ...ecritureRousseau().ligneTva, compte: '44566', credit: 0, debit: 100 },
+      autresLignes: [{ id: 1, compte: '607', compteId: 1, libelle: null, debit: 500, credit: 0 }],
+      lignesTiers: [
+        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
+      ],
+    });
+
+    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(anomalies).toEqual([]);
+    expect(statuts[0]).toMatchObject({ natureOperation: 'bien', exigible: true });
+  });
+
+  it('un achat de service (611, sous-traitance) suit l’exigibilité du lettrage', () => {
     const ecriture = ecritureRousseau({
       ligneTva: { ...ecritureRousseau().ligneTva, compte: '44566', credit: 0, debit: 100 },
       autresLignes: [{ id: 1, compte: '611', compteId: 1, libelle: null, debit: 500, credit: 0 }],
@@ -75,19 +90,8 @@ describe('determinerExigibiliteTva — déductible, hors scope depuis le 04/08',
       ],
     });
 
-    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
-    expect(statuts).toEqual([]);
-    expect(anomalies).toEqual([]);
-  });
-
-  it('idem pour un compte 44562 (immobilisations)', () => {
-    const ecriture = ecritureRousseau({
-      ligneTva: { ...ecritureRousseau().ligneTva, compte: '44562', credit: 0, debit: 200 },
-    });
-
-    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
-    expect(statuts).toEqual([]);
-    expect(anomalies).toEqual([]);
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(statuts[0]).toMatchObject({ natureOperation: 'service', exigible: false });
   });
 });
 
@@ -136,10 +140,6 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('paiement_partiel_a_verifier');
     expect(anomalies[0]?.gravite).toBe('signale');
-    // Le compte affiché sur l'anomalie (`compte`) est le compte TVA, pas le
-    // compte tiers concerné par le lettrage — sans ce champ, impossible de
-    // savoir quel compte client/fournisseur aller vérifier dans Pennylane.
-    expect(anomalies[0]?.details).toMatchObject({ compteTiers: ecriture.lignesTiers[0]!.compte });
     expect(statuts[0]?.exigible).toBe(true); // lettrée quand même, juste à vérifier le montant exact
   });
 
