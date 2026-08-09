@@ -6,7 +6,7 @@ import { PennylaneClient } from '../src/connectors/pennylane/client.js';
 import { resolveLedgerAccounts, resolveLedgerAccountsByIds, decouvrirComptesParPrefixe } from '../src/connectors/pennylane/ledgerAccounts.js';
 import { fetchLignesParCompte } from '../src/connectors/pennylane/tvaLedgerLines.js';
 import { fetchLignesDePiece } from '../src/connectors/pennylane/pieceLines.js';
-import { fetchLettrage } from '../src/connectors/pennylane/lettering.js';
+import { fetchLettrage, fetchLignesGroupeLettrage } from '../src/connectors/pennylane/lettering.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -190,6 +190,65 @@ describe('fetchLettrage — cas réel positif (ligne effectivement lettrée)', (
     const lettrage = await fetchLettrage(client, []);
     expect(lettrage.size).toBe(0);
     expect(appelE).toBe(false);
+  });
+});
+
+describe('fetchLignesGroupeLettrage — détail complet des lignes d’un groupe (montants, libellés)', () => {
+  it('récupère montant, compte, libellé et date — pas juste le lettrage comme fetchLettrage', async () => {
+    const fixture = loadFixture('lettering_rousseau_lettree.json');
+    const client = new PennylaneClient({ token: 'x', fetchImpl: fakeFetch(fixture) });
+
+    const lignes = await fetchLignesGroupeLettrage(client, [92522389336064]);
+
+    expect(lignes).toEqual([
+      {
+        id: 92522389336064,
+        compte: '411ROUSSEAU',
+        compteId: 12028930322432,
+        libelle: 'ROUSSEAU VIR 21/01',
+        debit: 4266.17,
+        credit: 0,
+        date: '2025-01-21',
+      },
+    ]);
+  });
+
+  it('retourne un tableau vide sans appel réseau si aucun id fourni', async () => {
+    let appelE = false;
+    const fetchImpl = (async () => {
+      appelE = true;
+      return new Response('{}', { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = new PennylaneClient({ token: 'x', fetchImpl });
+
+    const lignes = await fetchLignesGroupeLettrage(client, []);
+    expect(lignes).toEqual([]);
+    expect(appelE).toBe(false);
+  });
+
+  it('échoue fort sur un montant non numérique plutôt que de laisser passer un NaN silencieux', async () => {
+    const fixture = {
+      items: [
+        {
+          id: 1,
+          label: 'test',
+          debit: 'pas-un-nombre',
+          credit: '0.0',
+          date: '2025-01-01',
+          created_at: 'x',
+          updated_at: 'x',
+          journal: { id: 1, url: 'x' },
+          ledger_account: { id: 1, number: '401X', url: 'x' },
+          ledger_entry: { id: 1 },
+          lettered_ledger_entry_lines: { ids: [], url: 'x' },
+        },
+      ],
+      has_more: false,
+      next_cursor: null,
+    };
+    const client = new PennylaneClient({ token: 'x', fetchImpl: fakeFetch(fixture) });
+
+    await expect(fetchLignesGroupeLettrage(client, [1])).rejects.toThrow(/Montant Pennylane invalide/);
   });
 });
 
