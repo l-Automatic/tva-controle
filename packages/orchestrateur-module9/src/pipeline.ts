@@ -14,6 +14,7 @@ import {
   detecterImmobilisationManquee,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
+  detecterEncaissementsClientAAffecter,
 } from '@tva-controle/controles-module4';
 import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
 import type { Anomalie } from '@tva-controle/core';
@@ -58,6 +59,11 @@ export interface ParametresCycleTva {
   // non identifiés — préfixes, pas numéros exacts (comme comptesTva), car un
   // dossier peut subdiviser en plusieurs sous-comptes 471x.
   comptesAttenteOverride?: string[];
+  // Préfixe des comptes clients (411 par défaut) sur lesquels chercher des
+  // encaissements non lettrés à régulariser (chantier B) — même logique de
+  // préfixe que comptesAttenteOverride, un dossier peut avoir des
+  // sous-comptes 411xxx par client.
+  comptesClientOverride?: string[];
 }
 
 export type ResultatCycleTva =
@@ -175,6 +181,27 @@ export async function executerCycleTva(
     (a) => !ledgerEntryIdsQualifies.has(a.ledgerEntryId)
   );
 
+  // Chantier B : encaissements sur un compte CLIENT précis (411xxx), non
+  // lettrés — distinct du 471 (compte d'attente générique) : ici chaque
+  // compte a potentiellement son propre historique de taux. Contrairement
+  // au 471, pas de blocage/qualification préalable : un taux par défaut
+  // (historique du client si connu, sinon 20% par prudence) est appliqué
+  // directement, cf. detecterEncaissementsClientAAffecter.
+  const comptesClientPrefixes = params.comptesClientOverride ?? ['411'];
+  const comptesClient = (
+    await Promise.all(comptesClientPrefixes.map((prefixe) => decouvrirComptesParPrefixe(params.client, prefixe)))
+  ).flat();
+  const lignesClient =
+    comptesClient.length > 0
+      ? await fetchLignesParCompte(params.client, {
+          compteIds: comptesClient.map((c) => c.id),
+          periodeDebut: params.periodeDebut,
+          periodeFin: params.periodeFin,
+        })
+      : [];
+  const { regularisations: regularisationsClient, anomalies: anomaliesClient } =
+    detecterEncaissementsClientAAffecter(lignesClient, contexteDossier);
+
   const { statuts: statutsTiers, anomalies: anomaliesTiers } = verifierNouveauxTiers(ecritures, contexteDossier);
 
   const toutesAnomalies: Anomalie[] = [
@@ -183,6 +210,7 @@ export async function executerCycleTva(
     ...anomaliesCarburant,
     ...anomaliesImmobilisation,
     ...anomaliesEncaissements,
+    ...anomaliesClient,
     ...anomaliesTiers,
   ];
 
@@ -270,14 +298,19 @@ export async function executerCycleTva(
   // Encaissements en compte d'attente déjà qualifiés 'vente' par un humain
   // (lors d'un cycle précédent, cf. anomaliesEncaissements plus haut) :
   // intégrés après coup, pas dans calculerTva lui-même — la donnée ne vient
-  // pas de `ecritures` mais d'une décision stockée en base.
-  const regularisations = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+  // pas de `ecritures` mais d'une décision stockée en base. Fusionnées avec
+  // les régularisations clients (chantier B, calculées directement plus
+  // haut, pas de round-trip DB nécessaire puisqu'un défaut est toujours
+  // disponible) — même fonction d'intégration pour les deux, même forme de
+  // données (ledgerEntryId, montantTTC, taux).
+  const regularisations471 = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     listerRegularisationsAIntegrer(client, params.dossierId, params.periodeDebut)
   );
-  const resultat = integrerRegularisations(resultatBrut, regularisations);
+  const resultat = integrerRegularisations(resultatBrut, [...regularisations471, ...regularisationsClient]);
 
   if (process.env.DEBUG_CYCLE) {
-    console.error(`[DEBUG_CYCLE] regularisations 471 integrees : ${JSON.stringify(regularisations)}`);
+    console.error(`[DEBUG_CYCLE] regularisations 471 integrees : ${JSON.stringify(regularisations471)}`);
+    console.error(`[DEBUG_CYCLE] regularisations client integrees : ${JSON.stringify(regularisationsClient)}`);
     console.error(`[DEBUG_CYCLE] resultat.lignes : ${JSON.stringify(resultat.lignes)}`);
     console.error(`[DEBUG_CYCLE] resultat.ecrituresExclues : ${JSON.stringify(resultat.ecrituresExclues)}`);
   }
