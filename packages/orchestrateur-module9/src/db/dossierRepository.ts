@@ -62,14 +62,33 @@ export async function chargerContexteDossier(client: PoolClient, dossierId: stri
   const tiersRes = await client.query(`SELECT numero_compte_tiers FROM tiers_reference WHERE dossier_id = $1`, [
     dossierId,
   ]);
+  // Chantier B : taux historique par compte CLIENT (411xxx), table séparée
+  // (cf. migration 009) mais fusionnée ici dans le même tauxHistorique[]
+  // que les taux par compte produit/charge — TauxHistorique.compteOuTiers
+  // est un nom générique depuis l'origine, précisément pour ce cas : les
+  // deux espaces de numérotation (445xxx vs 411xxx) ne se chevauchent
+  // jamais, donc tauxHabituelPour() fonctionne sans ambiguïté pour les deux
+  // usages sans code de lookup séparé.
+  const tauxTiersRes = await client.query(
+    `SELECT numero_compte_tiers, taux_habituel, nb_occurrences
+     FROM taux_historique_tiers WHERE dossier_id = $1 AND statut = 'confirmed'`,
+    [dossierId]
+  );
 
-  const tauxHistorique: TauxHistorique[] = tauxRes.rows.map(
-    (r: { compte_produit_ou_charge: string; taux_habituel: string; nb_occurrences: number }) => ({
-      compteOuTiers: r.compte_produit_ou_charge,
+  const tauxHistorique: TauxHistorique[] = [
+    ...tauxRes.rows.map(
+      (r: { compte_produit_ou_charge: string; taux_habituel: string; nb_occurrences: number }) => ({
+        compteOuTiers: r.compte_produit_ou_charge,
+        tauxHabituel: Number.parseFloat(r.taux_habituel),
+        nbOccurrences: r.nb_occurrences,
+      })
+    ),
+    ...tauxTiersRes.rows.map((r: { numero_compte_tiers: string; taux_habituel: string; nb_occurrences: number }) => ({
+      compteOuTiers: r.numero_compte_tiers,
       tauxHabituel: Number.parseFloat(r.taux_habituel),
       nbOccurrences: r.nb_occurrences,
-    })
-  );
+    })),
+  ];
 
   const conventions: ConventionDossier[] = conventionsRes.rows.map(
     (r: { cle: string; valeur: unknown; statut: 'candidate' | 'confirmed' | 'rejected' }) => ({
