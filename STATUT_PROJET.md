@@ -11,15 +11,13 @@ la seule source de vérité. Jamais un zip, jamais une conversation passée.**
 
 Un incident réel s'est produit : une conversation a travaillé plusieurs
 heures sur Module 10 à partir d'un zip qui datait d'avant deux correctifs
-critiques (route `/cycles`, découverte des comptes via balance). Résultat :
-du code à fusionner à la main, du temps perdu, un risque réel de régression
-silencieuse. La cause : le zip donné en pièce jointe n'était plus à jour par
-rapport au VPS/GitHub au moment où la conversation a commencé à travailler.
+critiques. Résultat : du code à fusionner à la main, du temps perdu.
 
 **Pour toute nouvelle conversation (Claude ou Claude Code) : cloner ou lire
 le dépôt GitHub directement au tout début, avant d'écrire une ligne de code.**
-Ne jamais supposer qu'un zip fourni en pièce jointe est à jour – vérifier
-contre GitHub systématiquement.
+Vérifier aussi que le token GitHub utilisé a bien les droits d'écriture
+(Contents: Read and write) avant de commencer à coder — sinon les push
+échouent silencieusement en apparence de succès partiel.
 
 ## Objectif du projet
 
@@ -29,38 +27,49 @@ comptable, connecté à Pennylane, pensé pour être vendu à plusieurs cabinets
 comptables (marque L'Automatic).
 
 **Scope volontairement exclu pour l'instant** : génération de la déclaration
-CA3 (Module 8, jugé "anecdotique avec les bonnes infos"), TVA intracom
-(complexité DEB/DES/VIES hors scope, mais détectée et bloquée plutôt
-qu'ignorée), numérotation de facture par IA (formats trop variables pour du
-déterministe, nécessiterait Module 5).
+CA3 (Module 8), TVA intracom (détectée et bloquée, pas traitée).
 
 ## Architecture – les 10 modules
 
 | # | Module | Statut | Package |
 |---|---|---|---|
 | 1 | Connecteurs API (Pennylane) | 🟢 | `connector-pennylane` |
-| 2 | Mémoire de Dossier (Postgres) | 🟢 | `00X_*.sql` (racine) |
+| 2 | Mémoire de Dossier (Postgres) | 🟢 | `00X_*.sql` (racine, jusqu'à 008) |
 | 3 | Onboarding (découverte déterministe) | 🟢 | `onboarding-module3` |
 | 4 | Pré-contrôles Déterministes | 🟢 | `controles-module4` |
-| 5 | Résolution par Jugement (LLM) | 🟡 | pas commencé — mais partie déterministe de la tâche 3 (nouveaux tiers) faite dans `controles-module4`/`orchestrateur-module9` |
+| 5 | Résolution par Jugement (LLM) | 🔴 | **aucun appel LLM réel nulle part** — voir section dédiée |
 | 6 | Validation Humaine (backend + frontend) | 🟢 | `api-module6` + `packages/frontend` |
 | 7 | Calcul TVA | 🟢 | `calcul-module7` |
 | 8 | Génération Déclaration (CA3) | ⬜ | explicitement reporté |
 | 9 | Orchestrateur global | 🟢 | `orchestrateur-module9` |
 | 10 | Audit & Traçabilité | 🟢 | intégré dans `orchestrateur-module9`/`api-module6`/`frontend` |
 
-**Tests backend** (7 packages testables), `npm test` à la racine — comptes
-confirmés individuellement aujourd'hui : `controles-module4` 51,
-`calcul-module7` 15, `orchestrateur-module9` 39. Total agrégé pas revérifié
-depuis (`api-module6` et `onboarding-module3` non retouchés dans cette
-session) — lancer `npm test` à la racine pour le chiffre exact plutôt que de
-se fier à un total périmé ici.
+**Tests backend** : lancer `npm test` à la racine pour le chiffre exact —
+plusieurs allers-retours de construction/retrait (correction par solde
+fournisseur, testée puis abandonnée) rendent un total figé ici peu fiable.
+Tester package par package si besoin de diagnostiquer :
+`controles-module4`, `calcul-module7`, `orchestrateur-module9`,
+`connector-pennylane`, `api-module6`, `onboarding-module3`, `core`.
+
 Frontend vérifié manuellement en conditions réelles (navigateur, actions
-réelles, captures d'écran) par Claude Code – pas de suite automatisée dessus.
+réelles) par Claude Code — pas de suite automatisée dessus.
 
 Testé en conditions réelles sur le dossier sandbox Pennylane (électricien
-fictif) – cycle complet exécuté avec succès : anomalies détectées, calcul
-produit (exemple réel obtenu : 3957,05€ de crédit de TVA sur janvier 2025).
+fictif) à plusieurs reprises — cycle complet exécuté avec succès après
+correction de plusieurs bugs de calcul réels (voir plus bas).
+
+## ⚠️ Mistral / LLM : le champ existe, l'usage n'existe pas
+
+Le panneau Paramètres permet de saisir une clé API Mistral, stockée dans
+`parametres_cabinet`, masquée à l'affichage. **C'est tout.** Aucun code,
+nulle part dans le projet, n'appelle l'API Mistral. Le champ ne "active"
+rien de fonctionnel — c'est un formulaire de configuration sans
+consommateur pour l'instant. Avant que le module 5 (numérotation facture,
+véhicules, fournisseur à risque) ou le prorata de paiement partiel (voir
+plus bas) puissent fonctionner, il faudra construire ce premier vrai appel
+LLM : prompt, parsing de la réponse, gestion d'erreur, et — comme partout
+ailleurs dans ce projet — jamais d'application automatique d'un jugement
+IA sur un chiffre fiscal sans confirmation humaine explicite.
 
 ## Structure du monorepo
 
@@ -70,202 +79,269 @@ tva-controle/
 ├── 002_roles_and_privileges.sql    – rôles applicatifs, GRANT/REVOKE précis
 ├── 003_taux_historique_statut.sql  – workflow candidate/confirmed sur taux_historique
 ├── 004_anomalies_compte.sql        – colonne compte sur anomalies (Module 10)
+├── 005_anomalies_statut_obsolete.sql – statut obsolete (dédup anomalies)
+├── 006_calcul_rejete.sql           – statut rejete sur calculs_tva
+├── 007_anomalies_resolution.sql    – colonne resolution structurée (471)
+├── 008_parametrage.sql             – parametres_cabinet / parametres_dossier
 ├── seed_dossier_reel.sql           – crée un dossier persistant pour tester en réel
 ├── package.json                    – racine npm workspaces
 └── packages/
     ├── core/                    – types pivot partagés (EcritureTvaComplete, Anomalie, ContexteDossier...)
     ├── connector-pennylane/     – Module 1 : appels API Pennylane (Company API v2)
-    ├── controles-module4/       – Module 4 : 7 contrôles déterministes
+    ├── controles-module4/       – Module 4 : contrôles déterministes
     ├── calcul-module7/          – Module 7 : calcul TVA (fonction pure)
     ├── onboarding-module3/      – Module 3 : découverte autoliquidation/taux
     ├── orchestrateur-module9/   – Module 9 : pipeline + TOUT l'accès Postgres (lecture/écriture/audit)
-    ├── api-module6/             – Module 6 backend : API Fastify (anomalies, conventions, taux, calculs, audit, cycles)
+    ├── api-module6/             – Module 6 backend : API Fastify
     └── frontend/                – Module 6 frontend : React/Vite, construit et maintenu par Claude Code
 ```
 
 ## Décisions structurantes à connaître
 
-- **LLM utilisé le moins possible** : système presque entièrement
-  déterministe et testé. Aucune donnée fiscale calculée par un LLM.
+- **LLM utilisé le moins possible, et jamais pour trancher seul un chiffre
+  fiscal** : détection déterministe + jugement LLM (à construire) +
+  confirmation humaine obligatoire avant tout impact sur le calcul.
 - **`candidate`/`confirmed`/`rejected`** : toute proposition automatique
-  reste `candidate` tant qu'un humain ne l'a pas validée – jamais de
-  confirmation automatique, quel que soit le nombre d'occurrences détectées.
-- **Anomalies `bloquant` uniquement si le calcul deviendrait faux** : ex.
-  `compte_tva_non_reconnu` (intracom ou autre compte TVA non géré) est
-  bloquant – mieux vaut arrêter que produire un chiffre silencieusement faux.
-- **Prudence fiscale par défaut** : donnée indéterminée (carburant, nature
-  d'opération) – exclue du calcul par défaut, configurable.
-- **RLS stricte + rôles Postgres séparés** – jamais de superuser en usage
-  applicatif (`pennylane_tva_app`, `_provisioning`, `_readonly`, `_owner`).
+  reste `candidate` tant qu'un humain ne l'a pas validée.
+- **Anomalies `bloquant` uniquement si le calcul deviendrait faux.**
+- **Prudence fiscale par défaut** : donnée indéterminée exclue du calcul par défaut.
+- **RLS stricte + `FORCE ROW LEVEL SECURITY` sur TOUTE table sensible** —
+  y compris les tables ajoutées après coup (oubli réel une fois sur la
+  migration 008, corrigé, cf. bugs plus bas). Seule exception délibérée :
+  `cabinets` (fonction SECURITY DEFINER de provisioning).
 - **Immuabilité du calcul validé** – trigger Postgres, aucune modification
-  possible après passage en `valide`.
-- **Découverte des comptes TVA via la balance (`trial_balance`)**, pas la
-  liste brute des comptes existants – Pennylane active par défaut des
-  dizaines de sous-comptes TVA par pays jamais utilisés.
-- **`orchestrateur-module9` est l'unique propriétaire de l'accès Postgres**
-  (lecture ET écriture, y compris l'audit) – `api-module6` est une pure
-  couche HTTP par-dessus, jamais de SQL direct dedans.
+  possible après passage en `valide`. Un calcul `rejete` (erreur de saisie)
+  redevient `brouillon` si le cycle est relancé sur la même période.
+- **Aucun DELETE nulle part** sauf `calculs_tva_lignes` tant que le calcul
+  est en `brouillon` — remplacer par un `UPDATE` de statut (`obsolete`,
+  `rejete`) ou un `UPSERT`, jamais un `DELETE` applicatif.
+- **`orchestrateur-module9` est l'unique propriétaire de l'accès Postgres.**
 - **Chaque action humaine et chaque événement système sont tracés dans
-  `audit_log`**, dans la même transaction que l'action elle-même (rollback
-  conjoint si l'un des deux échoue).
+  `audit_log`**, dans la même transaction que l'action — sauf les secrets
+  eux-mêmes : une clé API modifiée est tracée par son nom, jamais sa valeur.
+- **`conventions_dossier` (comptes vente/charge/équipement/carburant,
+  comptes d'autoliquidation) n'est PAS une donnée de cycle** — ne jamais
+  l'inclure dans une purge de test entre deux essais. Contrairement à
+  `anomalies`/`calculs_tva`/`tiers_reference`, c'est une configuration
+  durable du dossier ; la vider casse le calcul au lieu de le nettoyer
+  (vécu : deux fois de suite dans la même session).
 
 ## Bugs réels trouvés en testant (pas en relisant le code)
 
+Liste chronologique, la plus longue section de ce document — presque tous
+trouvés en conditions réelles sur le dossier sandbox, pas en review de code :
+
 - `SET LOCAL ... = $1` invalide en Postgres (paramètre bindé) – `set_config()`
-- `resolveLedgerAccounts`/`resolveLedgerAccountsByIds` sans pagination – sur
-  un vrai dossier, des comptes clients tombaient silencieusement hors de la
-  première page, corrompant la base HT du calcul (taux implicites à 100% sur
-  des écritures pourtant correctes). Reproduit et corrigé, testé en cassant
-  volontairement le fix pour prouver que le test le détecte.
+- `resolveLedgerAccounts`/`resolveLedgerAccountsByIds` sans pagination –
+  comptes clients tombant silencieusement hors de la première page.
 - Distinction à trois voies nécessaire dans les écritures composées
   (`ligneTva` / `lignesTiers` / `autresLignes`), pas juste deux.
-- **Aucun DELETE possible sur `anomalies`/`calculs_tva` par le rôle
-  applicatif** (choix délibéré, 002 – traçabilité fiscale) : la première
-  tentative de fix pour la déduplication des anomalies utilisait `DELETE`,
-  a cassé toute la suite de tests en environnement réel avec `permission
-  denied`. Corrigé sans DELETE : statut `obsolete` (anomalies) et `UPDATE`
-  en place (calcul brouillon). Toujours tester contre la vraie base avec le
-  vrai rôle applicatif, pas juste en local avec un rôle superuser.
+- **`DELETE` interdit par le rôle applicatif** – première tentative de fix
+  de dédup des anomalies utilisait `DELETE`, cassé en conditions réelles
+  (`permission denied`). Corrigé sans DELETE (statut `obsolete`/`UPDATE`).
+- **`FORCE ROW LEVEL SECURITY` manquant sur la migration 008** –
+  `parametres_cabinet`/`parametres_dossier` créées sans cette protection,
+  alors que c'est la politique systématique du projet. Corrigé avant
+  qu'un secret (clé Mistral) n'y transite en conditions réelles.
+- **`ajouterConventionManuelle` écrasait au lieu de compléter** – ajouter
+  un second lot de comptes séparément (ex: 706 puis 611) à une clé de type
+  liste écrasait silencieusement le premier lot, parce que
+  `confirmerConvention` rejette la ligne `confirmed` précédente à chaque
+  nouvelle confirmation (comportement voulu pour les clés scalaires,
+  cassant pour les listes). Corrigé : fusion avec la liste déjà confirmée
+  avant insertion d'une nouvelle candidate.
+- **Autoliquidation : mauvais montant pris en compte.** Le code utilisait
+  le montant brut porté sur les comptes 4454/445664 comme s'il s'agissait
+  déjà de la TVA, alors que c'est un TTC-équivalent (facture du fournisseur
+  étranger). Corrigé : `TVA = montant - montant/(1+taux/100)`, soit
+  `montant/6` à 20% (confirmé avec Rami), pas `montant/5`.
+- **Avoirs comptés en plus au lieu d'en moins.** `Math.abs(credit - debit)`
+  détruisait le signe : un avoir (débit sur un compte de TVA collectée, ou
+  crédit sur un compte de TVA déductible) s'additionnait au lieu de se
+  soustraire. Corrigé : deux nets signés distincts selon le sens normal du
+  compte (crédit pour collecte/autoliquidation due, débit pour
+  déductible/autoliquidation déductible), plus de valeur absolue en amont.
+- **`qualifierEncaissementNonAffecte` sans garde-fou de statut** (trouvé
+  par Claude Code) – une anomalie 471 déjà qualifiée pouvait être
+  re-qualifiée silencieusement, écrasant la première décision. Corrigé
+  (`AnomalieNonQualifiableError`), testé par une vraie course concurrente.
+- **Faux positif "compte non reconnu" / "tout classé Bien" — deux fois** :
+  cause racine identique les deux fois, une commande de purge de test
+  (`TRUNCATE ... conventions_dossier ...`) donnée par erreur, qui a effacé
+  les conventions déjà confirmées (autoliquidation, puis vente/charge
+  service). Voir décision structurante ci-dessus — ne plus jamais inclure
+  `conventions_dossier` dans une remise à zéro entre deux tests.
 - **Désynchronisation entre conversations** (celle-ci) – voir avertissement
   en tête de document.
 
+## Chantier en cours — prorata de TVA déductible sur paiement partiel
+
+Contexte fiscal confirmé par Rami après recherche : un service payé
+partiellement ouvre droit à déduction de la TVA **au prorata du montant
+payé** (ex : facture 1200€ TTC/1000€ HT/200€ TVA, payée à 600€ → 100€ de
+TVA déductible), contrairement à l'hypothèse initiale du projet qui
+excluait tout ou rien selon le lettrage.
+
+**Piège identifié à ne pas rater** : un paiement non lettré face à une
+facture peut être (a) un vrai paiement partiel (rare, prorata légitime),
+(b) un acompte sur une facture pas encore reçue (aucun droit à déduction),
+ou (c) une facture simplement pas encore transmise par le client du
+cabinet (statu quo, rien à trancher). Confondre (a) avec (b) ouvrirait un
+droit à déduction indu. Distinction envisagée : le libellé du mouvement en
+banque/tiers contient souvent une info exploitable par un LLM (Mistral) ;
+un montant "rond" est un indice secondaire, jugé trop fragile seul.
+
+**Fait aujourd'hui (groundwork uniquement)** :
+- `fetchLignesGroupeLettrage` (`connector-pennylane`) : récupère le détail
+  complet (montant, compte, libellé, date) de chaque ligne d'un groupe de
+  lettrage. Avant ça, seuls les ids du groupe étaient connus
+  (`Lettrage.groupeIds`), jamais leurs montants — impossible de calculer un
+  prorata sans ça. Testé, isolé, **pas encore appelé nulle part**.
+
+**Pas fait** :
+1. Détection déterministe des candidats (paiement non lettré face à une
+   facture plus ancienne/plus grosse sur le même compte).
+2. Premier vrai appel Mistral du projet (jugement sur le libellé).
+3. Confirmation humaine structurée (sur le modèle de la qualification 471 :
+   anomalie → décision humaine → impact sur le calcul).
+4. Calcul du prorata et intégration au résultat.
+
+**Tentative abandonnée à ne pas reproduire** : une approche "correction en
+bloc par solde fournisseur" (retirer la TVA correspondant au solde impayé
+en fin de période, en une fois, plutôt que facture par facture) a été
+entièrement construite puis **retirée** dans cette même session — le
+mécanisme de lettrage ligne à ligne existant (`exigibilite.ts`) a été
+restauré tel quel. Rami avait d'abord proposé le solde par souci de
+simplicité, puis s'est renseigné et a confirmé que le droit fiscal exige
+un prorata précis, pas une approximation par solde. Le code de cette
+tentative n'existe plus (supprimé, pas juste désactivé) — consultable dans
+l'historique Git si jamais utile (commits autour du 04/08, chercher
+"solde fournisseur").
+
+## Chantier B — pas commencé : collecte sur encaissements clients non lettrés
+
+Distinct du chantier ci-dessus (celui-ci concerne la **collecte**, pas la
+déductible). Principe confirmé par Rami : par prudence fiscale (droit de
+l'État), un encaissement client non lettré doit générer de la TVA collectée
+même sans facture en face, selon ces règles :
+- Compte d'attente (471) : 20% par défaut sur le TTC (cf. mécanisme 471
+  déjà construit, mais qui aujourd'hui *bloque et attend qualification*
+  plutôt que d'appliquer un défaut).
+- Compte client précis, historique à taux unique : ce taux automatiquement.
+- Compte client précis, historique à taux mixte : 20% par défaut (prudence),
+  sauf choix explicite du collaborateur pour cet encaissement précis (info
+  de dernière minute, dans un sens ou dans l'autre).
+
+**Prérequis technique lourd, pas encore construit** :
+1. Nouveau fetch de données : un encaissement jamais rapproché d'aucune
+   facture n'apparaît nulle part dans ce que le connecteur récupère
+   aujourd'hui (ancré sur les écritures de TVA).
+2. **Taux historique par compte client** — concept qui n'existe pas du
+   tout aujourd'hui (`taux_historique` existe par compte de
+   produit/charge, jamais par tiers individuel).
+3. Mécanisme de qualification humaine pour les comptes mixtes (anomalie +
+   choix du taux), sur le modèle du 471.
+
+Chantier de la taille de celui du 471 (déjà fait) ou du paiement partiel
+(en cours) — pas commencé, à ne pas perdre de vue.
+
 ## Ce qui reste en suspens, par urgence
 
-**Fonctionnel, pas juste cosmétique :**
-- Le cas 409 (relance sur calcul déjà validé) et le cycle de succès n'ont été
-  vérifiés côté frontend que par interception réseau (Playwright, pas de
-  vrai token Pennylane disponible pour Claude Code) – à revalider en
-  conditions réelles sur le VPS avec un vrai token
-
 **Technique, connu et documenté :**
-- Pas d'authentification – header `x-cabinet-id` en clair, stand-in temporaire
-- Le token Pennylane est passé en clair dans le corps de la requête HTTP
-  (accepté pour l'instant : test en mode sandbox Pennylane `company`, pas
-  encore `firm` — à revoir avant tout usage multi-cabinets réel)
-- Proxy Vite en dev uniquement – pas déployable tel quel en production (CORS)
+- Pas d'authentification – header `x-cabinet-id` en clair, stand-in temporaire.
+- Le token Pennylane et la clé Mistral sont stockés/transmis en clair —
+  accepté en sandbox, à revoir avant tout usage multi-cabinets réel
+  (chiffrement au repos ou secrets manager — pas un simple ALTER TABLE,
+  question de gestion de la clé de chiffrement elle-même).
+- Proxy Vite en dev uniquement – pas déployable tel quel en production (CORS).
+- Le cas 409 (relance sur calcul déjà validé) et le cycle de succès du
+  panneau Calculs n'ont été vérifiés côté frontend que par interception
+  réseau (Playwright), pas avec un vrai token Pennylane.
 
-**Mis de côté consciemment :**
-- Module 5 (LLM) — 2 des 3 tâches restantes : numérotation facture,
-  classification véhicule tourisme/utilitaire. La 3ᵉ (nouveau fournisseur à
-  risque) a sa partie déterministe faite (détection + `tiers_reference`
-  alimentée) ; seul le jugement de risque par LLM reste à faire.
-- Paramétrage : la clé Mistral se configure déjà (panneau Paramètres,
-  `parametres_cabinet`), mais aucun appel LLM réel n'est câblé dessus —
-  aucune des tâches Module 5 ne consomme encore cette clé.
-- Module 8 (génération CA3) – cases officielles déjà vérifiées si repris un
-  jour (08–20%, 9B–10%, 09–5,5%, T6–2,1%, 19–immo, 20–abs)
-- Intracom – détecté (`compte_tva_non_reconnu`, bloquant) mais pas traité
+**Fonctionnel, des trous identifiés mais pas comblés :**
+- **Aucun contrôle ne lit `parametres_dossier`** — la table et l'API
+  existent (migration 008) mais rien ne consomme les paramètres pour
+  désactiver un contrôle par dossier. Plomberie posée, jamais branchée.
+- **Aucune catégorisation forcée des comptes avant le premier calcul** —
+  un compte de charge/produit mouvementé mais absent des conventions
+  (`comptes_vente_service`/`comptes_charge_service`/...) retombe
+  silencieusement en "bien" (exigible immédiatement), sans anomalie pour
+  le signaler. Vécu concrètement : le compte 604 (sous-traitance) est
+  passé entre les mailles deux fois de suite parce que seul 611 était
+  configuré. Idée de Rami, pas construite : forcer la catégorisation de
+  chaque compte mouvementé (bien / service / sous-traitance autoliquidée /
+  carburant) lors du premier onboarding d'un dossier, avant d'autoriser
+  un cycle.
+- **`tiers_reference` n'est jamais pré-peuplée à l'onboarding** — un
+  dossier avec des années d'historique verra TOUS ses fournisseurs/clients
+  connus signalés comme "nouveau tiers" dès le premier cycle, noyant le
+  collaborateur sous des anomalies non pertinentes. Pas de mécanisme de
+  pré-remplissage en masse depuis l'historique Pennylane.
+- **Pièces affichées par ID Pennylane brut**, pas par un libellé/numéro
+  lisible — un `Pièce : 22495307243520` ne correspond à rien de visible
+  dans l'interface Pennylane pour un collaborateur qui voudrait vérifier.
+- Aucun affichage frontend de la progression de confiance d'un tiers
+  (nouveau → à surveiller → confiance) — consultable en base uniquement.
+- `CycleForm` et `AnomaliesPanel` affichent chacun les anomalies d'un
+  cycle qui vient de tourner, redondant (deux chemins pour la même info) —
+  cosmétique, pas bloquant.
+
+**Mis de côté consciemment (arbitrage à faire avant de coder) :**
+- **Véhicules tourisme/utilitaire** : détection auto par LLM + validation,
+  ou saisie manuelle par le collaborateur — pas tranché.
+- **Déductibilité carburant 80%/100%** : le contrôle signale juste "parc
+  non renseigné", pas de paramètre pour choisir le taux quand le dossier
+  mixe tourisme et utilitaire.
+- **Motif de numérotation des factures** (Module 5) — pas commencé du tout.
+- Module 8 (génération CA3) – cases officielles déjà vérifiées si repris
+  un jour (08–20%, 9B–10%, 09–5,5%, T6–2,1%, 19–immo, 20–abs).
+- Intracom – détecté (`compte_tva_non_reconnu`, bloquant) mais pas traité.
+- Encaissements clients (411) sans facture — voir Chantier B ci-dessus.
 
 ## Comment tester sur le vrai dossier sandbox
 
-1. `seed_dossier_reel.sql` crée un cabinet + dossier persistant avec les
-   conventions confirmées (comptes déjà identifiés sur ce dossier précis :
-   autoliquidation 4454/445664, vente service 706, charge service 611,
-   équipement 6063, carburant 6061)
+1. `seed_dossier_reel.sql` crée un cabinet + dossier persistant. **Ne pas
+   confondre avec une remise à zéro entre deux tests** — pour ça, purger
+   uniquement `anomalies`, `calculs_tva`, `calculs_tva_lignes`,
+   `tiers_reference`, `audit_log` (jamais `conventions_dossier` ni
+   `taux_historique`, qui sont de la configuration durable, pas du cycle).
 2. API : `DATABASE_URL="postgresql://pennylane_tva_app:CHANGE_ME_APP@localhost:5432/tva_orchestrateur_test" npm run dev` dans `packages/api-module6`
-3. `POST /dossiers/:id/cycles` avec header `x-cabinet-id`, body
+   — ajouter `DEBUG_CYCLE=1` devant pour un diagnostic détaillé en cas de
+   chiffre suspect (dump des statuts d'exigibilité, anomalies, lignes de
+   calcul dans le terminal de l'API).
+3. Frontend : `npm run dev` dans `packages/frontend`, terminal séparé.
+4. `POST /dossiers/:id/cycles` avec header `x-cabinet-id`, body
    `{periodeDebut, periodeFin, pennylaneToken}` – token Pennylane à
-   régénérer avant usage (jamais réutiliser un token déjà collé quelque part)
-4. Interface : `http://localhost:5173/`
+   régénérer avant chaque usage.
+5. Interface : `http://localhost:5173/` (VPS distant — vérifier le port
+   forwarding VS Code, onglet "Ports", `5173` doit être "Forwarded").
 
 ## Comment travailler avec Rami – manières de faire
 
 - **Communication en français, directe, sans complaisance.** Rami corrige
-  activement quand une hypothèse ne colle pas à son expérience terrain –
-  c'est pris en compte, pas juste acquiescé.
-- **Rigueur non négociable** : jamais deviner un endpoint API ou un
-  comportement – vérifier contre de vraies données à chaque fois. Chaque
-  correctif doit être prouvé en cassant volontairement le fix pour confirmer
-  que le test le détecte réellement, pas seulement qu'il passe.
+  activement quand une hypothèse ne colle pas à son expérience terrain ou
+  à ce qu'il a vérifié fiscalement — c'est pris en compte, jamais juste
+  acquiescé. Il retourne parfois sur une décision après s'être renseigné
+  (ex : solde fournisseur abandonné après vérification du droit fiscal) —
+  normal, pas une hésitation à corriger.
+- **Rigueur non négociable** : jamais deviner un comportement fiscal ou un
+  endpoint API — vérifier contre de vraies données (`DEBUG_CYCLE=1`) à
+  chaque chiffre qui semble faux, avant de conclure à un bug ou de coder
+  un correctif.
 - **Répartition du travail** : conception + code backend testable – ici
   (Claude, sans interface). Frontend + vérification visuelle – Claude Code
-  (VS Code, connecté en Remote-SSH au VPS). Ne pas essayer de faire du
-  frontend à l'aveugle ici.
-- **Rami découvre le terminal** – donner des commandes complètes,
-  copiables-collables en un seul bloc, jamais de `\` de continuation de
-  ligne multi-lignes (le terminal VS Code/SSH coupe parfois mal le collé).
-  Toujours donner le remplacement exact d'un `<PID>` ou d'un placeholder,
-  jamais supposer que "évident" pour nous l'est pour lui à ce stade.
-- **Économie de tokens explicitement demandée** : planifier avant d'exécuter,
-  éviter les aller-retours évitables, livrer en zip delta (uniquement les
-  packages modifiés) plutôt que le monorepo complet à chaque fois.
-- **Sécurité** : Rami colle parfois des tokens API en clair dans le chat par
-  réflexe – le signaler et lui demander de régénérer systématiquement,
-  sans exception, sans jugement.
+  (VS Code, Remote-SSH). Ne pas faire de frontend à l'aveugle ici.
+- **Rami découvre le terminal** – commandes complètes, copiables-collables
+  en un seul bloc, jamais de `\` de continuation multi-lignes. Toujours
+  préciser explicitement lequel des deux terminaux (API / frontend) — il
+  ne devine pas tout seul lequel relancer.
+- **Économie de tokens explicitement demandée** : planifier avant
+  d'exécuter, éviter les aller-retours évitables.
+- **Sécurité** : Rami colle parfois des tokens API en clair dans le chat
+  par réflexe – le signaler et lui demander de régénérer systématiquement.
+- **Avant toute purge/TRUNCATE de test, vérifier explicitement quelles
+  tables contiennent de la configuration durable** (conventions, taux
+  historique) vs des données de cycle — l'erreur a coûté cher deux fois.
 - **VPS** : `92.113.31.90`, connexion `root@`. Base de test :
   `tva_orchestrateur_test`. Rami utilise VS Code + Remote-SSH + extension
-  Claude Code (pas le terminal SSH nu, sauf quand nécessaire).
-
-## Backlog — Module 5 et extensions (pas commencé, pour plus tard)
-
-### Module 5 — nécessite un LLM (déterministe insuffisant), 2 tâches restantes
-1. **Motif de numérotation des factures** par dossier — trop de formats
-   différents selon les cabinets pour une règle déterministe fiable.
-2. **Classification véhicule tourisme/utilitaire** à partir des libellés
-   d'immobilisation.
-
-~~3. Nouveau fournisseur à risque~~ — partie déterministe faite (voir
-"Nouveaux tiers" ci-dessous). Reste : jugement de risque par LLM sur le nom
-du tiers (pattern de fraude, fournisseur fictif...), pas encore câblé.
-
-### Nouveaux tiers — implémenté (partie déterministe)
-Fait : `verifierNouveauxTiers` (controles-module4) détecte tout compte
-client/fournisseur jamais vu pour ce dossier, anomalie `signale` (pas
-bloquante). `synchroniserTiersReference` (orchestrateur-module9) alimente
-enfin `tiers_reference` (existait depuis le schéma initial, jamais utilisée) :
-progression `nouveau` → `a_surveiller` (3 cycles) → `confiance` (6 cycles),
-seuils arbitraires en dur, documentés comme tels — bons candidats pour
-devenir un paramètre dossier/cabinet si le besoin se confirme à l'usage.
-
-Pas fait : rien côté frontend pour visualiser la progression de confiance
-d'un tiers dans le temps (consultable en base uniquement pour l'instant).
-Le jugement de risque par LLM (voir ci-dessus) reste la partie manquante
-de la tâche originale.
-
-### Compte 471 (attente) — implémenté
-Fait : détection (tout encaissement non lettré sur compte(s) préfixe 471,
-paramétrable par dossier via convention `comptes_attente`), anomalie
-bloquante, qualification manuelle (`POST /anomalies/:id/qualifier` :
-vente+taux ou hors-vente+motif), intégration au calcul de la période une
-fois qualifié vente (`integrerRegularisations`, calcul-module7). UI dans
-`AnomaliesPanel.tsx`. Distinction automatique vente/hors-vente reste un
-jugement humain à chaque fois — le LLM qui pourrait juger sur le libellé
-(Module 5) n'est pas construit.
-
-Volontairement pas fait : les encaissements clients (411) sans facture en
-face (acomptes, factures non transmises) suivent la même logique métier
-mais n'ont pas le même marqueur déterministe qu'un compte d'attente (une
-ligne créditrice non lettrée en 471 EST par nature non identifiée ; une
-ligne 411 non lettrée peut simplement être une facture impayée normale,
-pas un encaissement à qualifier). Pas encore traité — nécessite de
-distinguer les deux cas avant de dupliquer le mécanisme.
-
-### Paramétrage par dossier et par cabinet — socle implémenté
-Fait : tables `parametres_cabinet`/`parametres_dossier` (migration 008,
-clé-valeur, pas de workflow candidate/confirmed — décision directe, pas une
-proposition à valider), API GET/PUT, panneau frontend. Sert aujourd'hui à
-la clé Mistral (`mistral_api_key`, présence = LLM activé pour ce cabinet,
-masquée à l'affichage, jamais tracée en clair dans l'audit — mais stockée
-en clair en base, même compromis que le token Pennylane, à revoir avant
-tout usage multi-cabinets réel).
-
-Pas fait : aucun contrôle ne lit encore `parametres_dossier` pour se
-désactiver. La table existe, l'API existe, le câblage dans le pipeline
-(vérifier un paramètre avant de lancer chaque contrôle) reste à faire.
-
-### Véhicules tourisme/utilitaire — arbitrage à faire avant de développer
-Deux approches en balance, pas encore tranché :
-a. Détection automatique par LLM (Module 5) à partir des libellés
-   d'immobilisation, validée ensuite par le collaborateur.
-b. Saisie manuelle : le collaborateur liste les immobilisations concernées
-   dans un paramètre dédié et coche tourisme/utilitaire lui-même.
-
-Contrainte commune aux deux : immobilisations parfois anciennes, incertitude
-sur la capacité des API (Pennylane et autres) à toujours exposer la liste
-complète des immos d'un dossier.
-
-### Déductibilité carburant 80 %/100 %
-Le contrôle carburant actuel se contente de signaler "parc de véhicules non
-renseigné" sans permettre de trancher. À ajouter : un paramètre par dossier
-pour choisir 80 % ou 100 % de déductibilité quand le dossier a un mix
-tourisme + utilitaire.
+  Claude Code.
