@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
 import type { StatutExigibilite, StatutCarburant } from '@tva-controle/controles-module4';
-import { calculerTva, integrerRegularisations } from '../src/calcul.js';
+import { calculerTva, integrerRegularisations, corrigerDeductibleParSoldeFournisseurService } from '../src/calcul.js';
 
 function ligneTva(overrides: Partial<EcritureTvaComplete['ligneTva']> = {}): EcritureTvaComplete['ligneTva'] {
   return {
@@ -262,5 +262,77 @@ describe('integrerRegularisations — encaissements 471 qualifiés comme vente',
     expect(() => integrerRegularisations(base, [{ ledgerEntryId: 1, montantTTC: 100, taux: 15 }])).toThrow(
       /taux 15%/
     );
+  });
+});
+
+describe('corrigerDeductibleParSoldeFournisseurService — correction en bloc, plus de lettrage ligne à ligne', () => {
+  it('retire du déductible-ABS la TVA correspondant au solde impayé du fournisseur', () => {
+    const base = calculerTva(
+      [ecriture({ ligneTva: ligneTva({ compte: '44566', debit: 2000, ledgerEntryId: 1 }) })],
+      [],
+      [],
+      []
+    );
+
+    // Solde impayé 1200 TTC -> TVA à retirer = 1200 - 1200/1.2 = 200.
+    const resultat = corrigerDeductibleParSoldeFournisseurService(base, [
+      { compteFournisseur: '401X', soldeTTC: 1200 },
+    ]);
+
+    const ligneDeductible = resultat.lignes.find((l) => l.categorie === 'deductible_abs');
+    expect(ligneDeductible?.montant).toBe(1800); // 2000 - 200
+  });
+
+  it('cumule la correction sur plusieurs fournisseurs', () => {
+    const base = calculerTva(
+      [ecriture({ ligneTva: ligneTva({ compte: '44566', debit: 5000, ledgerEntryId: 1 }) })],
+      [],
+      [],
+      []
+    );
+
+    const resultat = corrigerDeductibleParSoldeFournisseurService(base, [
+      { compteFournisseur: '401A', soldeTTC: 1200 }, // -> 200
+      { compteFournisseur: '401B', soldeTTC: 600 }, // -> 100
+    ]);
+
+    const ligneDeductible = resultat.lignes.find((l) => l.categorie === 'deductible_abs');
+    expect(ligneDeductible?.montant).toBe(4700); // 5000 - 200 - 100
+  });
+
+  it('un solde négatif ou nul (fournisseur payé, ou en avance) ne corrige rien', () => {
+    const base = calculerTva(
+      [ecriture({ ligneTva: ligneTva({ compte: '44566', debit: 1000, ledgerEntryId: 1 }) })],
+      [],
+      [],
+      []
+    );
+
+    const resultat = corrigerDeductibleParSoldeFournisseurService(base, [
+      { compteFournisseur: '401PAYE', soldeTTC: -50 },
+    ]);
+
+    expect(resultat).toEqual(base);
+  });
+
+  it('ne touche pas aux autres catégories (deductible_immo, collecte, autoliquidation)', () => {
+    const base = calculerTva(
+      [
+        ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 1000, ledgerEntryId: 1 }) }),
+        ecriture({ ligneTva: ligneTva({ compte: '44566', debit: 2000, ledgerEntryId: 2 }) }),
+        ecriture({ ligneTva: ligneTva({ compte: '44562', debit: 500, ledgerEntryId: 3 }) }),
+      ],
+      [],
+      [],
+      []
+    );
+
+    const resultat = corrigerDeductibleParSoldeFournisseurService(base, [
+      { compteFournisseur: '401X', soldeTTC: 120 }, // -> 20 de correction
+    ]);
+
+    expect(resultat.lignes.find((l) => l.categorie === 'collectee_20')?.montant).toBe(1000);
+    expect(resultat.lignes.find((l) => l.categorie === 'deductible_immo')?.montant).toBe(500);
+    expect(resultat.lignes.find((l) => l.categorie === 'deductible_abs')?.montant).toBe(1980);
   });
 });
