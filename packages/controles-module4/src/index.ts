@@ -22,6 +22,10 @@ export {
 export { detecterComptesTvaNonReconnus, type ConfigComptesTva } from './comptesNonReconnus.js';
 export { detecterEncaissementsNonAffectes } from './encaissementNonAffecte.js';
 export { verifierNouveauxTiers, type StatutTiers } from './tiersReference.js';
+export {
+  identifierFournisseursService,
+  type ConfigSoldeFournisseurService,
+} from './soldeFournisseurService.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
