@@ -1,21 +1,22 @@
 import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
 
-// Convention par compte de PRODUIT, propre à chaque dossier — aucun défaut
-// national ne fait sens ici (contrairement au taux de TVA) : c'est le
-// cabinet qui décide comment il subdivise ses comptes 706/etc. entre "bien"
-// et "service". Doit venir de conventions_dossier à terme.
+// Convention par compte de PRODUIT/CHARGE, propre à chaque dossier — aucun
+// défaut national ne fait sens ici (contrairement au taux de TVA) : c'est le
+// cabinet qui décide comment il subdivise ses comptes 604/706/etc. entre
+// "bien" et "service". Doit venir de conventions_dossier à terme.
 export interface ConfigExigibiliteTva {
-  comptesVenteService: string[]; // ex: ['706', '704'] — côté collecte uniquement
+  comptesVenteService: string[]; // ex: ['706', '704'] — côté collecte
+  comptesChargeService: string[]; // ex: ['611'] — côté déductible
 }
 
 export type NatureOperation = 'bien' | 'service' | 'indetermine';
 
 export interface StatutExigibilite {
   ledgerEntryId: number;
-  compte: string; // compte TVA (445711...)
+  compte: string; // compte TVA (445711, 44566...)
   natureOperation: NatureOperation;
   // Ce que Module 7 doit savoir : peut-on inclure cette ligne dans le calcul
-  // de la période en cours ? false = service non encore encaissé, à
+  // de la période en cours ? false = service non encore encaissé/payé, à
   // exclure (ce n'est pas une erreur, c'est l'état normal d'une facture
   // impayée — d'où la séparation d'avec les anomalies).
   exigible: boolean;
@@ -23,21 +24,12 @@ export interface StatutExigibilite {
 }
 
 const PREFIXE_COLLECTE = '44571';
+const PREFIXES_DEDUCTIBLE = ['44566', '44562'];
 
 function estCompteService(compte: string, comptesService: string[]): boolean {
   return comptesService.some((prefixe) => compte.startsWith(prefixe));
 }
 
-// Ne traite QUE le côté collecte (TVA sur encaissement pour les ventes de
-// service). Le côté déductible n'est plus vérifié ligne à ligne ici depuis
-// le 04/08 — décision de Rami : en pratique, quasi toujours un seul taux
-// (20%) et peu de fournisseurs de services, donc une correction en bloc sur
-// le solde du compte fournisseur en fin de période (cf.
-// soldeFournisseurService.ts + calcul-module7.corrigerDeductibleParSolde-
-// FournisseurService) est suffisante et bien plus simple que le lettrage
-// facture par facture. L'autoliquidation (4454/445664) reste hors de ce
-// contrôle, comme avant (logique liée à l'achat lui-même, pas à un
-// encaissement/décaissement).
 export function determinerExigibiliteTva(
   ecritures: EcritureTvaComplete[],
   config: ConfigExigibiliteTva
@@ -47,7 +39,15 @@ export function determinerExigibiliteTva(
 
   for (const ecriture of ecritures) {
     const { compte, ledgerEntryId } = ecriture.ligneTva;
-    if (!compte.startsWith(PREFIXE_COLLECTE)) continue;
+    const estCollecte = compte.startsWith(PREFIXE_COLLECTE);
+    const estDeductible = PREFIXES_DEDUCTIBLE.some((p) => compte.startsWith(p));
+
+    // Comptes d'autoliquidation (4454/445664...) : logique d'exigibilité
+    // différente (liée à l'achat lui-même, pas à un encaissement client) —
+    // hors scope de ce contrôle, couverte par verifierAutoliquidationEquilibree.
+    if (!estCollecte && !estDeductible) continue;
+
+    const comptesServiceApplicables = estCollecte ? config.comptesVenteService : config.comptesChargeService;
 
     if (ecriture.autresLignes.length === 0) {
       anomalies.push({
@@ -55,7 +55,7 @@ export function determinerExigibiliteTva(
         gravite: 'signale',
         ledgerEntryId,
         compte,
-        description: 'Aucune ligne produit trouvée sur la pièce — nature bien/service non déterminable.',
+        description: 'Aucune ligne produit/charge trouvée sur la pièce — nature bien/service non déterminable.',
       });
       statuts.push({
         ledgerEntryId,
@@ -68,7 +68,7 @@ export function determinerExigibiliteTva(
     }
 
     const natures = new Set(
-      ecriture.autresLignes.map((l) => (estCompteService(l.compte, config.comptesVenteService) ? 'service' : 'bien'))
+      ecriture.autresLignes.map((l) => (estCompteService(l.compte, comptesServiceApplicables) ? 'service' : 'bien'))
     );
 
     if (natures.size > 1) {
