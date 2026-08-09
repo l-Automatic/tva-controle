@@ -31,11 +31,15 @@ export {
   definirParametreDossier,
   synchroniserTiersReference,
   type StatutTiersASynchroniser,
+  enregistrerPropositionsTauxTiers,
+  confirmerTauxHistoriqueTiers,
+  rejeterTauxHistoriqueTiers,
 } from './db/writeRepository.js';
 export {
   listerAnomalies,
   listerConventions,
   listerTauxHistorique,
+  listerTauxHistoriqueTiers,
   listerCalculs,
   listerAuditLog,
   listerAuditLogPourExport,
