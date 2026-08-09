@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EcritureTvaComplete } from '@tva-controle/core';
-import { analyserTauxHistorique } from '../src/tauxHistorique.js';
+import { analyserTauxHistorique, analyserTauxHistoriqueParTiers } from '../src/tauxHistorique.js';
 
 // Un seul exemple réel disponible (ROUSSEAU, 711.03/3555.14 = 20%) pour cette
 // analyse — les autres occurrences ci-dessous sont construites (montants
@@ -62,5 +62,101 @@ describe('analyserTauxHistorique', () => {
     const ecritures = [ecriture(1, 80, 1000), ecriture(2, 80, 1000), ecriture(3, 80, 1000)]; // 8%, pas un taux national
     const propositions = analyserTauxHistorique(ecritures, 3);
     expect(propositions).toEqual([{ compteOuTiers: '445711', tauxHabituel: 8, nbOccurrences: 3 }]);
+  });
+});
+
+function ecritureAvecTiers(
+  ledgerEntryId: number,
+  montantTva: number,
+  montantHT: number,
+  numeroCompteTiers: string,
+  estLettree = true
+): EcritureTvaComplete {
+  return {
+    ledgerEntryId,
+    ligneTva: {
+      id: ledgerEntryId,
+      compte: '445711',
+      compteId: 1,
+      libelle: null,
+      debit: 0,
+      credit: montantTva,
+      date: '2025-01-01',
+      ledgerEntryId,
+      lettrage: { estLettree: true, groupeIds: [] },
+    },
+    lignesTiers: [
+      {
+        compte: numeroCompteTiers,
+        compteId: 1,
+        libelleCompte: null,
+        debit: montantTva + montantHT,
+        credit: 0,
+        lettrage: { estLettree, groupeIds: estLettree ? [1, 2] : [] },
+      },
+    ],
+    autresLignes: [{ id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: montantHT }],
+  };
+}
+
+describe('analyserTauxHistoriqueParTiers', () => {
+  it('propose 20% pour un compte client dont l’historique lettré est dominant à 20%', () => {
+    const ecritures = [
+      ecritureAvecTiers(1, 200, 1000, '411ROUSSEAU'),
+      ecritureAvecTiers(2, 400, 2000, '411ROUSSEAU'),
+      ecritureAvecTiers(3, 600, 3000, '411ROUSSEAU'),
+      ecritureAvecTiers(4, 100, 1000, '411ROUSSEAU'), // 10%, minoritaire
+    ];
+
+    const propositions = analyserTauxHistoriqueParTiers(ecritures, 3);
+    expect(propositions).toEqual([{ numeroCompteTiers: '411ROUSSEAU', tauxHabituel: 20, nbOccurrences: 3 }]);
+  });
+
+  it('ignore les lignes tiers non lettrées — on ne peut pas apprendre d’une facture pas encore payée', () => {
+    const ecritures = [
+      ecritureAvecTiers(1, 200, 1000, '411X', true),
+      ecritureAvecTiers(2, 200, 1000, '411X', true),
+      ecritureAvecTiers(3, 200, 1000, '411X', false), // non lettrée, ne doit pas compter
+    ];
+
+    expect(analyserTauxHistoriqueParTiers(ecritures, 3)).toEqual([]);
+  });
+
+  it('distingue deux comptes clients différents', () => {
+    const ecritures = [
+      ecritureAvecTiers(1, 200, 1000, '411A'),
+      ecritureAvecTiers(2, 200, 1000, '411A'),
+      ecritureAvecTiers(3, 200, 1000, '411A'),
+      ecritureAvecTiers(4, 100, 1000, '411B'),
+      ecritureAvecTiers(5, 100, 1000, '411B'),
+      ecritureAvecTiers(6, 100, 1000, '411B'),
+    ];
+
+    const propositions = analyserTauxHistoriqueParTiers(ecritures, 3);
+    expect(propositions.sort((a, b) => a.numeroCompteTiers.localeCompare(b.numeroCompteTiers))).toEqual([
+      { numeroCompteTiers: '411A', tauxHabituel: 20, nbOccurrences: 3 },
+      { numeroCompteTiers: '411B', tauxHabituel: 10, nbOccurrences: 3 },
+    ]);
+  });
+
+  it('ignore une écriture sans ligne tiers du tout', () => {
+    const sansTiers: EcritureTvaComplete = {
+      ledgerEntryId: 1,
+      ligneTva: {
+        id: 1,
+        compte: '445711',
+        compteId: 1,
+        libelle: null,
+        debit: 0,
+        credit: 200,
+        date: '2025-01-01',
+        ledgerEntryId: 1,
+        lettrage: { estLettree: true, groupeIds: [] },
+      },
+      lignesTiers: [],
+      autresLignes: [{ id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 }],
+    };
+
+    expect(analyserTauxHistoriqueParTiers([sansTiers], 1)).toEqual([]);
   });
 });
