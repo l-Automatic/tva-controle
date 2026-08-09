@@ -4,7 +4,6 @@ import { determinerExigibiliteTva, type ConfigExigibiliteTva } from '../src/exig
 
 const configReelle: ConfigExigibiliteTva = {
   comptesVenteService: ['706', '704'],
-  comptesChargeService: ['611'],
 };
 
 // Cas réel ROUSSEAU (déjà validé bout-en-bout dans le connecteur) : vente de
@@ -66,22 +65,8 @@ describe('determinerExigibiliteTva — cas réel ROUSSEAU (service, lettré)', (
   });
 });
 
-describe('determinerExigibiliteTva — biens (déductible dès facturation)', () => {
-  it('un achat de bien (607, hors liste service) est exigible même sans lettrage', () => {
-    const ecriture = ecritureRousseau({
-      ligneTva: { ...ecritureRousseau().ligneTva, compte: '44566', credit: 0, debit: 100 },
-      autresLignes: [{ id: 1, compte: '607', compteId: 1, libelle: null, debit: 500, credit: 0 }],
-      lignesTiers: [
-        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
-      ],
-    });
-
-    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
-    expect(anomalies).toEqual([]);
-    expect(statuts[0]).toMatchObject({ natureOperation: 'bien', exigible: true });
-  });
-
-  it('un achat de service (611, sous-traitance) suit l’exigibilité du lettrage', () => {
+describe('determinerExigibiliteTva — déductible, hors scope depuis le 04/08', () => {
+  it('ne produit ni statut ni anomalie pour une ligne déductible (44566) — corrigée en bloc ailleurs désormais', () => {
     const ecriture = ecritureRousseau({
       ligneTva: { ...ecritureRousseau().ligneTva, compte: '44566', credit: 0, debit: 100 },
       autresLignes: [{ id: 1, compte: '611', compteId: 1, libelle: null, debit: 500, credit: 0 }],
@@ -90,8 +75,19 @@ describe('determinerExigibiliteTva — biens (déductible dès facturation)', ()
       ],
     });
 
-    const { statuts } = determinerExigibiliteTva([ecriture], configReelle);
-    expect(statuts[0]).toMatchObject({ natureOperation: 'service', exigible: false });
+    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(statuts).toEqual([]);
+    expect(anomalies).toEqual([]);
+  });
+
+  it('idem pour un compte 44562 (immobilisations)', () => {
+    const ecriture = ecritureRousseau({
+      ligneTva: { ...ecritureRousseau().ligneTva, compte: '44562', credit: 0, debit: 200 },
+    });
+
+    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(statuts).toEqual([]);
+    expect(anomalies).toEqual([]);
   });
 });
 
