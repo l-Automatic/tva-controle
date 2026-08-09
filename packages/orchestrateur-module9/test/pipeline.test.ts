@@ -89,6 +89,10 @@ function fakeFetchRouteur(): typeof fetch {
       // existantes, réponse vide explicite pour ne pas hériter par erreur des
       // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
       if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
+      // Comptes clients (411) : chantier B, decouverte inconditionnelle a
+      // chaque cycle desormais — reponse vide explicite ici aussi, meme
+      // raison que pour 471 (eviter d'heriter des fixtures 445).
+      if (filtre.includes('"value":"411"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
       if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
       if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
     }
@@ -240,6 +244,10 @@ describe('executerCycleTva — dérivation des comptes depuis conventions_dossie
         // existantes, réponse vide explicite pour ne pas hériter par erreur des
         // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
         if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
+        // Comptes clients (411) : chantier B, decouverte inconditionnelle a
+        // chaque cycle desormais — reponse vide explicite ici aussi, meme
+        // raison que pour 471 (eviter d'heriter des fixtures 445).
+        if (filtre.includes('"value":"411"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
         if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
         if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
       }
@@ -325,6 +333,10 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
         // existantes, réponse vide explicite pour ne pas hériter par erreur des
         // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
         if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
+        // Comptes clients (411) : chantier B, decouverte inconditionnelle a
+        // chaque cycle desormais — reponse vide explicite ici aussi, meme
+        // raison que pour 471 (eviter d'heriter des fixtures 445).
+        if (filtre.includes('"value":"411"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
         if (filtre.includes('"field":"number"')) return new Response(JSON.stringify(comptesTva), { status: 200 });
         if (filtre.includes('"field":"id"')) return new Response(JSON.stringify(comptesCandidats), { status: 200 });
       }
@@ -457,6 +469,10 @@ describe('executerCycleTva — découverte automatique des comptes via la balanc
         // existantes, réponse vide explicite pour ne pas hériter par erreur des
         // fixtures 445 sur ce nouveau type de requête (même forme de filtre).
         if (filtre.includes('"value":"471"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
+        // Comptes clients (411) : chantier B, decouverte inconditionnelle a
+        // chaque cycle desormais — reponse vide explicite ici aussi, meme
+        // raison que pour 471 (eviter d'heriter des fixtures 445).
+        if (filtre.includes('"value":"411"')) return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
         if (filtre.includes('"field":"number"') && filtre.includes('"operator":"in"')) {
           // Capture les comptes réellement transmis pour la résolution —
           // le fantôme à solde nul ne doit PAS y figurer.
