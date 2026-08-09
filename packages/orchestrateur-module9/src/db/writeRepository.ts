@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import type { Anomalie } from '@tva-controle/core';
 import type { PropositionConvention } from '@tva-controle/onboarding-module3';
-import type { PropositionTaux } from '@tva-controle/onboarding-module3';
+import type { PropositionTaux, PropositionTauxTiers } from '@tva-controle/onboarding-module3';
 import type { ResultatCalculTva } from '@tva-controle/calcul-module7';
 
 // ============================================================================
@@ -393,6 +393,82 @@ export async function rejeterTauxHistorique(
     acteur: 'utilisateur',
     acteurUtilisateurId: utilisateurId,
     details: { tauxId, compteProduitOuCharge: ligne?.compte_produit_ou_charge },
+  });
+}
+
+// ============================================================================
+// TAUX HISTORIQUE PAR TIERS (chantier B — encaissements clients non lettrés)
+// ============================================================================
+// Symétrique de enregistrerPropositionsTaux/confirmerTauxHistorique/
+// rejeterTauxHistorique ci-dessus, mais sur taux_historique_tiers (table
+// séparée, cf. migration 009 — compte_produit_ou_charge est NOT NULL sur
+// taux_historique, une table dédiée évite de toucher à cette contrainte).
+
+export async function enregistrerPropositionsTauxTiers(
+  client: PoolClient,
+  dossierId: string,
+  propositions: PropositionTauxTiers[]
+): Promise<void> {
+  for (const p of propositions) {
+    await client.query(
+      `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source)
+       VALUES ($1, $2, $3, $4, 'candidate', 'onboarding')`,
+      [dossierId, p.numeroCompteTiers, p.tauxHabituel, p.nbOccurrences]
+    );
+  }
+}
+
+export async function confirmerTauxHistoriqueTiers(
+  client: PoolClient,
+  tauxId: string,
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string; numero_compte_tiers: string }>(
+    `SELECT dossier_id, numero_compte_tiers FROM taux_historique_tiers WHERE id = $1`,
+    [tauxId]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new Error(`Taux historique tiers ${tauxId} introuvable`);
+  }
+
+  await client.query(
+    `UPDATE taux_historique_tiers SET statut = 'rejected'
+     WHERE dossier_id = $1 AND numero_compte_tiers = $2 AND statut = 'confirmed' AND id != $3`,
+    [ligne.dossier_id, ligne.numero_compte_tiers, tauxId]
+  );
+  await client.query(
+    `UPDATE taux_historique_tiers SET statut = 'confirmed', confirmed_by = $2, confirmed_at = now() WHERE id = $1`,
+    [tauxId, utilisateurId]
+  );
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'taux_tiers_confirme',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { tauxId, numeroCompteTiers: ligne.numero_compte_tiers },
+  });
+}
+
+export async function rejeterTauxHistoriqueTiers(
+  client: PoolClient,
+  tauxId: string,
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string; numero_compte_tiers: string }>(
+    `UPDATE taux_historique_tiers SET statut = 'rejected' WHERE id = $1
+     RETURNING dossier_id, numero_compte_tiers`,
+    [tauxId]
+  );
+  const ligne = res.rows[0];
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne?.dossier_id ?? null,
+    typeEvenement: 'taux_tiers_rejete',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { tauxId, numeroCompteTiers: ligne?.numero_compte_tiers },
   });
 }
 
