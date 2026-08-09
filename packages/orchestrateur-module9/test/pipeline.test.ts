@@ -84,6 +84,12 @@ function fakeFetchRouteur(): typeof fetch {
     const url = new URL(rawUrl);
     const filtre = url.searchParams.get('filter') ?? '';
 
+    if (url.pathname === '/api/external/v2/trial_balance') {
+      // Solde fournisseur (correction déductible, cf. pipeline.ts) : ces
+      // tests utilisent comptesTvaOverride donc n'ont jamais besoin de la
+      // balance pour la découverte TVA — vide dans tous les cas ici.
+      return new Response(JSON.stringify({ items: [], has_more: false }), { status: 200 });
+    }
     if (url.pathname === '/api/external/v2/ledger_accounts') {
       // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
       // existantes, réponse vide explicite pour ne pas hériter par erreur des
@@ -235,6 +241,12 @@ describe('executerCycleTva — dérivation des comptes depuis conventions_dossie
     const fetchImpl = (async (rawUrl: string) => {
       const url = new URL(rawUrl);
       const filtre = url.searchParams.get('filter') ?? '';
+      if (url.pathname === '/api/external/v2/trial_balance') {
+        // Solde fournisseur (correction déductible) : comptesTvaOverride est
+        // utilisé dans ce test, donc pas besoin de la balance pour la
+        // découverte TVA — vide dans tous les cas ici.
+        return new Response(JSON.stringify({ items: [], has_more: false }), { status: 200 });
+      }
       if (url.pathname === '/api/external/v2/ledger_accounts') {
         // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
         // existantes, réponse vide explicite pour ne pas hériter par erreur des
@@ -320,6 +332,12 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
     const fetchImpl = (async (rawUrl: string) => {
       const url = new URL(rawUrl);
       const filtre = url.searchParams.get('filter') ?? '';
+      if (url.pathname === '/api/external/v2/trial_balance') {
+        // Solde fournisseur (correction déductible) : comptesTvaOverride est
+        // utilisé dans ce test, donc pas besoin de la balance pour la
+        // découverte TVA — vide dans tous les cas ici.
+        return new Response(JSON.stringify({ items: [], has_more: false }), { status: 200 });
+      }
       if (url.pathname === '/api/external/v2/ledger_accounts') {
         // Compte 471 (attente) : ce dossier de test n'en a aucun dans les fixtures
         // existantes, réponse vide explicite pour ne pas hériter par erreur des
