@@ -109,6 +109,7 @@ export interface PropositionDb {
   dossierId: string;
   cle?: string | undefined; // conventions_dossier uniquement
   compteProduitOuCharge?: string | undefined; // taux_historique uniquement
+  numeroCompteTiers?: string | undefined; // taux_historique_tiers uniquement (chantier B)
   valeur?: unknown;
   tauxHabituel?: number | undefined;
   statut: 'candidate' | 'confirmed' | 'rejected';
@@ -167,6 +168,34 @@ export async function listerTauxHistorique(
     id: r.id,
     dossierId: r.dossier_id,
     compteProduitOuCharge: r.compte_produit_ou_charge,
+    tauxHabituel: r.taux_habituel !== null ? Number.parseFloat(r.taux_habituel) : undefined,
+    statut: r.statut,
+    source: r.source,
+  }));
+}
+
+export async function listerTauxHistoriqueTiers(
+  client: PoolClient,
+  dossierId: string,
+  statut?: string
+): Promise<PropositionDb[]> {
+  const params: unknown[] = [dossierId];
+  let condition = 'dossier_id = $1';
+  if (statut) {
+    params.push(statut);
+    condition += ` AND statut = $2`;
+  }
+
+  const res = await client.query(
+    `SELECT id, dossier_id, numero_compte_tiers, taux_habituel, statut, source
+     FROM taux_historique_tiers WHERE ${condition} ORDER BY derniere_maj DESC`,
+    params
+  );
+
+  return res.rows.map((r) => ({
+    id: r.id,
+    dossierId: r.dossier_id,
+    numeroCompteTiers: r.numero_compte_tiers,
     tauxHabituel: r.taux_habituel !== null ? Number.parseFloat(r.taux_habituel) : undefined,
     statut: r.statut,
     source: r.source,
