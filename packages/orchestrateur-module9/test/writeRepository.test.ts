@@ -8,6 +8,8 @@ import {
   enregistrerPropositionsConventions,
   ajouterConventionManuelle,
   confirmerConvention,
+  rejeterConvention,
+  retirerCompteConvention,
   enregistrerPropositionsTaux,
   enregistrerPropositionsTauxTiers,
   confirmerTauxHistoriqueTiers,
@@ -20,6 +22,7 @@ import {
   definirParametreCabinet,
   definirParametreDossier,
   synchroniserTiersReference,
+  corrigerNiveauConfianceTiers,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
   AnomalieNonQualifiableError,
@@ -1024,5 +1027,114 @@ describe('listerElementsATraiter', () => {
 
     const elements = await avecClient((client) => listerElementsATraiter(client, dossierId));
     expect(elements.some((e) => e.resume === 'Anomalie signalée, ne doit pas apparaître')).toBe(false);
+  });
+});
+
+describe('retirerCompteConvention', () => {
+  async function creerUtilisateur(label: string) {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, $2, $3, 'collaborateur') RETURNING id`,
+        [cabinetId, label, `${label}-${Date.now()}@test.fr`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('retire un compte d’une liste confirmée sans créer de nouvelle ligne ni de rejet', async () => {
+    const utilisateurId = await creerUtilisateur('Retrait1');
+    const cle = `comptes_test_retrait_${Date.now()}`;
+
+    const id = await avecClient((client) =>
+      ajouterConventionManuelle(client, dossierId, utilisateurId, cle, ['706', '611', '604'])
+    );
+    await avecClient((client) => confirmerConvention(client, id, utilisateurId));
+
+    await avecClient((client) => retirerCompteConvention(client, dossierId, cle, '611', utilisateurId));
+
+    const confirmees = await avecClient((client) => listerConventions(client, dossierId, 'confirmed'));
+    const ligne = confirmees.find((c) => c.cle === cle);
+    expect(ligne?.valeur).toEqual(['706', '604']);
+    expect(ligne?.id).toBe(id); // même ligne, pas une nouvelle
+
+    // Aucune ligne rejetée créée par cette opération.
+    const rejetees = await avecClient((client) => listerConventions(client, dossierId, 'rejected'));
+    expect(rejetees.some((c) => c.cle === cle)).toBe(false);
+  });
+
+  it('échoue proprement si la clé n’a pas de convention confirmée', async () => {
+    const utilisateurId = await creerUtilisateur('Retrait2');
+    await expect(
+      avecClient((client) => retirerCompteConvention(client, dossierId, 'cle_inexistante_xyz', '706', utilisateurId))
+    ).rejects.toThrow(/Aucune convention confirmée/);
+  });
+});
+
+describe('listerConventions et listerTauxHistorique — rejected masqué par défaut', () => {
+  it('n’inclut pas les conventions rejetées quand aucun statut n’est demandé explicitement', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RejMasque', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `rejmasque-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+    const cle = `cle_rejetee_${Date.now()}`;
+
+    const id = await avecClient((client) =>
+      ajouterConventionManuelle(client, dossierId, utilisateurId, cle, 'valeur_test')
+    );
+    await avecClient((client) => rejeterConvention(client, id, utilisateurId));
+
+    const sansFiltre = await avecClient((client) => listerConventions(client, dossierId));
+    expect(sansFiltre.some((c) => c.id === id)).toBe(false);
+
+    const avecFiltreExplicite = await avecClient((client) => listerConventions(client, dossierId, 'rejected'));
+    expect(avecFiltreExplicite.some((c) => c.id === id)).toBe(true);
+  });
+});
+
+describe('corrigerNiveauConfianceTiers', () => {
+  it('modifie directement le niveau de confiance d’un tiers déjà connu', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'CorrTiers', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `corrtiers-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+    const compte = `401correction${Date.now()}`;
+
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Test correction', estNouveau: true }],
+        '2025-01-31'
+      )
+    );
+
+    await avecClient((client) => corrigerNiveauConfianceTiers(client, dossierId, compte, 'confiance', utilisateurId));
+
+    const res = await avecClient((client) =>
+      client.query(`SELECT niveau_confiance FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(res.rows[0].niveau_confiance).toBe('confiance');
+  });
+
+  it('échoue proprement pour un tiers introuvable', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'CorrTiers2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `corrtiers2-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    await expect(
+      avecClient((client) =>
+        corrigerNiveauConfianceTiers(client, dossierId, '401NexistePas999', 'confiance', utilisateurId)
+      )
+    ).rejects.toThrow(/introuvable/);
   });
 });
