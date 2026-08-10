@@ -357,3 +357,62 @@ export async function listerParametresDossier(client: PoolClient, dossierId: str
   ]);
   return res.rows.map((r) => ({ cle: r.cle, valeur: r.valeur, updatedAt: r.updated_at }));
 }
+
+// ============================================================================
+// "À TRAITER" — agrégat de tout ce qui attend une décision humaine
+// ============================================================================
+// Point d'entrée demandé par Rami : avant de lancer quoi que ce soit sur un
+// dossier, voir d'un coup tout ce qui bloque ou attend un choix — anomalies
+// bloquantes non traitées, propositions de conventions/taux en attente de
+// confirmation, calculs en brouillon. Recompose des fonctions de lecture
+// déjà existantes plutôt que d'inventer une nouvelle requête SQL geante —
+// chacune reste la source de vérité pour son propre écran, celle-ci n'est
+// qu'une vue agrégée en lecture.
+
+export interface ElementATraiter {
+  type: 'anomalie_bloquante' | 'convention_candidate' | 'taux_candidate' | 'taux_tiers_candidate' | 'calcul_brouillon';
+  id: string;
+  resume: string;
+}
+
+export async function listerElementsATraiter(client: PoolClient, dossierId: string): Promise<ElementATraiter[]> {
+  const [anomalies, conventions, taux, tauxTiers, calculs] = await Promise.all([
+    listerAnomalies(client, dossierId, { statut: 'ouvert' }),
+    listerConventions(client, dossierId, 'candidate'),
+    listerTauxHistorique(client, dossierId, 'candidate'),
+    listerTauxHistoriqueTiers(client, dossierId, 'candidate'),
+    listerCalculs(client, dossierId),
+  ]);
+
+  const elements: ElementATraiter[] = [];
+
+  for (const a of anomalies.filter((a) => a.gravite === 'bloquant')) {
+    elements.push({ type: 'anomalie_bloquante', id: a.id, resume: a.description });
+  }
+  for (const c of conventions) {
+    elements.push({ type: 'convention_candidate', id: c.id, resume: `Convention "${c.cle}" à confirmer` });
+  }
+  for (const t of taux) {
+    elements.push({
+      type: 'taux_candidate',
+      id: t.id,
+      resume: `Taux ${t.tauxHabituel}% proposé pour le compte ${t.compteProduitOuCharge}`,
+    });
+  }
+  for (const t of tauxTiers) {
+    elements.push({
+      type: 'taux_tiers_candidate',
+      id: t.id,
+      resume: `Taux ${t.tauxHabituel}% proposé pour le client ${t.numeroCompteTiers}`,
+    });
+  }
+  for (const c of calculs.filter((c) => c.statut === 'brouillon')) {
+    elements.push({
+      type: 'calcul_brouillon',
+      id: c.id,
+      resume: `Calcul ${c.periodeDebut} — ${c.periodeFin} en attente de validation ou rejet`,
+    });
+  }
+
+  return elements;
+}
