@@ -52,7 +52,7 @@ export function detecterComptesTvaNonReconnus(
       gravite: 'bloquant',
       ledgerEntryId: ledgerEntryIds[0]!,
       compte,
-      description: `Compte de la famille TVA (${compte}) avec du mouvement mais non géré par cette version (ni collecte, ni déductible standard, ni autoliquidation configurée) — potentiellement hors périmètre actuel (ex: intracom). Calcul refusé tant que ce n'est pas vérifié manuellement.`,
+      description: `Compte de la famille TVA (${compte}) avec du mouvement mais non géré par cette version (ni collecte, ni déductible standard, ni autoliquidation configurée). Potentiellement hors périmètre actuel (ex: intracom) : calcul refusé tant que ce n'est pas vérifié manuellement.`,
       details: { nbEcritures: ledgerEntryIds.length, references: ledgerEntryIds },
     });
   }
