@@ -11,12 +11,14 @@ import {
   ajouterConventionManuelle,
   confirmerConvention,
   rejeterConvention,
+  retirerCompteConvention,
   confirmerTauxHistorique,
   rejeterTauxHistorique,
   listerTauxHistoriqueTiers,
   confirmerTauxHistoriqueTiers,
   rejeterTauxHistoriqueTiers,
   listerTiersReference,
+  corrigerNiveauConfianceTiers,
   validerCalcul,
   rejeterCalcul,
   listerAnomalies,
@@ -200,6 +202,29 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
+  // Retire un compte d'une convention de type liste déjà confirmée (ex:
+  // comptes_charge_service) — pas de nouveau cycle candidate/confirmed,
+  // UPDATE direct. dossierId + cle dans le corps car ce n'est pas une
+  // ligne précise qu'on cible mais une clé de convention pour ce dossier.
+  app.post<{ Body: { dossierId: string; cle: string; compte: string; utilisateurId: string } }>(
+    '/conventions/retirer-compte',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const { dossierId, cle, compte, utilisateurId } = request.body;
+      try {
+        await avecContexteCabinet(pool, cabinetId, (client) =>
+          retirerCompteConvention(client, dossierId, cle, compte, utilisateurId)
+        );
+        reply.code(204).send();
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('Aucune convention confirmée')) {
+          return reply.code(404).send({ erreur: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
   // --- Taux historique ---
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
     '/dossiers/:dossierId/taux-historique',
@@ -272,6 +297,28 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/tiers', async (request) => {
     const cabinetId = request.headers[HEADER_CABINET] as string;
     return avecContexteCabinet(pool, cabinetId, (client) => listerTiersReference(client, request.params.dossierId));
+  });
+
+  // Correction manuelle du niveau de confiance : la progression automatique
+  // reste la voie normale, ceci est l'exception pour une information directe
+  // du collaborateur.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { numeroCompteTiers: string; niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance'; utilisateurId: string };
+  }>('/dossiers/:dossierId/tiers/corriger', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { numeroCompteTiers, niveauConfiance, utilisateurId } = request.body;
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        corrigerNiveauConfianceTiers(client, request.params.dossierId, numeroCompteTiers, niveauConfiance, utilisateurId)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('introuvable')) {
+        return reply.code(404).send({ erreur: err.message });
+      }
+      throw err;
+    }
   });
 
   // --- Calculs ---
