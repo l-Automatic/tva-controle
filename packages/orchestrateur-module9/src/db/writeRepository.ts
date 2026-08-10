@@ -328,6 +328,13 @@ export async function rejeterConvention(
 // logique que les conventions, table différente (migration 003).
 // ============================================================================
 
+// Ne propose qu'une fois par compte : si une ligne existe déjà (candidate,
+// confirmed ou rejected), on ne la re-propose jamais, même si le taux
+// dominant recalculé diffère de celui déjà proposé/tranché. Sans ce
+// garde-fou, appeler cette fonction à chaque cycle (ce qui est le but,
+// cf. pipeline.ts) créerait une nouvelle candidate à l'infini pour un
+// compte déjà traité par un humain — "proposer une fois, laisser la
+// confirmation humaine trancher" plutôt que de réévaluer en continu.
 export async function enregistrerPropositionsTaux(
   client: PoolClient,
   dossierId: string,
@@ -336,7 +343,10 @@ export async function enregistrerPropositionsTaux(
   for (const p of propositions) {
     await client.query(
       `INSERT INTO taux_historique (dossier_id, compte_produit_ou_charge, taux_habituel, nb_occurrences, statut, source)
-       VALUES ($1, $2, $3, $4, 'candidate', 'onboarding')`,
+       SELECT $1, $2, $3, $4, 'candidate', 'onboarding'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM taux_historique WHERE dossier_id = $1 AND compte_produit_ou_charge = $2
+       )`,
       [dossierId, p.compteOuTiers, p.tauxHabituel, p.nbOccurrences]
     );
   }
@@ -404,6 +414,8 @@ export async function rejeterTauxHistorique(
 // séparée, cf. migration 009 — compte_produit_ou_charge est NOT NULL sur
 // taux_historique, une table dédiée évite de toucher à cette contrainte).
 
+// Même garde-fou que enregistrerPropositionsTaux : ne propose qu'une fois
+// par compte tiers.
 export async function enregistrerPropositionsTauxTiers(
   client: PoolClient,
   dossierId: string,
@@ -412,7 +424,10 @@ export async function enregistrerPropositionsTauxTiers(
   for (const p of propositions) {
     await client.query(
       `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source)
-       VALUES ($1, $2, $3, $4, 'candidate', 'onboarding')`,
+       SELECT $1, $2, $3, $4, 'candidate', 'onboarding'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM taux_historique_tiers WHERE dossier_id = $1 AND numero_compte_tiers = $2
+       )`,
       [dossierId, p.numeroCompteTiers, p.tauxHabituel, p.nbOccurrences]
     );
   }
