@@ -449,3 +449,21 @@ export async function listerElementsATraiter(client: PoolClient, dossierId: stri
 
   return elements;
 }
+
+export interface TauxAssigneDb {
+  compte: string;
+  tauxAssigne: string;
+  updatedAt: string;
+}
+
+export async function listerTauxAssignes(client: PoolClient, dossierId: string): Promise<TauxAssigneDb[]> {
+  const res = await client.query(
+    `SELECT compte_produit_ou_charge, taux_assigne, updated_at FROM taux_assigne_compte WHERE dossier_id = $1 ORDER BY compte_produit_ou_charge ASC`,
+    [dossierId]
+  );
+  return res.rows.map((r) => ({
+    compte: r.compte_produit_ou_charge,
+    tauxAssigne: r.taux_assigne,
+    updatedAt: r.updated_at,
+  }));
+}
