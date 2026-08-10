@@ -15,6 +15,8 @@ import {
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
+  identifierComptesACategoriser,
+  type CompteACategoriser,
 } from '@tva-controle/controles-module4';
 import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
 import { analyserTauxHistorique, analyserTauxHistoriqueParTiers } from '@tva-controle/onboarding-module3';
@@ -70,8 +72,14 @@ export interface ParametresCycleTva {
 }
 
 export type ResultatCycleTva =
-  | { statut: 'bloque'; anomalies: Anomalie[] }
-  | { statut: 'calcule'; anomalies: Anomalie[]; resultat: ResultatCalculTva; calculId: string };
+  | { statut: 'bloque'; anomalies: Anomalie[]; comptesACategoriser: CompteACategoriser[] }
+  | {
+      statut: 'calcule';
+      anomalies: Anomalie[];
+      resultat: ResultatCalculTva;
+      calculId: string;
+      comptesACategoriser: CompteACategoriser[];
+    };
 
 // Enchaîne : charge le contexte dossier (Module 2) -> récupère les écritures
 // (Module 1) -> exécute tous les contrôles (Module 4) -> persiste les
@@ -137,6 +145,16 @@ export async function executerCycleTva(
     params.comptesCarburantOverride ?? conventionListe(contexteDossier, 'comptes_carburant') ?? [];
   const comptesAttentePrefixes =
     params.comptesAttenteOverride ?? conventionListe(contexteDossier, 'comptes_attente') ?? ['471'];
+
+  // Détection déterministe pour le popup de catégorisation (08/08) — ne
+  // dépend que des 4 conventions déjà connues, calculée une fois qu'elles
+  // le sont toutes. Pas de présélection IA ici, cf. comptesACategoriser.ts.
+  const comptesACategoriser = identifierComptesACategoriser(ecritures, {
+    comptesVenteService,
+    comptesChargeService,
+    comptesEquipement,
+    comptesCarburant,
+  });
 
   const anomaliesPreControles = executerPreControles(ecritures, {
     contexteDossier,
@@ -276,7 +294,7 @@ export async function executerCycleTva(
         },
       })
     );
-    return { statut: 'bloque', anomalies: toutesAnomalies };
+    return { statut: 'bloque', anomalies: toutesAnomalies, comptesACategoriser };
   }
 
   if (process.env.DEBUG_CYCLE) {
@@ -348,5 +366,5 @@ export async function executerCycleTva(
     return id;
   });
 
-  return { statut: 'calcule', anomalies: toutesAnomalies, resultat, calculId };
+  return { statut: 'calcule', anomalies: toutesAnomalies, resultat, calculId, comptesACategoriser };
 }
