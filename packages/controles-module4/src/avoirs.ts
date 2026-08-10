@@ -20,7 +20,7 @@ export function verifierAvoirsCollecte(
         gravite: 'signale',
         ledgerEntryId,
         compte,
-        description: `Débit de ${debit} sur le compte de TVA collectée ${compte} — à confirmer qu'il s'agit bien d'un avoir ou d'une OD de régularisation.`,
+        description: `Débit de ${debit} sur le compte de TVA collectée ${compte} : à confirmer qu'il s'agit bien d'un avoir ou d'une OD de régularisation.`,
         details: { debit },
       });
     }
