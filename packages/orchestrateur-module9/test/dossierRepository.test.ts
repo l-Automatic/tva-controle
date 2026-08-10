@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pg from 'pg';
 import { creerPool, avecContexteCabinet } from '../src/db/pool.js';
-import { chargerContexteDossier, chargerDossier } from '../src/db/dossierRepository.js';
+import { chargerContexteDossier, chargerDossier, listerDossiers } from '../src/db/dossierRepository.js';
 
 // Ce test crée ses propres données via le vrai mécanisme de provisioning
 // (provisioning_create_cabinet, déjà validé dans 002_roles_and_privileges.sql)
@@ -133,5 +133,26 @@ describe('chargerContexteDossier — contre la vraie base', () => {
     expect(contexte.conventions).toEqual([]);
     expect(contexte.parcVehicules).toEqual([]);
     expect(contexte.tiersConnus).toEqual([]);
+  });
+});
+
+describe('listerDossiers', () => {
+  it('trouve le dossier réel par une recherche partielle sur le nom', async () => {
+    const resultats = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerDossiers(client, cabinetId, 'Electricien')
+    );
+    expect(resultats.some((d) => d.id === dossierId && d.nom === 'Electricien Sandbox')).toBe(true);
+  });
+
+  it('ne retourne rien pour une recherche qui ne correspond à aucun dossier', async () => {
+    const resultats = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerDossiers(client, cabinetId, 'CompteQuiNexistePas12345')
+    );
+    expect(resultats).toEqual([]);
+  });
+
+  it('sans recherche, retourne tous les dossiers du cabinet', async () => {
+    const resultats = await avecContexteCabinet(pool, cabinetId, (client) => listerDossiers(client, cabinetId));
+    expect(resultats.some((d) => d.id === dossierId)).toBe(true);
   });
 });
