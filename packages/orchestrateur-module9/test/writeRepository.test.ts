@@ -33,6 +33,7 @@ import {
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
   listerParametresCabinet,
+  listerElementsATraiter,
   parametreCabinetValeur,
   listerParametresDossier,
 } from '../src/db/readRepository.js';
@@ -981,5 +982,47 @@ describe('taux_historique_tiers (chantier B)', () => {
 
     const rejetees = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'rejected'));
     expect(rejetees.some((c) => c.numeroCompteTiers === compteTiers)).toBe(true);
+  });
+});
+
+describe('listerElementsATraiter', () => {
+  it('agrège une anomalie bloquante ouverte et un calcul brouillon pour le même dossier', async () => {
+    const anomalie: Anomalie = {
+      type: 'compte_tva_non_reconnu',
+      gravite: 'bloquant',
+      ledgerEntryId: 9001,
+      compte: '4459',
+      description: 'Compte de test à traiter',
+    };
+    await avecClient((client) => enregistrerAnomalies(client, dossierId, '2025-12-01', [anomalie]));
+
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 10, referencesPieces: [1] }],
+      tvaNette: 10,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    await avecClient((client) => enregistrerCalcul(client, dossierId, '2025-12-01', '2025-12-31', resultat));
+
+    const elements = await avecClient((client) => listerElementsATraiter(client, dossierId));
+
+    expect(elements.some((e) => e.type === 'anomalie_bloquante' && e.resume === 'Compte de test à traiter')).toBe(
+      true
+    );
+    expect(elements.some((e) => e.type === 'calcul_brouillon')).toBe(true);
+  });
+
+  it('n’inclut pas une anomalie signalée (non bloquante) ni un calcul déjà validé', async () => {
+    const anomalieSignalee: Anomalie = {
+      type: 'avoir_a_verifier',
+      gravite: 'signale',
+      ledgerEntryId: 9002,
+      compte: '445711',
+      description: 'Anomalie signalée, ne doit pas apparaître',
+    };
+    await avecClient((client) => enregistrerAnomalies(client, dossierId, '2025-11-01', [anomalieSignalee]));
+
+    const elements = await avecClient((client) => listerElementsATraiter(client, dossierId));
+    expect(elements.some((e) => e.resume === 'Anomalie signalée, ne doit pas apparaître')).toBe(false);
   });
 });
