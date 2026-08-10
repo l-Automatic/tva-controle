@@ -822,3 +822,45 @@ export async function corrigerNiveauConfianceTiers(
     details: { numeroCompteTiers, niveauConfiance },
   });
 }
+
+// ============================================================================
+// TAUX ASSIGNÉ PAR COMPTE (produit ou charge) — assignation directe, pas
+// une observation. Cf. migration 010 pour le raisonnement complet.
+// ============================================================================
+
+export type TauxAssigne =
+  | '0'
+  | '2.1'
+  | '5.5'
+  | '10'
+  | '20'
+  | 'autoliquide_intracom'
+  | 'autoliquide_20'
+  | 'autoliquide_10'
+  | 'autoliquide_5.5';
+
+// Assignation directe, pas de workflow candidate/confirmed — un simple
+// upsert. Contrairement aux conventions de comptes (listes), c'est une
+// valeur unique par compte, remplacée telle quelle si déjà assignée.
+export async function assignerTauxCompte(
+  client: PoolClient,
+  dossierId: string,
+  compte: string,
+  taux: TauxAssigne,
+  utilisateurId: string
+): Promise<void> {
+  await client.query(
+    `INSERT INTO taux_assigne_compte (dossier_id, compte_produit_ou_charge, taux_assigne)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (dossier_id, compte_produit_ou_charge) DO UPDATE SET taux_assigne = EXCLUDED.taux_assigne, updated_at = now()`,
+    [dossierId, compte, taux]
+  );
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'taux_compte_assigne',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { compte, taux },
+  });
+}
