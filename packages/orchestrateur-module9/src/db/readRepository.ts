@@ -127,6 +127,12 @@ export async function listerConventions(
   if (statut) {
     params.push(statut);
     condition += ` AND statut = $2`;
+  } else {
+    // 'rejected' masqué par défaut : reste consultable en base et via
+    // audit_log (traçabilité intacte), mais n'encombre plus l'écran par
+    // défaut — même logique que 'obsolete' sur les anomalies (05/08).
+    // Demande de Rami (08/08) : cet historique ne sert à rien au quotidien.
+    condition += ` AND statut != 'rejected'`;
   }
 
   const res = await client.query(
@@ -156,6 +162,8 @@ export async function listerTauxHistorique(
   if (statut) {
     params.push(statut);
     condition += ` AND statut = $2`;
+  } else {
+    condition += ` AND statut != 'rejected'`;
   }
 
   const res = await client.query(
@@ -184,6 +192,8 @@ export async function listerTauxHistoriqueTiers(
   if (statut) {
     params.push(statut);
     condition += ` AND statut = $2`;
+  } else {
+    condition += ` AND statut != 'rejected'`;
   }
 
   const res = await client.query(
