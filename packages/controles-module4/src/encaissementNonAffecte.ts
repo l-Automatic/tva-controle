@@ -23,8 +23,8 @@ export function detecterEncaissementsNonAffectes(lignes: LigneEcritureAvecLettra
       ledgerEntryId: l.ledgerEntryId,
       compte: l.compte,
       description:
-        `Encaissement de ${l.credit.toFixed(2)} € TTC sur le compte ${l.compte}, non identifié — ` +
-        `à qualifier manuellement : lié à une vente (taux de TVA à préciser) ou sans lien avec ` +
+        `Encaissement de ${l.credit.toFixed(2)} € TTC sur le compte ${l.compte}, non identifié. ` +
+        `À qualifier manuellement : lié à une vente (taux de TVA à préciser) ou sans lien avec ` +
         `une vente (remboursement, régularisation...).`,
       details: { montantTTC: l.credit, libelle: l.libelle, date: l.date },
     }));
