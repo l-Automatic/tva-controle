@@ -25,6 +25,8 @@ import {
   CalculPasEnBrouillonError,
   definirParametreCabinet,
   definirParametreDossier,
+  listerDossiers,
+  listerElementsATraiter,
   listerParametresCabinet,
   listerParametresDossier,
   type AuditEvenementDb,
@@ -409,6 +411,20 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(204).send();
     }
   );
+
+  // --- Liste/recherche de dossiers pour un cabinet ---
+  app.get<{ Querystring: { q?: string } }>('/dossiers', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) => listerDossiers(client, cabinetId, request.query.q));
+  });
+
+  // --- Tout ce qui attend une décision humaine sur ce dossier ---
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/a-traiter', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) =>
+      listerElementsATraiter(client, request.params.dossierId)
+    );
+  });
 
   return app;
 }
