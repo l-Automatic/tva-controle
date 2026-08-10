@@ -23,6 +23,12 @@ export interface EcritureExclue {
   ledgerEntryId: number;
   compte: string;
   motif: string;
+  // Ajoutés le 08/08 : sans ça, une écriture exclue n'était identifiable
+  // que par un ledgerEntryId Pennylane brut et le compte TVA (445711...) —
+  // jamais le compte client/fournisseur réellement concerné ni une date,
+  // impossible à retrouver dans le grand livre sans ça.
+  compteTiers?: string | undefined;
+  date?: string | undefined;
 }
 
 export interface ResultatCalculTva {
@@ -107,7 +113,8 @@ export function calculerTva(
   }
 
   for (const ecriture of ecritures) {
-    const { compte, ledgerEntryId, debit, credit } = ecriture.ligneTva;
+    const { compte, ledgerEntryId, debit, credit, date } = ecriture.ligneTva;
+    const compteTiers = ecriture.lignesTiers[0]?.compte;
     // Deux nets signés, un par sens normal de compte. PAS de Math.abs()
     // unique en amont : un avoir (qui inverse le sens habituel d'un compte)
     // doit RETRANCHER du total de sa catégorie, pas s'y additionner. Prendre
@@ -160,7 +167,7 @@ export function calculerTva(
     // --- Exigibilité (bien/service, TVA sur encaissement) ---
     const statutExig = exigibiliteParPiece.get(cle);
     if (statutExig && !statutExig.exigible) {
-      exclues.push({ ledgerEntryId, compte, motif: statutExig.motif });
+      exclues.push({ ledgerEntryId, compte, motif: statutExig.motif, compteTiers, date });
       continue;
     }
     // Absence de statut = pas concerné par le contrôle d'exigibilité pour cette
@@ -173,7 +180,13 @@ export function calculerTva(
     if (statutCarb) {
       if (statutCarb.tauxDeductible === null) {
         if (politique === 'exclure') {
-          exclues.push({ ledgerEntryId, compte, motif: `Carburant, taux déductible indéterminé : ${statutCarb.motif}` });
+          exclues.push({
+            ledgerEntryId,
+            compte,
+            motif: `Carburant, taux déductible indéterminé : ${statutCarb.motif}`,
+            compteTiers,
+            date,
+          });
           continue;
         }
         // politique 'inclure' : on inclut au montant plein, à charge du
@@ -192,6 +205,8 @@ export function calculerTva(
           ledgerEntryId,
           compte,
           motif: `Taux TVA collectée non résolu pour ce compte (ni convention dossier, ni table nationale) — exclu du calcul.`,
+          compteTiers,
+          date,
         });
         continue;
       }
