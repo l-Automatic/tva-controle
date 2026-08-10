@@ -4,10 +4,13 @@ import type {
   Calcul,
   Dossier,
   ElementATraiter,
+  NiveauConfianceTiers,
   Parametre,
   Proposition,
   QualificationEncaissement,
   ResultatCycle,
+  TauxAssigne,
+  TauxAssigneEntry,
   TiersReference,
 } from './types';
 
@@ -141,6 +144,21 @@ export function rejeterConvention(cabinetId: string, id: string, utilisateurId: 
   return request<void>(`/conventions/${id}/rejeter`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId }),
+  });
+}
+
+// Retire un compte précis d'une convention de type liste déjà confirmée
+// (ex : comptes_charge_service) sans toucher au reste de la liste.
+export function retirerCompteConvention(
+  cabinetId: string,
+  dossierId: string,
+  cle: string,
+  compte: string,
+  utilisateurId: string
+): Promise<void> {
+  return request<void>('/conventions/retirer-compte', cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ dossierId, cle, compte, utilisateurId }),
   });
 }
 
@@ -327,6 +345,41 @@ export function fetchElementsATraiter(cabinetId: string, dossierId: string): Pro
 
 export function fetchTiersReference(cabinetId: string, dossierId: string): Promise<TiersReference[]> {
   return request<TiersReference[]>(`/dossiers/${dossierId}/tiers`, cabinetId);
+}
+
+// Correction manuelle du niveau de confiance — la progression automatique
+// (via les cycles) reste la voie normale, ceci est l'exception.
+export function corrigerNiveauConfianceTiers(
+  cabinetId: string,
+  dossierId: string,
+  numeroCompteTiers: string,
+  niveauConfiance: NiveauConfianceTiers,
+  utilisateurId: string
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/tiers/corriger`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ numeroCompteTiers, niveauConfiance, utilisateurId }),
+  });
+}
+
+// --- Taux assigné par compte (produit/charge) — assignation directe, pas
+// de workflow candidate/confirmed. ---
+
+export function fetchTauxAssignes(cabinetId: string, dossierId: string): Promise<TauxAssigneEntry[]> {
+  return request<TauxAssigneEntry[]>(`/dossiers/${dossierId}/taux-assignes`, cabinetId);
+}
+
+export function assignerTauxCompte(
+  cabinetId: string,
+  dossierId: string,
+  compte: string,
+  taux: TauxAssigne,
+  utilisateurId: string
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/taux-assignes`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ compte, taux, utilisateurId }),
+  });
 }
 
 export function fetchParametresDossier(cabinetId: string, dossierId: string): Promise<Parametre[]> {

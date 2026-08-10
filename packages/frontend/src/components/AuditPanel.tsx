@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Download, RefreshCw } from 'lucide-react';
 import { ApiError, fetchAudit, telechargerExportAudit } from '../api';
 import type { ActeurAudit, AuditEvenement } from '../types';
 
@@ -100,9 +101,11 @@ export function AuditPanel({ cabinetId, dossierId }: AuditPanelProps) {
           onKeyDown={(e) => e.key === 'Enter' && void charger()}
         />
         <button onClick={() => void charger()} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
         <button onClick={() => void handleExporter()} disabled={exporting} className="secondary">
+          <Download size={14} aria-hidden="true" />
           {exporting ? 'Export…' : 'Exporter en CSV'}
         </button>
       </div>

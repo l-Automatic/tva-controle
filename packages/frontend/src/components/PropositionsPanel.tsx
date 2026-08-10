@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { ApiError } from '../api';
+import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
 import type { Proposition, StatutProposition } from '../types';
+import { BadgeStatut } from './BadgeStatut';
 
 interface PropositionsPanelProps {
   title: string;
@@ -73,7 +76,7 @@ function PropositionRow({
   return (
     <li className="card proposition">
       <div className="card-header">
-        <span className={`badge statut-${proposition.statut}`}>{LIBELLE_STATUT[proposition.statut]}</span>
+        <BadgeStatut statut={proposition.statut} libelle={LIBELLE_STATUT[proposition.statut]} />
         <span className="source">{proposition.source}</span>
       </div>
       <p className="label">{renderLabel(proposition)}</p>
@@ -82,9 +85,11 @@ function PropositionRow({
       {estCandidate && (
         <div className="actions">
           <button onClick={handleConfirmer} disabled={submitting !== null}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting === 'confirmer' ? '…' : 'Confirmer'}
           </button>
           <button onClick={handleRejeter} disabled={submitting !== null} className="secondary">
+            <ICONE_ACTION.rejeter size={14} aria-hidden="true" />
             {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>
         </div>
@@ -145,6 +150,7 @@ export function PropositionsPanel({
           Afficher les propositions traitées
         </label>
         <button onClick={() => void charger()} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>

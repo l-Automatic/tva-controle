@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { ApiError, fetchCalculs, rejeterCalcul, validerCalcul } from '../api';
 import { formatDate } from '../dateUtils';
+import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
 import type { Calcul, StatutCalcul } from '../types';
+import { BadgeStatut } from './BadgeStatut';
 
 interface CalculsPanelProps {
   cabinetId: string;
@@ -97,7 +100,7 @@ export function CalculRow({
   return (
     <li className={`card calcul statut-carte-${calcul.statut}`}>
       <div className="card-header">
-        <span className={`badge statut-${calcul.statut}`}>{LIBELLE_STATUT_CALCUL[calcul.statut]}</span>
+        <BadgeStatut statut={calcul.statut} libelle={LIBELLE_STATUT_CALCUL[calcul.statut]} />
         <span className="periode">
           {formatDate(calcul.periodeDebut)} — {formatDate(calcul.periodeFin)}
         </span>
@@ -117,9 +120,11 @@ export function CalculRow({
             disabled={submitting !== null}
           />
           <button onClick={() => void handleValider()} disabled={submitting !== null}>
+            <ICONE_ACTION.valider size={14} aria-hidden="true" />
             {submitting === 'valider' ? '…' : 'Valider'}
           </button>
           <button onClick={() => void handleRejeter()} disabled={submitting !== null} className="secondary">
+            <ICONE_ACTION.rejeter size={14} aria-hidden="true" />
             {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>
         </div>
@@ -165,6 +170,7 @@ export function CalculsPanel({ cabinetId, dossierId, utilisateurId }: CalculsPan
           Calculs ({nbBrouillons} brouillon{nbBrouillons === 1 ? '' : 's'} à valider)
         </h2>
         <button onClick={() => void charger()} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>

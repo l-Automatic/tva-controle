@@ -1,14 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { ATraiterPanel } from './components/ATraiterPanel';
-import { DossierSelector } from './components/DossierSelector';
 import { ParametresPanel } from './components/ParametresPanel';
 import { ProgressionPanel } from './components/ProgressionPanel';
+import { Sidebar, type Zone } from './components/Sidebar';
 import { ConfigurationZone, type SousOngletConfiguration } from './components/zones/ConfigurationZone';
 import { CycleZone } from './components/zones/CycleZone';
 import { HistoriqueZone } from './components/zones/HistoriqueZone';
-import { fetchAnomalies, fetchCalculs, fetchConventions } from './api';
+import { fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresDossier } from './api';
 import { toDateOnly } from './dateUtils';
-import { CLES_CONVENTIONS_COMPTES, type CleConventionCompte, type Dossier, type ElementATraiter } from './types';
+import {
+  CLE_THEME_DEGRADE,
+  CLES_CONVENTIONS_COMPTES,
+  DEGRADE_PAR_DEFAUT,
+  type CleConventionCompte,
+  type Dossier,
+  type ElementATraiter,
+} from './types';
 
 const STORAGE_KEY = 'module6.identite';
 const STORAGE_KEY_DOSSIER = 'module6.dossier';
@@ -38,15 +45,6 @@ function chargerDossier(): Dossier | null {
   return null;
 }
 
-type Zone = 'cycle' | 'configuration' | 'historique' | 'parametres';
-
-const ZONES: { id: Zone; libelle: string }[] = [
-  { id: 'cycle', libelle: 'Cycle' },
-  { id: 'configuration', libelle: 'Configuration du dossier' },
-  { id: 'historique', libelle: 'Historique' },
-  { id: 'parametres', libelle: 'Paramètres' },
-];
-
 export function App() {
   const [identite, setIdentite] = useState<Identite>(chargerIdentite);
   const [dossier, setDossier] = useState<Dossier | null>(chargerDossier);
@@ -54,6 +52,25 @@ export function App() {
   const [sousOngletConfiguration, setSousOngletConfiguration] = useState<SousOngletConfiguration>('comptes');
   const [periodeCycle, setPeriodeCycle] = useState<{ debut: string; fin: string } | null>(null);
   const [aTraiterRefreshKey, setATraiterRefreshKey] = useState(0);
+  const [degrade, setDegrade] = useState<string>(DEGRADE_PAR_DEFAUT);
+
+  const { cabinetId, utilisateurId } = identite;
+
+  useEffect(() => {
+    if (!cabinetId || !dossier) {
+      setDegrade(DEGRADE_PAR_DEFAUT);
+      return;
+    }
+    let annule = false;
+    fetchParametresDossier(cabinetId, dossier.id).then((parametres) => {
+      if (annule) return;
+      const param = parametres.find((p) => p.cle === CLE_THEME_DEGRADE);
+      setDegrade(typeof param?.valeur === 'string' ? param.valeur : DEGRADE_PAR_DEFAUT);
+    });
+    return () => {
+      annule = true;
+    };
+  }, [cabinetId, dossier]);
 
   function mettreAJourIdentite(champ: keyof Identite, valeur: string) {
     const suivante = { ...identite, [champ]: valeur };
@@ -69,12 +86,6 @@ export function App() {
     setATraiterRefreshKey((k) => k + 1);
   }
 
-  function changerDeDossier() {
-    setDossier(null);
-    localStorage.removeItem(STORAGE_KEY_DOSSIER);
-    setPeriodeCycle(null);
-  }
-
   function allerVersZone(z: Zone) {
     setZone(z);
     // Ce qui reste "à traiter" a pu changer pendant qu'on travaillait dans
@@ -85,9 +96,9 @@ export function App() {
   }
 
   // Amène l'utilisateur directement sur l'écran concerné pour traiter
-  // l'élément cliqué, pas juste sur la bonne zone en général (cf. brief
-  // refonte, section 2). Les résumés de /a-traiter ne portent pas la
-  // période/la clé complète — on la retrouve via les listes déjà exposées.
+  // l'élément cliqué, pas juste sur la bonne zone en général. Les résumés
+  // de /a-traiter ne portent pas la période/la clé complète — on la
+  // retrouve via les listes déjà exposées.
   async function naviguerVersElement(el: ElementATraiter) {
     const { cabinetId } = identite;
     if (!dossier) return;
@@ -133,97 +144,70 @@ export function App() {
     }
   }
 
-  const { cabinetId, utilisateurId } = identite;
   const identiteComplete = Boolean(cabinetId && utilisateurId);
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Module 6 — Validation humaine</h1>
-        <div className="identite-form">
-          <label>
-            Cabinet (x-cabinet-id)
-            <input
-              type="text"
-              value={cabinetId}
-              onChange={(e) => mettreAJourIdentite('cabinetId', e.target.value)}
-              placeholder="UUID du cabinet"
+    <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
+      <Sidebar
+        cabinetId={cabinetId}
+        utilisateurId={utilisateurId}
+        onIdentiteChange={mettreAJourIdentite}
+        dossier={dossier}
+        onSelectDossier={selectionnerDossier}
+        zone={zone}
+        onChangeZone={allerVersZone}
+      />
+
+      <div className="app-content">
+        {!identiteComplete ? (
+          <p className="empty">Renseignez le cabinet et l'utilisateur dans le volet latéral pour commencer.</p>
+        ) : !dossier ? (
+          <p className="empty">Sélectionnez un dossier dans le volet latéral pour commencer.</p>
+        ) : (
+          <>
+            <ATraiterPanel
+              cabinetId={cabinetId}
+              dossierId={dossier.id}
+              onNaviguer={(el) => void naviguerVersElement(el)}
+              refreshKey={aTraiterRefreshKey}
             />
-          </label>
-          <label>
-            Utilisateur
-            <input
-              type="text"
-              value={utilisateurId}
-              onChange={(e) => mettreAJourIdentite('utilisateurId', e.target.value)}
-              placeholder="UUID de l'utilisateur"
-            />
-          </label>
-          {dossier && (
-            <div className="dossier-courant">
-              <span className="dossier-courant-nom">{dossier.nom}</span>
-              <button className="secondary" onClick={changerDeDossier}>
-                Changer de dossier
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+            <ProgressionPanel cabinetId={cabinetId} dossierId={dossier.id} refreshKey={aTraiterRefreshKey} />
 
-      {!identiteComplete ? (
-        <p className="empty">Renseignez le cabinet et l'utilisateur pour commencer.</p>
-      ) : !dossier ? (
-        <DossierSelector cabinetId={cabinetId} onSelect={selectionnerDossier} />
-      ) : (
-        <>
-          <ATraiterPanel
-            cabinetId={cabinetId}
-            dossierId={dossier.id}
-            onNaviguer={(el) => void naviguerVersElement(el)}
-            refreshKey={aTraiterRefreshKey}
-          />
-          <ProgressionPanel cabinetId={cabinetId} dossierId={dossier.id} refreshKey={aTraiterRefreshKey} />
-
-          <nav className="zones-nav">
-            {ZONES.map((z) => (
-              <button
-                key={z.id}
-                className={`zone-onglet${zone === z.id ? ' actif' : ''}`}
-                onClick={() => allerVersZone(z.id)}
-              >
-                {z.libelle}
-              </button>
-            ))}
-          </nav>
-
-          <main className="app-main">
-            {zone === 'cycle' && (
-              <CycleZone
-                cabinetId={cabinetId}
-                dossierId={dossier.id}
-                utilisateurId={utilisateurId}
-                periode={periodeCycle}
-                onPeriodeChange={setPeriodeCycle}
-              />
-            )}
-            {zone === 'configuration' && (
-              <ConfigurationZone
-                cabinetId={cabinetId}
-                dossierId={dossier.id}
-                utilisateurId={utilisateurId}
-                sousOnglet={sousOngletConfiguration}
-                onChangeSousOnglet={setSousOngletConfiguration}
-              />
-            )}
-            {zone === 'historique' && (
-              <HistoriqueZone cabinetId={cabinetId} dossierId={dossier.id} utilisateurId={utilisateurId} />
-            )}
-            {zone === 'parametres' && (
-              <ParametresPanel cabinetId={cabinetId} dossierId={dossier.id} utilisateurId={utilisateurId} />
-            )}
-          </main>
-        </>
-      )}
+            <main className="app-main">
+              {zone === 'cycle' && (
+                <CycleZone
+                  cabinetId={cabinetId}
+                  dossierId={dossier.id}
+                  utilisateurId={utilisateurId}
+                  periode={periodeCycle}
+                  onPeriodeChange={setPeriodeCycle}
+                />
+              )}
+              {zone === 'configuration' && (
+                <ConfigurationZone
+                  cabinetId={cabinetId}
+                  dossierId={dossier.id}
+                  utilisateurId={utilisateurId}
+                  sousOnglet={sousOngletConfiguration}
+                  onChangeSousOnglet={setSousOngletConfiguration}
+                />
+              )}
+              {zone === 'historique' && (
+                <HistoriqueZone cabinetId={cabinetId} dossierId={dossier.id} utilisateurId={utilisateurId} />
+              )}
+              {zone === 'parametres' && (
+                <ParametresPanel
+                  cabinetId={cabinetId}
+                  dossierId={dossier.id}
+                  utilisateurId={utilisateurId}
+                  degradeActif={degrade}
+                  onDegradeChange={setDegrade}
+                />
+              )}
+            </main>
+          </>
+        )}
+      </div>
     </div>
   );
 }

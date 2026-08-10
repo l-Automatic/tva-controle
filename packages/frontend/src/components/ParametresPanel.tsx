@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
 import {
   ApiError,
   definirParametreCabinet,
@@ -7,12 +8,15 @@ import {
   fetchParametresDossier,
 } from '../api';
 import { useToast } from '../toast';
-import type { Parametre } from '../types';
+import { CLE_THEME_DEGRADE, DEGRADES_SIDEBAR, type Parametre } from '../types';
+import { ParametresDecisionsPanel } from './ParametresDecisionsPanel';
 
 interface ParametresPanelProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
+  degradeActif: string;
+  onDegradeChange: (degrade: string) => void;
 }
 
 const CLE_MISTRAL = 'mistral_api_key';
@@ -105,6 +109,65 @@ function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utili
   );
 }
 
+function DegradeSection({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  degradeActif,
+  onDegradeChange,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  degradeActif: string;
+  onDegradeChange: (degrade: string) => void;
+}) {
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleChoisir(degrade: string) {
+    setSubmitting(degrade);
+    setError(null);
+    try {
+      await definirParametreDossier(cabinetId, dossierId, utilisateurId, CLE_THEME_DEGRADE, degrade);
+      onDegradeChange(degrade);
+      notifier('Dégradé du volet mis à jour');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Apparence</h2>
+      </div>
+      <p className="reference">
+        Dégradé du volet latéral pour ce dossier — sert aussi de couleur secondaire pour les boutons principaux et
+        les badges actifs.
+      </p>
+      <div className="degrade-grille">
+        {DEGRADES_SIDEBAR.map((degrade) => (
+          <button
+            key={degrade}
+            className={`degrade-swatch${degrade === degradeActif ? ' actif' : ''}`}
+            style={{ background: degrade }}
+            disabled={submitting !== null}
+            onClick={() => void handleChoisir(degrade)}
+            aria-label="Choisir ce dégradé"
+          >
+            {degrade === degradeActif && <Check size={16} color="#fff" aria-hidden="true" />}
+          </button>
+        ))}
+      </div>
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
+
 function DossierSection({
   cabinetId,
   dossierId,
@@ -166,19 +229,26 @@ function DossierSection({
         <h2>Paramètres dossier</h2>
       </div>
       <p className="reference">
-        Aucun paramètre dossier n'est encore exploité par le backend — clé/valeur libres, pour préparer le terrain.
+        Clé/valeur libres, pour préparer le terrain — aucun paramètre ici n'est encore exploité par un contrôle.
       </p>
-      {!loading && parametres.length === 0 && <p className="empty">Aucun paramètre défini pour ce dossier.</p>}
-      <ul className="card-list">
-        {parametres.map((p) => (
-          <li key={p.cle} className="card">
-            <p className="label">
-              {p.cle} : <strong>{String(p.valeur)}</strong>
-            </p>
-            <p className="reference">Mis à jour {formatDate(p.updatedAt)}</p>
-          </li>
-        ))}
-      </ul>
+      {(() => {
+        const visibles = parametres.filter((p) => p.cle !== CLE_THEME_DEGRADE);
+        return (
+          <>
+            {!loading && visibles.length === 0 && <p className="empty">Aucun paramètre défini pour ce dossier.</p>}
+            <ul className="card-list">
+              {visibles.map((p) => (
+                <li key={p.cle} className="card">
+                  <p className="label">
+                    {p.cle} : <strong>{String(p.valeur)}</strong>
+                  </p>
+                  <p className="reference">Mis à jour {formatDate(p.updatedAt)}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        );
+      })()}
       <div className="cycle-form">
         <label>
           Clé
@@ -202,11 +272,25 @@ function DossierSection({
 // /dossiers/:id/parametres), on garde cette séparation côté utilisateur —
 // pas de mode admin/collaborateur pour l'instant, les deux restent
 // accessibles sans distinction de rôle (cf. brief refonte, section 3).
-export function ParametresPanel({ cabinetId, dossierId, utilisateurId }: ParametresPanelProps) {
+export function ParametresPanel({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  degradeActif,
+  onDegradeChange,
+}: ParametresPanelProps) {
   return (
     <>
       <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      <DegradeSection
+        cabinetId={cabinetId}
+        dossierId={dossierId}
+        utilisateurId={utilisateurId}
+        degradeActif={degradeActif}
+        onDegradeChange={onDegradeChange}
+      />
+      <ParametresDecisionsPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Plus, RefreshCw } from 'lucide-react';
 import {
   ApiError,
   ajouterConvention,
@@ -6,8 +7,10 @@ import {
   fetchConventions,
   rejeterConvention,
 } from '../api';
+import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
 import { CLES_CONVENTIONS_COMPTES, LIBELLE_CLE_CONVENTION, type CleConventionCompte, type Proposition } from '../types';
+import { BadgeStatut } from './BadgeStatut';
 
 interface ConventionsComptesPanelProps {
   cabinetId: string;
@@ -67,9 +70,10 @@ function ConventionRow({
   return (
     <li className={`card proposition${proposition.statut === 'confirmed' ? ' compte-confirme' : ''}`}>
       <div className="card-header">
-        <span className={`badge statut-${proposition.statut}`}>
-          {proposition.statut === 'candidate' ? 'En attente' : proposition.statut === 'confirmed' ? 'Confirmée' : 'Rejetée'}
-        </span>
+        <BadgeStatut
+          statut={proposition.statut}
+          libelle={proposition.statut === 'candidate' ? 'En attente' : proposition.statut === 'confirmed' ? 'Confirmée' : 'Rejetée'}
+        />
         <span className="source">{proposition.source === 'saisie_manuelle' ? 'Saisie manuelle' : proposition.source}</span>
       </div>
       <p className="label">{libelleComptes(proposition.valeur)}</p>
@@ -77,9 +81,11 @@ function ConventionRow({
       {estCandidate && (
         <div className="actions">
           <button onClick={handleConfirmer} disabled={submitting !== null}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting === 'confirmer' ? '…' : 'Confirmer'}
           </button>
           <button onClick={handleRejeter} disabled={submitting !== null} className="secondary">
+            <ICONE_ACTION.rejeter size={14} aria-hidden="true" />
             {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>
         </div>
@@ -144,6 +150,7 @@ function AjoutForm({
         disabled={submitting}
       />
       <button onClick={() => void handleAjouter()} disabled={submitting}>
+        <Plus size={14} aria-hidden="true" />
         {submitting ? '…' : 'Ajouter'}
       </button>
       {error && <p className="error">{error}</p>}
@@ -188,6 +195,7 @@ export function ConventionsComptesPanel({ cabinetId, dossierId, utilisateurId }:
           Afficher les rejetées
         </label>
         <button onClick={() => void charger()} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>

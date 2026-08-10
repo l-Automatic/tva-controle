@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, fetchElementsATraiter } from '../api';
+import { ICONE_ELEMENT_A_TRAITER } from '../icons';
 import type { ElementATraiter } from '../types';
 
 interface ATraiterPanelProps {
@@ -55,7 +56,13 @@ export function ATraiterPanel({ cabinetId, dossierId, onNaviguer, refreshKey }: 
         {elements.map((el) => (
           <li key={`${el.type}-${el.id}`} className="card a-traiter-card" onClick={() => onNaviguer(el)}>
             <div className="card-header">
-              <span className="badge a-traiter-badge">{LIBELLE_TYPE[el.type]}</span>
+              <span className="badge a-traiter-badge">
+                {(() => {
+                  const Icone = ICONE_ELEMENT_A_TRAITER[el.type];
+                  return <Icone size={12} aria-hidden="true" />;
+                })()}
+                {LIBELLE_TYPE[el.type]}
+              </span>
             </div>
             <p className="label">{el.resume}</p>
           </li>

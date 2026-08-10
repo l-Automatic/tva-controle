@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import {
   ApiError,
   confirmerTauxHistorique,
@@ -8,8 +9,10 @@ import {
   rejeterTauxHistorique,
   rejeterTauxHistoriqueTiers,
 } from '../api';
+import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
 import type { Proposition, StatutProposition } from '../types';
+import { BadgeStatut } from './BadgeStatut';
 
 interface TauxHistoriquePanelProps {
   cabinetId: string;
@@ -89,7 +92,7 @@ function TauxRow({
   return (
     <li className="card proposition">
       <div className="card-header">
-        <span className={`badge statut-${proposition.statut}`}>{LIBELLE_STATUT[proposition.statut]}</span>
+        <BadgeStatut statut={proposition.statut} libelle={LIBELLE_STATUT[proposition.statut]} />
         <span className="badge badge-origine">{origine === 'compte' ? 'Compte produit/charge' : 'Compte client'}</span>
         <span className="source">{proposition.source}</span>
       </div>
@@ -99,9 +102,11 @@ function TauxRow({
       {estCandidate && (
         <div className="actions">
           <button onClick={() => void handleConfirmer()} disabled={submitting !== null}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting === 'confirmer' ? '…' : 'Confirmer'}
           </button>
           <button onClick={() => void handleRejeter()} disabled={submitting !== null} className="secondary">
+            <ICONE_ACTION.rejeter size={14} aria-hidden="true" />
             {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>
         </div>
@@ -168,6 +173,7 @@ export function TauxHistoriquePanel({ cabinetId, dossierId, utilisateurId }: Tau
           Afficher les propositions traitées
         </label>
         <button onClick={() => void charger()} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>

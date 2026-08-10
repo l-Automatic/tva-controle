@@ -3,8 +3,9 @@ import { fetchCalculs } from '../../api';
 import { toDateOnly } from '../../dateUtils';
 import { AnomaliesPanel } from '../AnomaliesPanel';
 import { CalculRow } from '../CalculsPanel';
+import { CategorisationPopup } from '../CategorisationPopup';
 import { CycleForm } from '../CycleForm';
-import type { Calcul } from '../../types';
+import type { Calcul, CompteACategoriser } from '../../types';
 
 interface CycleZoneProps {
   cabinetId: string;
@@ -73,6 +74,8 @@ function CalculsDuCycle({
 // seul flux, plutôt que trois panneaux séparés à faire défiler (cf. brief
 // refonte, section 3).
 export function CycleZone({ cabinetId, dossierId, utilisateurId, periode, onPeriodeChange }: CycleZoneProps) {
+  const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
+
   useEffect(() => {
     if (periode) return;
     let annule = false;
@@ -94,7 +97,10 @@ export function CycleZone({ cabinetId, dossierId, utilisateurId, periode, onPeri
       <CycleForm
         cabinetId={cabinetId}
         dossierId={dossierId}
-        onCycleLance={(debut, fin) => onPeriodeChange({ debut, fin })}
+        onCycleLance={(debut, fin, comptes) => {
+          onPeriodeChange({ debut, fin });
+          if (comptes.length > 0) setComptesACategoriser(comptes);
+        }}
       />
       {periode && (
         <>
@@ -109,6 +115,15 @@ export function CycleZone({ cabinetId, dossierId, utilisateurId, periode, onPeri
           <div className="panel-separateur" />
           <CalculsDuCycle cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} periode={periode} />
         </>
+      )}
+      {comptesACategoriser.length > 0 && (
+        <CategorisationPopup
+          cabinetId={cabinetId}
+          dossierId={dossierId}
+          utilisateurId={utilisateurId}
+          comptes={comptesACategoriser}
+          onClose={() => setComptesACategoriser([])}
+        />
       )}
     </section>
   );

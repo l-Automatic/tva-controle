@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import {
   ApiError,
   fetchAnomalies,
@@ -6,8 +7,10 @@ import {
   qualifierEncaissement,
   resoudreAnomalie,
 } from '../api';
+import { ICONE_ACTION, iconeTypeAnomalie } from '../icons';
 import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
+import { BadgeStatut } from './BadgeStatut';
 
 interface AnomaliesPanelProps {
   cabinetId: string;
@@ -145,6 +148,7 @@ function EncaissementQualification({
       {decision === null && (
         <div className="actions">
           <button onClick={() => setDecision('vente')} disabled={submitting}>
+            <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
             Lié à une vente
           </button>
           <button onClick={() => setDecision('hors_vente')} className="secondary" disabled={submitting}>
@@ -164,6 +168,7 @@ function EncaissementQualification({
             ))}
           </select>
           <button onClick={() => void handleConfirmerVente()} disabled={submitting}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting ? '…' : 'Confirmer'}
           </button>
           <button onClick={() => setDecision(null)} className="secondary" disabled={submitting}>
@@ -182,6 +187,7 @@ function EncaissementQualification({
             disabled={submitting}
           />
           <button onClick={() => void handleConfirmerHorsVente()} disabled={submitting}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting ? '…' : 'Confirmer'}
           </button>
           <button onClick={() => setDecision(null)} className="secondary" disabled={submitting}>
@@ -250,9 +256,15 @@ function AnomalieRow({
   return (
     <li className={`card anomalie gravite-${anomalie.gravite}`}>
       <div className="card-header">
-        <span className={`badge statut-${anomalie.statut}`}>{LIBELLE_STATUT[anomalie.statut]}</span>
+        <BadgeStatut statut={anomalie.statut} libelle={LIBELLE_STATUT[anomalie.statut]} />
         <span className={`badge gravite-badge-${anomalie.gravite}`}>{LIBELLE_GRAVITE[anomalie.gravite]}</span>
-        <span className="type-anomalie">{anomalie.typeAnomalie}</span>
+        <span className="type-anomalie">
+          {(() => {
+            const Icone = iconeTypeAnomalie(anomalie.typeAnomalie);
+            return <Icone size={13} aria-hidden="true" />;
+          })()}
+          {anomalie.typeAnomalie}
+        </span>
         <span className="periode">{anomalie.periode}</span>
       </div>
       <p className="description">{anomalie.description}</p>
@@ -292,9 +304,11 @@ function AnomalieRow({
               disabled={submitting !== null}
             />
             <button onClick={handleResoudre} disabled={submitting !== null}>
+              <ICONE_ACTION.resoudre size={14} aria-hidden="true" />
               {submitting === 'resoudre' ? '…' : 'Résoudre'}
             </button>
             <button onClick={handleJustifier} disabled={submitting !== null} className="secondary">
+              <ICONE_ACTION.justifier size={14} aria-hidden="true" />
               {submitting === 'justifier' ? '…' : 'Justifier'}
             </button>
           </div>
@@ -382,6 +396,7 @@ export function AnomaliesPanel({
           </>
         )}
         <button onClick={() => void charger()} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>

@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --bg: #f6f7fa;
   --bg-raised: #ffffff;
@@ -24,6 +24,9 @@
   --violet: #6a3fc0;
   --violet-soft-bg: #f0e9fb;
 
+  --degrade-actif: linear-gradient(135deg, #3499ff, #3a3985);
+  --sidebar-width: 250px;
+
   --radius: 8px;
   --shadow-card: 0 1px 2px rgba(23, 27, 33, 0.04);
 }
@@ -38,58 +41,219 @@ body {
   color: var(--text);
 }
 
-.app {
+.app-shell {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
   max-width: 1180px;
   margin: 0 auto;
   padding: 1.5rem;
 }
 
-.app-header h1 {
-  font-size: 1.35rem;
-  font-weight: 600;
-  margin: 0 0 1rem;
+.app-content > .empty {
+  margin-top: 2rem;
+  text-align: center;
 }
 
-.identite-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 1rem;
-  flex-wrap: wrap;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  padding: 0.75rem 1rem;
-  margin-bottom: 1.5rem;
-}
+/* --- Volet latéral --- */
 
-.identite-form label {
+.sidebar {
+  position: sticky;
+  top: 0;
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--degrade-actif);
+  color: #fff;
+  padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  gap: 0.25rem;
-  flex: 1;
-  min-width: 200px;
+  gap: 1.5rem;
 }
 
-.identite-form input {
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.sidebar-section-titre {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 0.5rem;
+}
+
+.sidebar-dossier-actuel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-weight: 600;
   font-size: 0.85rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 7px;
+  text-align: left;
 }
 
-.dossier-courant {
+.sidebar-dossier-actuel:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.sidebar-dossier-actuel-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-search-input {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 7px;
+  padding: 0.4rem 0.6rem;
+}
+
+.sidebar-search-input input[type='text'] {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 0;
+  width: 100%;
+}
+
+.sidebar-search-input input[type='text']::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sidebar-search-input input[type='text']:focus-visible {
+  outline: none;
+}
+
+.sidebar-vide,
+.sidebar-error {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0.5rem 0 0;
+}
+
+.sidebar-error {
+  color: #ffd7d0;
+}
+
+.sidebar-dossier-liste {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.sidebar-dossier-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.sidebar-dossier-item:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.sidebar-dossier-item-nom {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sidebar-dossier-item-meta {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sidebar-nav-item {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-left: auto;
-  padding-left: 1rem;
-  border-left: 1px solid var(--border);
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+  font-size: 0.87rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 7px;
+  text-align: left;
 }
 
-.dossier-courant-nom {
-  font-weight: 600;
-  font-size: 0.9rem;
+.sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.sidebar-nav-item.actif {
+  background: rgba(255, 255, 255, 0.92);
+  color: #22263a;
+  border-color: transparent;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar-footer-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.sidebar-footer-label input[type='text'] {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 5px;
+}
+
+.sidebar-footer-label input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .app-main {
@@ -149,18 +313,20 @@ body {
 
 button {
   cursor: pointer;
-  border: 1px solid var(--accent);
-  background: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  background: var(--degrade-actif);
   color: #fff;
   border-radius: 6px;
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
 button:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  opacity: 0.88;
 }
 
 button.secondary {
@@ -197,54 +363,15 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
-/* --- Navigation : sélection de dossier --- */
+/* --- Sous-onglets (Configuration du dossier) --- */
 
-.dossier-selector {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  padding: 1.25rem;
-}
-
-.dossier-selector h2 {
-  font-size: 1.02rem;
-  font-weight: 600;
-  margin: 0 0 0.75rem;
-}
-
-.dossier-selector-search {
-  width: 100%;
-  padding: 0.55rem 0.7rem;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.dossier-card {
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.dossier-card:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft-bg);
-}
-
-/* --- Navigation : zones et sous-onglets --- */
-
-.zones-nav,
 .sous-onglets {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
-  margin-bottom: 1.25rem;
-}
-
-.sous-onglets {
   margin-bottom: 1rem;
 }
 
-.zone-onglet,
 .sous-onglet {
   background: var(--bg-raised);
   color: var(--text-muted);
@@ -252,22 +379,15 @@ button:focus-visible {
   font-weight: 500;
 }
 
-.zone-onglet {
-  font-size: 0.9rem;
-  padding: 0.5rem 1rem;
-}
-
-.zone-onglet:hover:not(.actif),
 .sous-onglet:hover:not(.actif) {
   background: var(--accent-soft-bg);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.zone-onglet.actif,
 .sous-onglet.actif {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--degrade-actif);
+  border-color: transparent;
   color: #fff;
 }
 
@@ -446,6 +566,9 @@ button:focus-visible {
 
 .type-anomalie,
 .type-evenement {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-weight: 600;
   color: var(--text);
 }
@@ -456,7 +579,9 @@ button:focus-visible {
 }
 
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   border-radius: 999px;
   padding: 0.1rem 0.55rem;
   font-size: 0.7rem;
@@ -466,6 +591,19 @@ button:focus-visible {
 .badge-origine {
   background: var(--neutral-soft-bg);
   color: var(--neutral);
+}
+
+.niveau-confiance-nouveau {
+  background: var(--neutral-soft-bg);
+  color: var(--neutral);
+}
+.niveau-confiance-a_surveiller {
+  background: var(--warning-soft-bg);
+  color: var(--warning);
+}
+.niveau-confiance-confiance {
+  background: var(--success-soft-bg);
+  color: var(--success);
 }
 
 .statut-ouvert,
@@ -726,4 +864,125 @@ pre.details {
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+
+/* --- Apparence : dégradés du volet --- */
+
+.degrade-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 0.6rem;
+  max-width: 480px;
+}
+
+.degrade-swatch {
+  width: 56px;
+  height: 40px;
+  border-radius: 7px;
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.degrade-swatch.actif {
+  border-color: var(--text);
+}
+
+/* --- Chips (comptes retirables d'une convention) --- */
+
+.chip-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--neutral-soft-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.15rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.chip-remove:hover:not(:disabled) {
+  background: var(--danger-soft-bg);
+  color: var(--danger);
+}
+
+/* --- Popup de catégorisation des comptes --- */
+
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 27, 33, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 2000;
+}
+
+.popup {
+  background: var(--bg-raised);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(23, 27, 33, 0.25);
+  padding: 1.25rem 1.5rem;
+  max-width: 640px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.popup-header h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.popup-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.3rem;
+}
+
+.popup-close:hover {
+  background: var(--neutral-soft-bg);
+  opacity: 1;
+}
+
+.popup-choix {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
 }

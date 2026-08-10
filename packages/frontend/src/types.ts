@@ -90,9 +90,23 @@ export interface ResultatCalculCycle {
   ecrituresExclues: EcritureExclue[];
 }
 
+// Comptes produit/charge mouvementés sur la période mais absents des 4
+// conventions de comptes — popup de catégorisation (brief v2). Sans
+// présélection IA pour l'instant (chantier séparé, pas construit).
+export interface CompteACategoriser {
+  compte: string;
+  exemplesLibelle: string[];
+}
+
 export type ResultatCycle =
-  | { statut: 'bloque'; anomalies: AnomalieCycle[] }
-  | { statut: 'calcule'; anomalies: AnomalieCycle[]; resultat: ResultatCalculCycle; calculId: string };
+  | { statut: 'bloque'; anomalies: AnomalieCycle[]; comptesACategoriser: CompteACategoriser[] }
+  | {
+      statut: 'calcule';
+      anomalies: AnomalieCycle[];
+      resultat: ResultatCalculCycle;
+      calculId: string;
+      comptesACategoriser: CompteACategoriser[];
+    };
 
 // --- Calculs persistés (panneau "Calculs") ---
 
@@ -153,6 +167,65 @@ export interface TiersReference {
   nbControlesSansAnomalie: number;
   derniereDateControle: string | null;
 }
+
+// --- Taux assigné par compte (produit/charge) — assignation directe, pas
+// de workflow candidate/confirmed. Prévu pour un futur contrôle de
+// cohérence de fin d'exercice (pas encore construit). ---
+
+export const VALEURS_TAUX_ASSIGNE = [
+  '0',
+  '2.1',
+  '5.5',
+  '10',
+  '20',
+  'autoliquide_intracom',
+  'autoliquide_20',
+  'autoliquide_10',
+  'autoliquide_5.5',
+] as const;
+export type TauxAssigne = (typeof VALEURS_TAUX_ASSIGNE)[number];
+
+export const LIBELLE_TAUX_ASSIGNE: Record<TauxAssigne, string> = {
+  '0': '0 %',
+  '2.1': '2,1 %',
+  '5.5': '5,5 %',
+  '10': '10 %',
+  '20': '20 %',
+  autoliquide_intracom: 'Autoliquidé — intracommunautaire',
+  autoliquide_20: 'Autoliquidé — 20 %',
+  autoliquide_10: 'Autoliquidé — 10 %',
+  'autoliquide_5.5': 'Autoliquidé — 5,5 %',
+};
+
+export interface TauxAssigneEntry {
+  compte: string;
+  tauxAssigne: TauxAssigne;
+  updatedAt: string;
+}
+
+// --- Dégradés du volet latéral (brief v2) — palette fournie, stockée
+// comme paramètre dossier (`theme_degrade`), jamais cabinet. ---
+
+export const CLE_THEME_DEGRADE = 'theme_degrade';
+
+export const DEGRADES_SIDEBAR = [
+  'linear-gradient(135deg, #FF6CAB, #7366FF)',
+  'linear-gradient(135deg, #B65EBA, #2E8DE1)',
+  'linear-gradient(135deg, #64E8DE, #8A64EB)',
+  'linear-gradient(135deg, #7BF2E9, #B65EBA)',
+  'linear-gradient(135deg, #FF9482, #7D77FF)',
+  'linear-gradient(135deg, #FFCF1B, #FF881B)',
+  'linear-gradient(135deg, #FFA62E, #EA4D2C)',
+  'linear-gradient(135deg, #00FFED, #00B8BA)',
+  'linear-gradient(135deg, #6EE2F5, #6454F0)',
+  'linear-gradient(135deg, #3499FF, #3A3985)',
+  'linear-gradient(135deg, #FF9897, #F650A0)',
+  'linear-gradient(135deg, #FFCDA5, #EE4D5F)',
+  'linear-gradient(135deg, #FF5B94, #8441A4)',
+  'linear-gradient(135deg, #F869D5, #5650DE)',
+  'linear-gradient(135deg, #F00B51, #7366FF)',
+] as const;
+export const DEGRADE_PAR_DEFAUT: string = DEGRADES_SIDEBAR[9]; // bleu sobre, cohérent avec l'accent existant
 
 export type ActeurAudit = 'agent' | 'utilisateur' | 'systeme';
 
