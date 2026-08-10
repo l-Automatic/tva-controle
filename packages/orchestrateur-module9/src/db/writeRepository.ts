@@ -303,6 +303,46 @@ export async function confirmerConvention(
   });
 }
 
+// Retire un compte d'une convention de type liste déjà confirmée (ex:
+// comptes_charge_service) — UPDATE direct de la ligne existante, PAS un
+// nouveau cycle candidate/confirmed. Pas de ligne 'rejected' créée, pas de
+// perte de la ligne confirmée elle-même : seule sa valeur change. Différent
+// de rejeterConvention (qui rejette la ligne entière) — ici on modifie le
+// contenu d'une liste, la convention elle-même reste confirmée. Demande de
+// Rami (08/08) : la saisie manuelle répétée est chronophage, et le workflow
+// candidate/confirmed pour un simple retrait créait un historique de
+// rejets qui ne sert à rien.
+export async function retirerCompteConvention(
+  client: PoolClient,
+  dossierId: string,
+  cle: string,
+  compte: string,
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ id: string; valeur: unknown }>(
+    `SELECT id, valeur FROM conventions_dossier WHERE dossier_id = $1 AND cle = $2 AND statut = 'confirmed'`,
+    [dossierId, cle]
+  );
+  const ligne = res.rows[0];
+  if (!ligne || !Array.isArray(ligne.valeur)) {
+    throw new Error(`Aucune convention confirmée de type liste pour la clé "${cle}" sur ce dossier.`);
+  }
+
+  const nouvelleValeur = ligne.valeur.filter((v) => v !== compte);
+  await client.query(`UPDATE conventions_dossier SET valeur = $2 WHERE id = $1`, [
+    ligne.id,
+    JSON.stringify(nouvelleValeur),
+  ]);
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'convention_compte_retire',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { cle, compteRetire: compte, nouvelleValeur },
+  });
+}
+
 export async function rejeterConvention(
   client: PoolClient,
   conventionId: string,
@@ -748,4 +788,37 @@ export async function synchroniserTiersReference(
       );
     }
   }
+}
+
+// Correction manuelle du niveau de confiance d'un tiers — la progression
+// automatique (synchroniserTiersReference) reste la voie normale, mais un
+// collaborateur peut avoir une information directe (ex: fournisseur connu
+// personnellement depuis des années malgré peu de cycles passés dans ce
+// logiciel, ou inversement un doute sur un tiers déjà en 'confiance').
+// Demande de Rami (08/08) : pouvoir corriger toute décision déjà actée par
+// le logiciel, pas seulement celles encore en attente.
+export async function corrigerNiveauConfianceTiers(
+  client: PoolClient,
+  dossierId: string,
+  numeroCompteTiers: string,
+  niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance',
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ id: string }>(
+    `UPDATE tiers_reference SET niveau_confiance = $3
+     WHERE dossier_id = $1 AND numero_compte_tiers = $2
+     RETURNING id`,
+    [dossierId, numeroCompteTiers, niveauConfiance]
+  );
+  if (res.rows.length === 0) {
+    throw new Error(`Tiers ${numeroCompteTiers} introuvable pour ce dossier.`);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'tiers_confiance_corrigee',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { numeroCompteTiers, niveauConfiance },
+  });
 }
