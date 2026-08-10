@@ -77,7 +77,33 @@ describe('calculerTva — exigibilité (TVA sur encaissement)', () => {
     const resultat = calculerTva([e], [], statuts, []);
     expect(resultat.lignes).toEqual([]);
     expect(resultat.tvaNette).toBe(0);
-    expect(resultat.ecrituresExclues).toEqual([{ ledgerEntryId: 1, compte: '445711', motif: 'pas encore payée' }]);
+    expect(resultat.ecrituresExclues).toEqual([
+      { ledgerEntryId: 1, compte: '445711', motif: 'pas encore payée', date: '2025-01-15' },
+    ]);
+  });
+
+  it('inclut le compte tiers dans l’exclusion quand une ligne tiers est identifiée', () => {
+    const e = ecriture({
+      ligneTva: ligneTva({ compte: '445711', credit: 500, ledgerEntryId: 2 }),
+      lignesTiers: [
+        {
+          compte: '411ROUSSEAU',
+          compteId: 1,
+          libelleCompte: 'CLIENT ROUSSEAU',
+          debit: 500,
+          credit: 0,
+          lettrage: { estLettree: false, groupeIds: [] },
+        },
+      ],
+    });
+    const statuts: StatutExigibilite[] = [
+      { ledgerEntryId: 2, compte: '445711', natureOperation: 'service', exigible: false, motif: 'pas encore payée' },
+    ];
+
+    const resultat = calculerTva([e], [], statuts, []);
+    expect(resultat.ecrituresExclues).toEqual([
+      { ledgerEntryId: 2, compte: '445711', motif: 'pas encore payée', date: '2025-01-15', compteTiers: '411ROUSSEAU' },
+    ]);
   });
 });
 
