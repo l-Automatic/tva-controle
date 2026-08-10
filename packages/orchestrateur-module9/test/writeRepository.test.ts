@@ -23,6 +23,7 @@ import {
   definirParametreDossier,
   synchroniserTiersReference,
   corrigerNiveauConfianceTiers,
+  assignerTauxCompte,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
   AnomalieNonQualifiableError,
@@ -39,6 +40,7 @@ import {
   listerElementsATraiter,
   parametreCabinetValeur,
   listerParametresDossier,
+  listerTauxAssignes,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -1136,5 +1138,44 @@ describe('corrigerNiveauConfianceTiers', () => {
         corrigerNiveauConfianceTiers(client, dossierId, '401NexistePas999', 'confiance', utilisateurId)
       )
     ).rejects.toThrow(/introuvable/);
+  });
+});
+
+describe('assignerTauxCompte', () => {
+  it('assigne puis remplace le taux d’un compte (upsert, une seule ligne)', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'TauxAssigne', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `tauxassigne-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+    const compte = `706test${Date.now()}`;
+
+    await avecClient((client) => assignerTauxCompte(client, dossierId, compte, '20', utilisateurId));
+    let taux = await avecClient((client) => listerTauxAssignes(client, dossierId));
+    expect(taux.find((t) => t.compte === compte)?.tauxAssigne).toBe('20');
+
+    // Réassignation : remplace, ne duplique pas.
+    await avecClient((client) => assignerTauxCompte(client, dossierId, compte, 'autoliquide_20', utilisateurId));
+    taux = await avecClient((client) => listerTauxAssignes(client, dossierId));
+    const pourCeCompte = taux.filter((t) => t.compte === compte);
+    expect(pourCeCompte).toHaveLength(1);
+    expect(pourCeCompte[0]?.tauxAssigne).toBe('autoliquide_20');
+  });
+
+  it('refuse une valeur de taux hors de l’ensemble autorisé (contrainte SQL)', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'TauxAssigne2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `tauxassigne2-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    await expect(
+      avecClient((client) =>
+        // @ts-expect-error valeur volontairement invalide pour tester la contrainte SQL
+        assignerTauxCompte(client, dossierId, `706invalide${Date.now()}`, '15', utilisateurId)
+      )
+    ).rejects.toThrow();
   });
 });
