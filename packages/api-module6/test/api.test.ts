@@ -435,6 +435,113 @@ describe('API Module 6 — consultation et export de l’audit (Module 10)', () 
   });
 });
 
+describe('API Module 6 — taux historique tiers (chantier B) via HTTP', () => {
+  it('liste, confirme puis retrouve une proposition de taux tiers via l’API', async () => {
+    const client = await pool.connect();
+    let propositionId = '';
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [cabinetId]);
+      const res = await client.query<{ id: string }>(
+        `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source)
+         VALUES ($1, '411http', 10, 4, 'candidate', 'decouverte_continue') RETURNING id`,
+        [dossierId]
+      );
+      propositionId = res.rows[0]!.id;
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+
+    const resListeCandidates = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/taux-historique-tiers?statut=candidate`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(resListeCandidates.statusCode).toBe(200);
+    expect(resListeCandidates.json().some((t: { id: string }) => t.id === propositionId)).toBe(true);
+
+    const resConfirmer = await app.inject({
+      method: 'POST',
+      url: `/taux-historique-tiers/${propositionId}/confirmer`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId },
+    });
+    expect(resConfirmer.statusCode).toBe(204);
+
+    const resListeConfirmees = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/taux-historique-tiers?statut=confirmed`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(resListeConfirmees.json().some((t: { id: string }) => t.id === propositionId)).toBe(true);
+  });
+
+  it('rejette une proposition de taux tiers via l’API', async () => {
+    const client = await pool.connect();
+    let propositionId = '';
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [cabinetId]);
+      const res = await client.query<{ id: string }>(
+        `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source)
+         VALUES ($1, '411http-reject', 20, 2, 'candidate', 'decouverte_continue') RETURNING id`,
+        [dossierId]
+      );
+      propositionId = res.rows[0]!.id;
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+
+    const resRejeter = await app.inject({
+      method: 'POST',
+      url: `/taux-historique-tiers/${propositionId}/rejeter`,
+      headers: { 'x-cabinet-id': cabinetId },
+      payload: { utilisateurId },
+    });
+    expect(resRejeter.statusCode).toBe(204);
+
+    const resListeRejetees = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/taux-historique-tiers?statut=rejected`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(resListeRejetees.json().some((t: { id: string }) => t.id === propositionId)).toBe(true);
+  });
+});
+
+describe('API Module 6 — GET /dossiers/:id/tiers', () => {
+  it('liste les tiers de référence d’un dossier avec leur niveau de confiance', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [cabinetId]);
+      await client.query(
+        `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie, derniere_date_controle)
+         VALUES ($1, '411tiers-http', 'Client HTTP Test', 'a_surveiller', 4, '2025-06-01')`,
+        [dossierId]
+      );
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/tiers`,
+      headers: { 'x-cabinet-id': cabinetId },
+    });
+    expect(res.statusCode).toBe(200);
+    const tiers = res.json().find((t: { numeroCompteTiers: string }) => t.numeroCompteTiers === '411tiers-http');
+    expect(tiers).toMatchObject({
+      nomTiers: 'Client HTTP Test',
+      niveauConfiance: 'a_surveiller',
+      nbControlesSansAnomalie: 4,
+    });
+  });
+});
+
 describe('API Module 6 — POST /dossiers/:id/cycles — validation seulement', () => {
   // Le succès réel de cette route dépend d'un vrai appel réseau à Pennylane,
   // impossible à tester depuis ce bac à sable (réseau restreint). Seule la

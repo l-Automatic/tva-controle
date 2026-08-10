@@ -202,6 +202,29 @@ export async function listerTauxHistoriqueTiers(
   }));
 }
 
+export interface TiersReferenceDb {
+  numeroCompteTiers: string;
+  nomTiers: string | null;
+  niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance';
+  nbControlesSansAnomalie: number;
+  derniereDateControle: string | null;
+}
+
+export async function listerTiersReference(client: PoolClient, dossierId: string): Promise<TiersReferenceDb[]> {
+  const res = await client.query(
+    `SELECT numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie, derniere_date_controle
+     FROM tiers_reference WHERE dossier_id = $1 ORDER BY nb_controles_sans_anomalie DESC`,
+    [dossierId]
+  );
+  return res.rows.map((r) => ({
+    numeroCompteTiers: r.numero_compte_tiers,
+    nomTiers: r.nom_tiers,
+    niveauConfiance: r.niveau_confiance,
+    nbControlesSansAnomalie: r.nb_controles_sans_anomalie,
+    derniereDateControle: r.derniere_date_controle,
+  }));
+}
+
 export interface CalculDb {
   id: string;
   periodeDebut: string;

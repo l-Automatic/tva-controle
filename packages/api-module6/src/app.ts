@@ -13,6 +13,10 @@ import {
   rejeterConvention,
   confirmerTauxHistorique,
   rejeterTauxHistorique,
+  listerTauxHistoriqueTiers,
+  confirmerTauxHistoriqueTiers,
+  rejeterTauxHistoriqueTiers,
+  listerTiersReference,
   validerCalcul,
   rejeterCalcul,
   listerAnomalies,
@@ -228,6 +232,47 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(204).send();
     }
   );
+
+  // --- Taux historique tiers (chantier B — compte client 411xxx, table
+  // séparée de taux_historique mais même écran côté frontend : le typage
+  // compte/tiers ne se chevauche jamais, cf. dossierRepository.ts) ---
+  app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
+    '/dossiers/:dossierId/taux-historique-tiers',
+    async (request) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      return avecContexteCabinet(pool, cabinetId, (client) =>
+        listerTauxHistoriqueTiers(client, request.params.dossierId, request.query.statut)
+      );
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+    '/taux-historique-tiers/:id/confirmer',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        confirmerTauxHistoriqueTiers(client, request.params.id, request.body.utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+    '/taux-historique-tiers/:id/rejeter',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        rejeterTauxHistoriqueTiers(client, request.params.id, request.body.utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
+
+  // --- Tiers de référence (mémoire de confiance — Module 9) ---
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/tiers', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) => listerTiersReference(client, request.params.dossierId));
+  });
 
   // --- Calculs ---
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/calculs', async (request) => {

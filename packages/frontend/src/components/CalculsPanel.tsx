@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError, fetchCalculs, rejeterCalcul, validerCalcul } from '../api';
+import { formatDate } from '../dateUtils';
+import { useToast } from '../toast';
 import type { Calcul, StatutCalcul } from '../types';
 
 interface CalculsPanelProps {
@@ -8,24 +10,18 @@ interface CalculsPanelProps {
   utilisateurId: string;
 }
 
-const LIBELLE_STATUT: Record<StatutCalcul, string> = {
+export const LIBELLE_STATUT_CALCUL: Record<StatutCalcul, string> = {
   brouillon: 'Brouillon',
   valide: 'Validé',
   declare: 'Déclaré',
   rejete: 'Rejeté',
 };
 
-function formatMontant(montant: number): string {
+export function formatMontant(montant: number): string {
   return `${montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`;
 }
 
-// L'API renvoie des colonnes DATE Postgres sérialisées en ISO complet
-// (2025-04-01T00:00:00.000Z) — on ne garde que la partie date pour l'affichage.
-function formatDate(iso: string): string {
-  return iso.split('T')[0] ?? iso;
-}
-
-function CalculRow({
+export function CalculRow({
   calcul,
   cabinetId,
   utilisateurId,
@@ -40,6 +36,7 @@ function CalculRow({
   const [submitting, setSubmitting] = useState<'valider' | 'rejeter' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflit, setConflit] = useState(false);
+  const notifier = useToast();
 
   async function handleValider() {
     if (
@@ -54,6 +51,7 @@ function CalculRow({
     setConflit(false);
     try {
       await validerCalcul(cabinetId, calcul.id, utilisateurId);
+      notifier('Calcul validé');
       onChanged();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -80,6 +78,7 @@ function CalculRow({
     setConflit(false);
     try {
       await rejeterCalcul(cabinetId, calcul.id, utilisateurId, motif.trim());
+      notifier('Calcul rejeté');
       onChanged();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -98,7 +97,7 @@ function CalculRow({
   return (
     <li className={`card calcul statut-carte-${calcul.statut}`}>
       <div className="card-header">
-        <span className={`badge statut-${calcul.statut}`}>{LIBELLE_STATUT[calcul.statut]}</span>
+        <span className={`badge statut-${calcul.statut}`}>{LIBELLE_STATUT_CALCUL[calcul.statut]}</span>
         <span className="periode">
           {formatDate(calcul.periodeDebut)} — {formatDate(calcul.periodeFin)}
         </span>

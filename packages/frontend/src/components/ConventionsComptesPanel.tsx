@@ -6,6 +6,7 @@ import {
   fetchConventions,
   rejeterConvention,
 } from '../api';
+import { useToast } from '../toast';
 import { CLES_CONVENTIONS_COMPTES, LIBELLE_CLE_CONVENTION, type CleConventionCompte, type Proposition } from '../types';
 
 interface ConventionsComptesPanelProps {
@@ -32,12 +33,14 @@ function ConventionRow({
 }) {
   const [submitting, setSubmitting] = useState<'confirmer' | 'rejeter' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
 
   async function handleConfirmer() {
     setSubmitting('confirmer');
     setError(null);
     try {
       await confirmerConvention(cabinetId, proposition.id, utilisateurId);
+      notifier('Convention confirmée');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la confirmation');

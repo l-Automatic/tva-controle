@@ -51,6 +51,7 @@ export {
   parametreCabinetValeur,
   listerParametresDossier,
   listerElementsATraiter,
+  listerTiersReference,
   type AnomalieDb,
   type PropositionDb,
   type CalculDb,
@@ -58,4 +59,5 @@ export {
   type RegularisationDb,
   type ParametreDb,
   type ElementATraiter,
+  type TiersReferenceDb,
 } from './db/readRepository.js';

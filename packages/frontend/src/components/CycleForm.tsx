@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { ApiError, lancerCycle } from '../api';
+import { useToast } from '../toast';
 import type { ResultatCycle } from '../types';
 
 interface CycleFormProps {
   cabinetId: string;
   dossierId: string;
+  onCycleLance?: (periodeDebut: string, periodeFin: string) => void;
 }
 
 const LIBELLE_CATEGORIE: Record<string, string> = {
@@ -100,7 +102,7 @@ function ResultatCycleView({ resultat }: { resultat: ResultatCycle }) {
   );
 }
 
-export function CycleForm({ cabinetId, dossierId }: CycleFormProps) {
+export function CycleForm({ cabinetId, dossierId, onCycleLance }: CycleFormProps) {
   const [periodeDebut, setPeriodeDebut] = useState('');
   const [periodeFin, setPeriodeFin] = useState('');
   const [pennylaneToken, setPennylaneToken] = useState('');
@@ -108,6 +110,7 @@ export function CycleForm({ cabinetId, dossierId }: CycleFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [dejaValide, setDejaValide] = useState(false);
   const [resultat, setResultat] = useState<ResultatCycle | null>(null);
+  const notifier = useToast();
 
   async function handleLancer() {
     if (!periodeDebut || !periodeFin || !pennylaneToken) {
@@ -122,6 +125,8 @@ export function CycleForm({ cabinetId, dossierId }: CycleFormProps) {
       const res = await lancerCycle(cabinetId, dossierId, { periodeDebut, periodeFin, pennylaneToken });
       setResultat(res);
       setPennylaneToken('');
+      notifier(res.statut === 'bloque' ? 'Cycle bloqué — anomalies à traiter' : 'Cycle calculé');
+      onCycleLance?.(periodeDebut, periodeFin);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setDejaValide(true);
@@ -135,7 +140,7 @@ export function CycleForm({ cabinetId, dossierId }: CycleFormProps) {
   }
 
   return (
-    <section className="panel panel-full">
+    <div className="panel-section">
       <div className="panel-header">
         <h2>Lancer un cycle TVA</h2>
       </div>
@@ -170,6 +175,6 @@ export function CycleForm({ cabinetId, dossierId }: CycleFormProps) {
 
       {error && <p className={dejaValide ? 'error error-409' : 'error'}>{error}</p>}
       {resultat && <ResultatCycleView resultat={resultat} />}
-    </section>
+    </div>
   );
 }

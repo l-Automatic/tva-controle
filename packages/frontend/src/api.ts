@@ -2,10 +2,13 @@ import type {
   Anomalie,
   AuditEvenement,
   Calcul,
+  Dossier,
+  ElementATraiter,
   Parametre,
   Proposition,
   QualificationEncaissement,
   ResultatCycle,
+  TiersReference,
 } from './types';
 
 const BASE_URL = '/api';
@@ -54,9 +57,12 @@ async function request<T>(
 export function fetchAnomalies(
   cabinetId: string,
   dossierId: string,
-  statut?: string
+  filtres: { statut?: string; periode?: string } = {}
 ): Promise<Anomalie[]> {
-  const query = statut ? `?statut=${encodeURIComponent(statut)}` : '';
+  const params = new URLSearchParams();
+  if (filtres.statut) params.set('statut', filtres.statut);
+  if (filtres.periode) params.set('periode', filtres.periode);
+  const query = params.toString() ? `?${params.toString()}` : '';
   return request<Anomalie[]>(`/dossiers/${dossierId}/anomalies${query}`, cabinetId);
 }
 
@@ -206,6 +212,35 @@ export function rejeterTauxHistorique(cabinetId: string, id: string, utilisateur
   });
 }
 
+// --- Taux historique tiers (chantier B — compte client 411xxx) ---
+
+export function fetchTauxHistoriqueTiers(
+  cabinetId: string,
+  dossierId: string,
+  statut?: string
+): Promise<Proposition[]> {
+  const query = statut ? `?statut=${encodeURIComponent(statut)}` : '';
+  return request<Proposition[]>(`/dossiers/${dossierId}/taux-historique-tiers${query}`, cabinetId);
+}
+
+export function confirmerTauxHistoriqueTiers(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string
+): Promise<void> {
+  return request<void>(`/taux-historique-tiers/${id}/confirmer`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
+  });
+}
+
+export function rejeterTauxHistoriqueTiers(cabinetId: string, id: string, utilisateurId: string): Promise<void> {
+  return request<void>(`/taux-historique-tiers/${id}/rejeter`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
+  });
+}
+
 export interface ParametresCycle {
   periodeDebut: string;
   periodeFin: string;
@@ -273,6 +308,25 @@ export function definirParametreCabinet(
     method: 'PUT',
     body: JSON.stringify({ utilisateurId, cle, valeur }),
   });
+}
+
+// --- Dossiers (sélection) ---
+
+export function fetchDossiers(cabinetId: string, q?: string): Promise<Dossier[]> {
+  const query = q ? `?q=${encodeURIComponent(q)}` : '';
+  return request<Dossier[]>(`/dossiers${query}`, cabinetId);
+}
+
+// --- Point d'entrée "à traiter" ---
+
+export function fetchElementsATraiter(cabinetId: string, dossierId: string): Promise<ElementATraiter[]> {
+  return request<ElementATraiter[]>(`/dossiers/${dossierId}/a-traiter`, cabinetId);
+}
+
+// --- Tiers de référence (mémoire de confiance) ---
+
+export function fetchTiersReference(cabinetId: string, dossierId: string): Promise<TiersReference[]> {
+  return request<TiersReference[]>(`/dossiers/${dossierId}/tiers`, cabinetId);
 }
 
 export function fetchParametresDossier(cabinetId: string, dossierId: string): Promise<Parametre[]> {

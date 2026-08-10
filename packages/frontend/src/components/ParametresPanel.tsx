@@ -6,6 +6,7 @@ import {
   fetchParametresCabinet,
   fetchParametresDossier,
 } from '../api';
+import { useToast } from '../toast';
 import type { Parametre } from '../types';
 
 interface ParametresPanelProps {
@@ -30,6 +31,7 @@ function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utili
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
 
   async function charger() {
     setLoading(true);
@@ -56,6 +58,7 @@ function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utili
     try {
       await definirParametreCabinet(cabinetId, utilisateurId, CLE_MISTRAL, nouvelleCle.trim());
       setNouvelleCle('');
+      notifier('Paramètre cabinet enregistré');
       await charger();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
@@ -70,8 +73,10 @@ function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utili
   const valeurAffichee = mistral ? String(mistral.valeur) : null;
 
   return (
-    <div className="parametres-section">
-      <h3>Cabinet</h3>
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Paramètres cabinet</h2>
+      </div>
       <p className="reference">
         Clé API Mistral : <strong>{loading ? '…' : (valeurAffichee ?? 'Non définie')}</strong>
         {mistral && ` — dernière mise à jour ${formatDate(mistral.updatedAt)}`}
@@ -96,7 +101,7 @@ function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utili
         Stockée en clair côté serveur pour l'instant (pas encore chiffrée).
       </p>
       {error && <p className="error">{error}</p>}
-    </div>
+    </section>
   );
 }
 
@@ -115,6 +120,7 @@ function DossierSection({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
 
   async function charger() {
     setLoading(true);
@@ -145,6 +151,7 @@ function DossierSection({
       await definirParametreDossier(cabinetId, dossierId, utilisateurId, cle.trim(), valeur);
       setCle('');
       setValeur('');
+      notifier('Paramètre dossier enregistré');
       await charger();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
@@ -154,8 +161,10 @@ function DossierSection({
   }
 
   return (
-    <div className="parametres-section">
-      <h3>Dossier</h3>
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Paramètres dossier</h2>
+      </div>
       <p className="reference">
         Aucun paramètre dossier n'est encore exploité par le backend — clé/valeur libres, pour préparer le terrain.
       </p>
@@ -184,20 +193,20 @@ function DossierSection({
         </button>
       </div>
       {error && <p className="error">{error}</p>}
-    </div>
+    </section>
   );
 }
 
+// Deux sous-sections distinctes et clairement séparées visuellement : les
+// routes API sont déjà séparées (/parametres-cabinet vs
+// /dossiers/:id/parametres), on garde cette séparation côté utilisateur —
+// pas de mode admin/collaborateur pour l'instant, les deux restent
+// accessibles sans distinction de rôle (cf. brief refonte, section 3).
 export function ParametresPanel({ cabinetId, dossierId, utilisateurId }: ParametresPanelProps) {
   return (
-    <section className="panel panel-full">
-      <div className="panel-header">
-        <h2>Paramètres</h2>
-      </div>
-      <div className="parametres-grid">
-        <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />
-        <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      </div>
-    </section>
+    <>
+      <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />
+      <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+    </>
   );
 }

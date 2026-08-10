@@ -29,6 +29,7 @@ export interface Proposition {
   dossierId: string;
   cle?: string;
   compteProduitOuCharge?: string;
+  numeroCompteTiers?: string;
   valeur?: unknown;
   tauxHabituel?: number;
   statut: StatutProposition;
@@ -112,6 +113,45 @@ export interface Parametre {
   cle: string;
   valeur: unknown;
   updatedAt: string;
+}
+
+// --- Dossiers (sélection) ---
+
+export type StatutDossier = 'onboarding' | 'actif' | 'inactif';
+
+export interface Dossier {
+  id: string;
+  nom: string;
+  siren: string | null;
+  statut: StatutDossier;
+  regimeTva: string;
+}
+
+// --- Point d'entrée "à traiter" ---
+
+export type TypeElementATraiter =
+  | 'anomalie_bloquante'
+  | 'convention_candidate'
+  | 'taux_candidate'
+  | 'taux_tiers_candidate'
+  | 'calcul_brouillon';
+
+export interface ElementATraiter {
+  type: TypeElementATraiter;
+  id: string;
+  resume: string;
+}
+
+// --- Tiers de référence (mémoire de confiance — Module 9) ---
+
+export type NiveauConfianceTiers = 'nouveau' | 'a_surveiller' | 'confiance';
+
+export interface TiersReference {
+  numeroCompteTiers: string;
+  nomTiers: string | null;
+  niveauConfiance: NiveauConfianceTiers;
+  nbControlesSansAnomalie: number;
+  derniereDateControle: string | null;
 }
 
 export type ActeurAudit = 'agent' | 'utilisateur' | 'systeme';

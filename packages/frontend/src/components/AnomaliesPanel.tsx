@@ -6,12 +6,18 @@ import {
   qualifierEncaissement,
   resoudreAnomalie,
 } from '../api';
+import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
 
 interface AnomaliesPanelProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
+  // 'cycle' : anomalies d'une période précise (vue fusionnée du cycle en
+  // cours), sans filtres avancés. 'historique' (défaut) : toutes périodes,
+  // filtrables par type et statut — cf. brief refonte, zones Cycle/Historique.
+  variant?: 'cycle' | 'historique';
+  periode?: string | null;
 }
 
 const LIBELLE_STATUT: Record<StatutAnomalie, string> = {
@@ -78,6 +84,7 @@ function EncaissementQualification({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflit, setConflit] = useState(false);
+  const notifier = useToast();
 
   async function handleConfirmerVente() {
     if (!taux) {
@@ -92,6 +99,7 @@ function EncaissementQualification({
         decision: 'vente',
         taux: Number.parseFloat(taux),
       });
+      notifier('Encaissement qualifié');
       onChanged();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -118,6 +126,7 @@ function EncaissementQualification({
         decision: 'hors_vente',
         motif: motif.trim(),
       });
+      notifier('Encaissement qualifié');
       onChanged();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -199,12 +208,14 @@ function AnomalieRow({
   const [commentaire, setCommentaire] = useState('');
   const [submitting, setSubmitting] = useState<'resoudre' | 'justifier' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
 
   async function handleResoudre() {
     setSubmitting('resoudre');
     setError(null);
     try {
       await resoudreAnomalie(cabinetId, anomalie.id, utilisateurId, commentaire || undefined);
+      notifier('Anomalie résolue');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la résolution');
@@ -222,6 +233,7 @@ function AnomalieRow({
     setError(null);
     try {
       await justifierAnomalie(cabinetId, anomalie.id, utilisateurId, commentaire);
+      notifier('Anomalie justifiée');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la justification');
@@ -292,17 +304,27 @@ function AnomalieRow({
   );
 }
 
-export function AnomaliesPanel({ cabinetId, dossierId, utilisateurId }: AnomaliesPanelProps) {
+const TOUS_STATUTS = 'tous';
+
+export function AnomaliesPanel({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  variant = 'historique',
+  periode = null,
+}: AnomaliesPanelProps) {
   const [anomalies, setAnomalies] = useState<Anomalie[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [afficherTraitees, setAfficherTraitees] = useState(false);
+  const [filtreStatut, setFiltreStatut] = useState<typeof TOUS_STATUTS | StatutAnomalie>(TOUS_STATUTS);
+  const [filtreType, setFiltreType] = useState('');
 
   async function charger() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAnomalies(cabinetId, dossierId);
+      const data = await fetchAnomalies(cabinetId, dossierId, periode ? { periode } : {});
       setAnomalies(data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Impossible de charger les anomalies');
@@ -314,29 +336,61 @@ export function AnomaliesPanel({ cabinetId, dossierId, utilisateurId }: Anomalie
   useEffect(() => {
     if (cabinetId && dossierId) void charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cabinetId, dossierId]);
+  }, [cabinetId, dossierId, periode]);
 
-  const visibles = afficherTraitees ? anomalies : anomalies.filter((a) => a.statut === 'ouvert');
+  const visibles = (
+    variant === 'cycle'
+      ? afficherTraitees
+        ? anomalies
+        : anomalies.filter((a) => a.statut === 'ouvert')
+      : anomalies
+          .filter((a) => filtreStatut === TOUS_STATUTS || a.statut === filtreStatut)
+          .filter((a) => !filtreType.trim() || a.typeAnomalie.toLowerCase().includes(filtreType.trim().toLowerCase()))
+  );
   const nbOuvertes = anomalies.filter((a) => a.statut === 'ouvert').length;
 
   return (
-    <section className="panel panel-full">
+    <section className={variant === 'cycle' ? 'panel-section' : 'panel panel-full'}>
       <div className="panel-header">
-        <h2>Anomalies ({nbOuvertes} ouverte{nbOuvertes === 1 ? '' : 's'})</h2>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={afficherTraitees}
-            onChange={(e) => setAfficherTraitees(e.target.checked)}
-          />
-          Afficher les anomalies traitées
-        </label>
+        <h2>
+          {variant === 'cycle' ? 'Anomalies de la période' : 'Anomalies'} ({nbOuvertes} ouverte
+          {nbOuvertes === 1 ? '' : 's'})
+        </h2>
+        {variant === 'cycle' ? (
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={afficherTraitees}
+              onChange={(e) => setAfficherTraitees(e.target.checked)}
+            />
+            Afficher les anomalies traitées
+          </label>
+        ) : (
+          <>
+            <select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value as StatutAnomalie)}>
+              <option value={TOUS_STATUTS}>Tous les statuts</option>
+              <option value="ouvert">Ouvertes</option>
+              <option value="resolu">Résolues</option>
+              <option value="justifie">Justifiées</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Filtrer par type (ex : taux_incoherent)"
+              value={filtreType}
+              onChange={(e) => setFiltreType(e.target.value)}
+            />
+          </>
+        )}
         <button onClick={() => void charger()} disabled={loading}>
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>
       {error && <p className="error">{error}</p>}
-      {!loading && visibles.length === 0 && <p className="empty">Aucune anomalie à afficher.</p>}
+      {!loading && visibles.length === 0 && (
+        <p className="empty">
+          {variant === 'cycle' ? 'Aucune anomalie pour cette période.' : 'Aucune anomalie à afficher.'}
+        </p>
+      )}
       <ul className="card-list">
         {visibles.map((a) => (
           <AnomalieRow
