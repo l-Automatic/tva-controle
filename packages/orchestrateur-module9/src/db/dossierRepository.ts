@@ -15,6 +15,43 @@ export interface DossierInfo {
   externalCompanyId: string;
 }
 
+export interface DossierListe {
+  id: string;
+  nom: string;
+  siren: string | null;
+  statut: 'onboarding' | 'actif' | 'inactif';
+  regimeTva: string;
+}
+
+// Recherche simple par nom (ILIKE) — pas de pagination pour l'instant, un
+// cabinet a rarement plus de quelques dizaines de dossiers actifs. À revoir
+// si un cabinet en gère des centaines.
+export async function listerDossiers(
+  client: PoolClient,
+  cabinetId: string,
+  recherche?: string
+): Promise<DossierListe[]> {
+  const params: unknown[] = [cabinetId];
+  let condition = 'cabinet_id = $1';
+  if (recherche) {
+    params.push(`%${recherche}%`);
+    condition += ` AND nom ILIKE $2`;
+  }
+
+  const res = await client.query(
+    `SELECT id, nom, siren, statut, regime_tva FROM dossiers WHERE ${condition} ORDER BY nom ASC`,
+    params
+  );
+
+  return res.rows.map((r) => ({
+    id: r.id,
+    nom: r.nom,
+    siren: r.siren,
+    statut: r.statut,
+    regimeTva: r.regime_tva,
+  }));
+}
+
 export async function chargerDossier(client: PoolClient, dossierId: string): Promise<DossierInfo | null> {
   const res = await client.query(
     `SELECT id, regime_tva, tva_encaissement, logiciel_source, external_company_id
