@@ -218,32 +218,45 @@ tentative n'existe plus (supprimé, pas juste désactivé) — consultable dans
 l'historique Git si jamais utile (commits autour du 04/08, chercher
 "solde fournisseur").
 
-## Chantier B — pas commencé : collecte sur encaissements clients non lettrés
+## Chantier B — implémenté : collecte sur encaissements clients non lettrés
 
 Distinct du chantier ci-dessus (celui-ci concerne la **collecte**, pas la
 déductible). Principe confirmé par Rami : par prudence fiscale (droit de
 l'État), un encaissement client non lettré doit générer de la TVA collectée
-même sans facture en face, selon ces règles :
-- Compte d'attente (471) : 20% par défaut sur le TTC (cf. mécanisme 471
-  déjà construit, mais qui aujourd'hui *bloque et attend qualification*
-  plutôt que d'appliquer un défaut).
-- Compte client précis, historique à taux unique : ce taux automatiquement.
-- Compte client précis, historique à taux mixte : 20% par défaut (prudence),
-  sauf choix explicite du collaborateur pour cet encaissement précis (info
-  de dernière minute, dans un sens ou dans l'autre).
+même sans facture en face.
 
-**Prérequis technique lourd, pas encore construit** :
-1. Nouveau fetch de données : un encaissement jamais rapproché d'aucune
-   facture n'apparaît nulle part dans ce que le connecteur récupère
-   aujourd'hui (ancré sur les écritures de TVA).
-2. **Taux historique par compte client** — concept qui n'existe pas du
-   tout aujourd'hui (`taux_historique` existe par compte de
-   produit/charge, jamais par tiers individuel).
-3. Mécanisme de qualification humaine pour les comptes mixtes (anomalie +
-   choix du taux), sur le modèle du 471.
+**Fait** :
+- `detecterEncaissementsClientAAffecter` (controles-module4) : détecte tout
+  encaissement (crédit) non lettré sur un compte client (411xxx, découverte
+  automatique par préfixe comme pour le 471), applique directement un taux
+  — historique confirmé du client si connu et mono-taux, sinon 20% par
+  prudence. Contrairement au 471, **pas de blocage** : le défaut s'applique
+  tout de suite, une anomalie `signale` (non bloquante) trace la décision.
+- `taux_historique_tiers` (migration 009) + `analyserTauxHistoriqueParTiers`
+  (onboarding-module3) : construit le taux historique par compte client à
+  partir des factures déjà lettrées (seuil : 3 occurrences). Fusionné dans
+  `ContexteDossier.tauxHistorique` (même tableau que les taux par compte
+  produit/charge — le champ `compteOuTiers` anticipait déjà ce cas).
+- Branché dans `pipeline.ts` : tourne à chaque cycle, propose automatiquement
+  les candidats de taux historique (compte produit/charge ET compte client)
+  dans le panneau "Taux historique" déjà existant côté frontend — pas de
+  nouvelle interface construite, réutilisation de l'écran existant.
+- Garde-fou anti-doublon : une proposition de taux n'est faite qu'une seule
+  fois par compte, jamais re-proposée à chaque relance de cycle.
 
-Chantier de la taille de celui du 471 (déjà fait) ou du paiement partiel
-(en cours) — pas commencé, à ne pas perdre de vue.
+**Pas fait** :
+- Correction manuelle du taux appliqué par défaut (le collaborateur qui
+  veut imposer un autre taux sur un encaissement précis) — seule la
+  traçabilité existe, pas encore l'endpoint de correction.
+- Taux historique par compte **fournisseur** (401) — pas scopé, n'aurait de
+  sens que pour un cas différent (acompte payé à un fournisseur sans
+  facture), jamais discuté.
+- **Précision utile pour la suite** : `analyserTauxHistorique` (compte
+  produit/charge, existait déjà avant ce chantier) ne regroupe PAS par
+  compte de charge/produit (706, 607, 611...) malgré son nom — elle
+  regroupe par **sous-compte de TVA** (445711, 44566...), c'est un outil de
+  cohérence de taux par sous-compte TVA, pas un suivi par compte produit.
+  Ne pas confondre les deux quand on regarde le panneau "Taux historique".
 
 ## Ce qui reste en suspens, par urgence
 
