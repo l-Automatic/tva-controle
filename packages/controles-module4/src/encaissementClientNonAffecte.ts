@@ -54,7 +54,7 @@ export function detecterEncaissementsClientAAffecter(
       compte: ligne.compte,
       description:
         `Encaissement de ${ligne.credit.toFixed(2)} € TTC sur le compte ${ligne.compte}, non lettré ` +
-        `(aucune facture rapprochée) — TVA collectée appliquée au taux de ${taux}% ` +
+        `(aucune facture rapprochée). TVA collectée appliquée au taux de ${taux}% ` +
         `(${source === 'taux_historique' ? 'taux habituel connu de ce client' : 'défaut de prudence, taux du client inconnu ou mixte'}). ` +
         `Modifiable si vous disposez d'une information contraire (acompte à un autre taux, etc.).`,
       details: { montantTTC: ligne.credit, libelle: ligne.libelle, date: ligne.date, tauxApplique: taux, source },
