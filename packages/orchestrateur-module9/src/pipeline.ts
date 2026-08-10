@@ -17,6 +17,7 @@ import {
   detecterEncaissementsClientAAffecter,
 } from '@tva-controle/controles-module4';
 import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
+import { analyserTauxHistorique, analyserTauxHistoriqueParTiers } from '@tva-controle/onboarding-module3';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur, conventionListe } from './db/dossierRepository.js';
@@ -25,6 +26,8 @@ import {
   enregistrerCalcul,
   enregistrerEvenementAudit,
   synchroniserTiersReference,
+  enregistrerPropositionsTaux,
+  enregistrerPropositionsTauxTiers,
 } from './db/writeRepository.js';
 import { listerLedgerEntryIdsQualifies, listerRegularisationsAIntegrer } from './db/readRepository.js';
 
@@ -225,6 +228,16 @@ export async function executerCycleTva(
     // cycle bloque ensuite pour une autre raison (ex: 471 non qualifié) —
     // ce n'est pas lié, pas de raison d'attendre un calcul réussi pour ça.
     await synchroniserTiersReference(client, params.dossierId, statutsTiers, params.periodeFin);
+
+    // Propositions de taux historique (compte produit/charge ET compte
+    // tiers) — recalculées à chaque cycle sur les écritures déjà fetchées,
+    // mais enregistrerPropositionsTaux(Tiers) ne propose qu'une fois par
+    // compte (garde-fou anti-doublon) : ça ne fait rien de plus au-delà du
+    // premier cycle pour un compte déjà proposé/tranché. Persisté ici,
+    // affiché et confirmé/rejeté via le panneau "Taux historique" déjà
+    // existant côté frontend — pas de nouvelle popup nécessaire.
+    await enregistrerPropositionsTaux(client, params.dossierId, analyserTauxHistorique(ecritures));
+    await enregistrerPropositionsTauxTiers(client, params.dossierId, analyserTauxHistoriqueParTiers(ecritures));
 
     const parGravite: Record<string, number> = {};
     for (const a of inserees) {
