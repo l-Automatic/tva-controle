@@ -26,6 +26,11 @@ export {
   detecterEncaissementsClientAAffecter,
   type RegularisationClientAAppliquer,
 } from './encaissementClientNonAffecte.js';
+export {
+  identifierComptesACategoriser,
+  type ComptesConnus,
+  type CompteACategoriser,
+} from './comptesACategoriser.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
