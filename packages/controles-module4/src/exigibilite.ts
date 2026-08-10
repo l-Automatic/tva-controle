@@ -55,14 +55,14 @@ export function determinerExigibiliteTva(
         gravite: 'signale',
         ledgerEntryId,
         compte,
-        description: 'Aucune ligne produit/charge trouvée sur la pièce — nature bien/service non déterminable.',
+        description: 'Aucune ligne produit/charge trouvée sur la pièce : nature bien/service non déterminable.',
       });
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'indetermine',
         exigible: true,
-        motif: 'Nature indéterminée — exigibilité supposée par défaut (facturation), à vérifier manuellement.',
+        motif: 'Nature indéterminée : exigibilité supposée par défaut (facturation), à vérifier manuellement.',
       });
       continue;
     }
@@ -78,14 +78,14 @@ export function determinerExigibiliteTva(
         ledgerEntryId,
         compte,
         description:
-          'Pièce mêlant des lignes de nature bien et service — exigibilité à vérifier ligne par ligne, non calculée automatiquement.',
+          'Pièce mêlant des lignes de nature bien et service : exigibilité à vérifier ligne par ligne, non calculée automatiquement.',
       });
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'indetermine',
         exigible: true,
-        motif: 'Nature mixte — à vérifier manuellement.',
+        motif: 'Nature mixte : à vérifier manuellement.',
       });
       continue;
     }
@@ -111,14 +111,14 @@ export function determinerExigibiliteTva(
         ledgerEntryId,
         compte,
         description:
-          'Prestation de service sans ligne tiers identifiée sur la pièce — exigibilité (TVA sur encaissement) non vérifiable.',
+          'Prestation de service sans ligne tiers identifiée sur la pièce : exigibilité (TVA sur encaissement) non vérifiable.',
       });
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'service',
         exigible: true,
-        motif: 'Ligne tiers introuvable — exigibilité supposée par défaut, à vérifier.',
+        motif: 'Ligne tiers introuvable : exigibilité supposée par défaut, à vérifier.',
       });
       continue;
     }
@@ -137,7 +137,7 @@ export function determinerExigibiliteTva(
         gravite: 'signale',
         ledgerEntryId,
         compte,
-        description: `Compte tiers ${ligneTiers.compte} : groupe de lettrage à ${ligneTiers.lettrage.groupeIds.length} lignes — possible paiement partiel, montant exigible à vérifier manuellement (calcul extracomptable de la TVA non encore déductible/collectée).`,
+        description: `Compte tiers ${ligneTiers.compte} : ce règlement est rapproché avec ${ligneTiers.lettrage.groupeIds.length} autres pièces à la fois (pas juste une facture et son paiement). Signe possible d'un paiement partiel dont le montant exigible n'est pas calculé automatiquement ici : à vérifier manuellement dans Pennylane.`,
         details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds },
       });
     }
