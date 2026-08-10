@@ -42,8 +42,8 @@ export function detecterImmobilisationManquee(
       compte: lignesConcernees.map((l) => l.compte).join(', '),
       description:
         lignesConcernees.length === 1
-          ? `Achat de ${Math.abs(lignesConcernees[0]!.debit - lignesConcernees[0]!.credit).toFixed(2)}€ HT sur un compte de petit équipement — au-delà du seuil de ${seuil}€, à vérifier pour passage en immobilisation.`
-          : `${lignesConcernees.length} lignes de petit équipement dépassant individuellement ${seuil}€ HT sur la même pièce — à vérifier pour passage en immobilisation (isolément ou comme ensemble fonctionnel).`,
+          ? `Achat de ${Math.abs(lignesConcernees[0]!.debit - lignesConcernees[0]!.credit).toFixed(2)}€ HT sur un compte de petit équipement, au-delà du seuil de ${seuil}€ : à vérifier pour passage en immobilisation.`
+          : `${lignesConcernees.length} lignes de petit équipement dépassant individuellement ${seuil}€ HT sur la même pièce : à vérifier pour passage en immobilisation (isolément ou comme ensemble fonctionnel).`,
       details: {
         seuil,
         lignes: lignesConcernees.map((l) => ({
