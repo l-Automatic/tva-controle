@@ -43,7 +43,7 @@ export function determinerDeductibiliteCarburant(
         ledgerEntryId,
         compte: ligneCarburant.compte,
         description:
-          'Achat de carburant sans aucun véhicule répertorié dans le dossier — déductibilité (80%/100%) non déterminable automatiquement.',
+          'Achat de carburant sans aucun véhicule répertorié dans le dossier : déductibilité (80%/100%) non déterminable automatiquement.',
       });
       statuts.push({
         ledgerEntryId,
@@ -61,13 +61,13 @@ export function determinerDeductibiliteCarburant(
         ledgerEntryId,
         compte: ligneCarburant.compte,
         description:
-          'Flotte mixte (véhicules de tourisme ET utilitaires) — impossible de déterminer automatiquement à quel véhicule ce carburant se rapporte. Décision humaine requise.',
+          'Flotte mixte (véhicules de tourisme ET utilitaires) : impossible de déterminer automatiquement à quel véhicule ce carburant se rapporte. Décision humaine requise.',
       });
       statuts.push({
         ledgerEntryId,
         compte: ligneCarburant.compte,
         tauxDeductible: null,
-        motif: 'Flotte mixte — à déterminer manuellement.',
+        motif: 'Flotte mixte : à déterminer manuellement.',
       });
       continue;
     }
