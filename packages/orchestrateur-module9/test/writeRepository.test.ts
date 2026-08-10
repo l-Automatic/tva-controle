@@ -9,6 +9,9 @@ import {
   ajouterConventionManuelle,
   confirmerConvention,
   enregistrerPropositionsTaux,
+  enregistrerPropositionsTauxTiers,
+  confirmerTauxHistoriqueTiers,
+  rejeterTauxHistoriqueTiers,
   enregistrerCalcul,
   validerCalcul,
   rejeterCalcul,
@@ -25,6 +28,7 @@ import {
   listerAnomalies,
   listerConventions,
   listerTauxHistorique,
+  listerTauxHistoriqueTiers,
   listerCalculs,
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
@@ -184,6 +188,23 @@ describe('enregistrerPropositionsConventions et enregistrerPropositionsTaux', ()
 
     expect(conventions.some((c) => c.cle === 'compte_tva_due_autoliquidee')).toBe(true);
     expect(taux.some((t) => t.compteProduitOuCharge === '445712' && t.tauxHabituel === 10)).toBe(true);
+  });
+
+  it('ne propose jamais deux fois pour le même compte, même si rappelée (relance de cycle)', async () => {
+    const compte = `445714test${Date.now()}`;
+    await avecClient((client) =>
+      enregistrerPropositionsTaux(client, dossierId, [{ compteOuTiers: compte, tauxHabituel: 20, nbOccurrences: 5 }])
+    );
+    // Rappel avec un taux dominant différent (simule un recalcul sur un
+    // cycle suivant) : ne doit PAS créer une seconde candidate.
+    await avecClient((client) =>
+      enregistrerPropositionsTaux(client, dossierId, [{ compteOuTiers: compte, tauxHabituel: 10, nbOccurrences: 8 }])
+    );
+
+    const taux = await avecClient((client) => listerTauxHistorique(client, dossierId, 'candidate'));
+    const pourCeCompte = taux.filter((t) => t.compteProduitOuCharge === compte);
+    expect(pourCeCompte).toHaveLength(1);
+    expect(pourCeCompte[0]?.tauxHabituel).toBe(20); // la première proposition, pas la seconde
   });
 });
 
@@ -899,5 +920,66 @@ describe('synchroniserTiersReference', () => {
       ])
     );
     expect(res.rows[0].nom_tiers).toBe('Nom Original');
+  });
+});
+
+describe('taux_historique_tiers (chantier B)', () => {
+  it('propose, confirme, et ne double-propose jamais pour le même compte tiers', async () => {
+    const compteTiers = `411test${Date.now()}`;
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'UTaux', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `utaux-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerPropositionsTauxTiers(client, dossierId, [
+        { numeroCompteTiers: compteTiers, tauxHabituel: 10, nbOccurrences: 4 },
+      ])
+    );
+    // Rappel (simule une relance de cycle) : ne doit pas créer de doublon.
+    await avecClient((client) =>
+      enregistrerPropositionsTauxTiers(client, dossierId, [
+        { numeroCompteTiers: compteTiers, tauxHabituel: 20, nbOccurrences: 9 },
+      ])
+    );
+
+    const candidates = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'candidate'));
+    const pourCeCompte = candidates.filter((c) => c.numeroCompteTiers === compteTiers);
+    expect(pourCeCompte).toHaveLength(1);
+    expect(pourCeCompte[0]?.tauxHabituel).toBe(10);
+
+    await avecClient((client) => confirmerTauxHistoriqueTiers(client, pourCeCompte[0]!.id, utilisateurId));
+
+    const confirmees = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'confirmed'));
+    expect(confirmees.some((c) => c.numeroCompteTiers === compteTiers && c.tauxHabituel === 10)).toBe(true);
+  });
+
+  it('rejeterTauxHistoriqueTiers passe la proposition en rejected', async () => {
+    const compteTiers = `411reject${Date.now()}`;
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'UTaux2', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `utaux2-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerPropositionsTauxTiers(client, dossierId, [
+        { numeroCompteTiers: compteTiers, tauxHabituel: 5.5, nbOccurrences: 3 },
+      ])
+    );
+    const candidates = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'candidate'));
+    const proposition = candidates.find((c) => c.numeroCompteTiers === compteTiers)!;
+
+    await avecClient((client) => rejeterTauxHistoriqueTiers(client, proposition.id, utilisateurId));
+
+    const rejetees = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'rejected'));
+    expect(rejetees.some((c) => c.numeroCompteTiers === compteTiers)).toBe(true);
   });
 });
