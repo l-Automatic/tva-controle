@@ -327,17 +327,7 @@ Mistral qui fonctionne réellement (prompt, parsing, gestion d'erreur).
 l'un de ces quatre cas, les trois autres ne demandent qu'un prompt et une
 UI de confirmation différents — pas une nouvelle plomberie.
 
-### Groupe E — Symétrique fournisseur du chantier B (nouveau, jamais discuté)
-
-1. Taux historique par compte fournisseur (401) — n'existe pas.
-2. Encaissements/paiements fournisseurs sans facture en face (acompte
-   payé à un fournisseur) — jamais évoqué, symétrique du chantier B mais
-   côté achat.
-
-**Pourquoi les grouper** : c'est littéralement le chantier B, mais côté
-paiement plutôt qu'encaissement. Même architecture réutilisable.
-
-### Groupe F — Sécurité/infra avant un vrai client payant (pas urgent en solo sandbox)
+### Groupe E — Sécurité/infra avant un vrai client payant (pas urgent en solo sandbox)
 
 1. Authentification — header `x-cabinet-id` en clair.
 2. Chiffrement de la clé Mistral et du token Pennylane (stockés en clair).
@@ -348,3 +338,15 @@ paiement plutôt qu'encaissement. Même architecture réutilisable.
 **Pourquoi les grouper** : aucun rapport avec la logique fiscale, tous
 liés au passage "sandbox solo" → "cabinet réel/plusieurs cabinets".
 Aucune urgence tant que ce n'est pas le cas.
+
+---
+
+**Note (06/08)** : un "symétrique fournisseur du chantier B" avait été
+envisagé (taux historique par compte fournisseur, encaissements
+fournisseurs sans facture) puis écarté après clarification avec Rami —
+aucune utilité identifiée. Le côté fournisseur a toujours une vraie
+facture avec sa propre ligne de TVA à un taux connu (lu directement,
+ligne à ligne, cf. point 2 de la partie 1) : deviner un taux n'a de sens
+que côté client, où l'encaissement arrive sans aucune facture en face. Et
+un paiement fournisseur sans facture du tout n'ouvre simplement aucun
+droit à déduction — pas besoin d'appliquer un défaut comme côté client.
