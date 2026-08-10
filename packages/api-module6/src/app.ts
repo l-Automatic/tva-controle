@@ -19,6 +19,9 @@ import {
   rejeterTauxHistoriqueTiers,
   listerTiersReference,
   corrigerNiveauConfianceTiers,
+  assignerTauxCompte,
+  listerTauxAssignes,
+  type TauxAssigne,
   validerCalcul,
   rejeterCalcul,
   listerAnomalies,
@@ -319,6 +322,27 @@ export function buildApp(pool: Pool): FastifyInstance {
       }
       throw err;
     }
+  });
+
+  // --- Taux assigné par compte (produit/charge) — assignation directe, une
+  // fois pour toutes, cf. migration 010. Pas de workflow candidate/confirmed.
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/taux-assignes', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) =>
+      listerTauxAssignes(client, request.params.dossierId)
+    );
+  });
+
+  app.post<{
+    Params: { dossierId: string };
+    Body: { compte: string; taux: TauxAssigne; utilisateurId: string };
+  }>('/dossiers/:dossierId/taux-assignes', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { compte, taux, utilisateurId } = request.body;
+    await avecContexteCabinet(pool, cabinetId, (client) =>
+      assignerTauxCompte(client, request.params.dossierId, compte, taux, utilisateurId)
+    );
+    reply.code(204).send();
   });
 
   // --- Calculs ---
