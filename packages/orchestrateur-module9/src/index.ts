@@ -3,7 +3,9 @@ export {
   chargerDossier,
   chargerContexteDossier,
   conventionValeur,
+  listerDossiers,
   type DossierInfo,
+  type DossierListe,
 } from './db/dossierRepository.js';
 export { executerCycleTva, type ParametresCycleTva, type ResultatCycleTva } from './pipeline.js';
 export {
@@ -48,10 +50,12 @@ export {
   listerParametresCabinet,
   parametreCabinetValeur,
   listerParametresDossier,
+  listerElementsATraiter,
   type AnomalieDb,
   type PropositionDb,
   type CalculDb,
   type AuditEvenementDb,
   type RegularisationDb,
   type ParametreDb,
+  type ElementATraiter,
 } from './db/readRepository.js';
