@@ -23,6 +23,13 @@ export function sommeNette(lignes: Array<{ debit: number; credit: number }>): nu
   return lignes.reduce((acc, l) => acc + (l.credit - l.debit), 0);
 }
 
+// Ne couvre QUE la collecte (445711-445714) — un compte déductible (44566,
+// 44562) est très souvent mixte (plusieurs taux mélangés sur un seul
+// compte), donc un "taux habituel" n'a pas de sens à y établir. Confirmé
+// avec Rami (08/08) après qu'un vrai bug a été trouvé : cette fonction
+// proposait initialement aussi des candidates sur les comptes déductibles,
+// produisant des propositions à 20% sur des comptes en réalité mixtes.
+//
 // Limitation connue, assumée pour cette v1 : contrairement à
 // verifierCoherenceTauxCollecte (Module 4), cette analyse ne détecte pas les
 // pièces multi-taux non éclatées avant de calculer le taux implicite — sur
@@ -36,9 +43,7 @@ export function analyserTauxHistorique(
 
   for (const ecriture of ecritures) {
     const { compte } = ecriture.ligneTva;
-    const estConcerne =
-      compte.startsWith('44571') || compte.startsWith('44566') || compte.startsWith('44562');
-    if (!estConcerne) continue;
+    if (!compte.startsWith('44571')) continue;
 
     const baseHT = Math.abs(sommeNette(ecriture.autresLignes));
     if (baseHT === 0) continue;
