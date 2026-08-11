@@ -40,6 +40,7 @@ export {
   type StatutTiersASynchroniser,
   enregistrerPropositionsTauxTiers,
   confirmerTauxHistoriqueTiers,
+  assignerTauxHistoriqueTiersManuel,
   rejeterTauxHistoriqueTiers,
 } from './db/writeRepository.js';
 export {
