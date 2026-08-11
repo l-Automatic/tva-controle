@@ -864,3 +864,42 @@ export async function assignerTauxCompte(
     details: { compte, taux },
   });
 }
+
+// Résolution en masse — demande de Rami (08/08) : une liste d'anomalies
+// signalées peut être longue, traiter une par une est lourd. Un seul
+// commentaire partagé pour tout le lot (pas de faux-semblant d'analyse
+// individuelle), restreint aux anomalies encore 'ouvert' (les ids déjà
+// traités passés par erreur sont silencieusement ignorés, pas une erreur).
+// Un seul événement d'audit pour tout le lot plutôt qu'un par anomalie :
+// plus lisible dans l'historique qu'une rafale de N lignes identiques.
+export async function resoudreAnomaliesEnMasse(
+  client: PoolClient,
+  anomalieIds: string[],
+  utilisateurId: string,
+  commentaire: string
+): Promise<{ dossierId: string | null; nombreResolues: number }> {
+  if (anomalieIds.length === 0) {
+    return { dossierId: null, nombreResolues: 0 };
+  }
+
+  const res = await client.query<{ id: string; dossier_id: string }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), commentaire_traitement = $3
+     WHERE id = ANY($1) AND statut = 'ouvert'
+     RETURNING id, dossier_id`,
+    [anomalieIds, utilisateurId, commentaire]
+  );
+
+  const dossierId = res.rows[0]?.dossier_id ?? null;
+  if (dossierId) {
+    await enregistrerEvenementAudit(client, {
+      dossierId,
+      typeEvenement: 'anomalies_resolues_en_masse',
+      moduleSource: 'module6_validation',
+      acteur: 'utilisateur',
+      acteurUtilisateurId: utilisateurId,
+      details: { anomalieIds: res.rows.map((r) => r.id), commentaire },
+    });
+  }
+
+  return { dossierId, nombreResolues: res.rows.length };
+}
