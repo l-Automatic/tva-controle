@@ -67,4 +67,20 @@ describe('identifierComptesACategoriser', () => {
   it('aucune ligne autre : liste vide', () => {
     expect(identifierComptesACategoriser([ecriture([])], connusVides)).toEqual([]);
   });
+
+  it('exclut un compte de trésorerie (5121) — bug réel du 08/08, ne concerne pas ce popup', () => {
+    const e = ecriture([
+      { id: 1, compte: '5121', compteId: 1, libelle: 'Virement', debit: 500, credit: 0 },
+      { id: 2, compte: '607', compteId: 2, libelle: 'Achat marchandises', debit: 100, credit: 0 },
+    ]);
+
+    const resultat = identifierComptesACategoriser([e], connusVides);
+    expect(resultat.map((r) => r.compte)).toEqual(['607']);
+  });
+
+  it('exclut aussi les comptes tiers (4xx) qui pourraient se retrouver dans autresLignes', () => {
+    const e = ecriture([{ id: 1, compte: '401FOURNISSEUR', compteId: 1, libelle: null, debit: 0, credit: 200 }]);
+
+    expect(identifierComptesACategoriser([e], connusVides)).toEqual([]);
+  });
 });
