@@ -48,6 +48,37 @@ describe('analyserTauxHistorique', () => {
     expect(analyserTauxHistorique([e], 1)).toEqual([]);
   });
 
+  it('exclut les comptes déductibles (44566, 44562) — bug réel du 08/08, souvent mixtes donc pas de "taux habituel" à établir', () => {
+    function ecritureDeductible(compte: string, montantTva: number, montantHT: number): EcritureTvaComplete {
+      return {
+        ledgerEntryId: 1,
+        ligneTva: {
+          id: 1,
+          compte,
+          compteId: 1,
+          libelle: null,
+          debit: montantTva,
+          credit: 0,
+          date: '2025-01-01',
+          ledgerEntryId: 1,
+          lettrage: { estLettree: true, groupeIds: [] },
+        },
+        lignesTiers: [],
+        autresLignes: [{ id: 1, compte: '607', compteId: 1, libelle: null, debit: montantHT, credit: 0 }],
+      };
+    }
+    const ecritures = [
+      ecritureDeductible('44566', 200, 1000),
+      ecritureDeductible('44566', 200, 1000),
+      ecritureDeductible('44566', 200, 1000),
+      ecritureDeductible('44562', 200, 1000),
+      ecritureDeductible('44562', 200, 1000),
+      ecritureDeductible('44562', 200, 1000),
+    ];
+
+    expect(analyserTauxHistorique(ecritures, 3)).toEqual([]);
+  });
+
   it('normalise un taux implicite proche d’un taux officiel (arrondi de saisie)', () => {
     const ecritures = [
       ecriture(1, 199.5, 1000), // 19.95% -> doit être normalisé à 20%
