@@ -18,6 +18,7 @@ import {
   validerCalcul,
   rejeterCalcul,
   resoudreAnomalie,
+  resoudreAnomaliesEnMasse,
   qualifierEncaissementNonAffecte,
   definirParametreCabinet,
   definirParametreDossier,
@@ -1177,5 +1178,63 @@ describe('assignerTauxCompte', () => {
         assignerTauxCompte(client, dossierId, `706invalide${Date.now()}`, '15', utilisateurId)
       )
     ).rejects.toThrow();
+  });
+});
+
+describe('resoudreAnomaliesEnMasse', () => {
+  it('résout plusieurs anomalies ouvertes en une fois avec un commentaire partagé', async () => {
+    const anomalies: Anomalie[] = [
+      { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 8001, compte: '445711', description: 'A' },
+      { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 8002, compte: '445712', description: 'B' },
+    ];
+    const inserees = await avecClient((client) => enregistrerAnomalies(client, dossierId, '2025-10-01', anomalies));
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'Masse1', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `masse1-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    const resultat = await avecClient((client) =>
+      resoudreAnomaliesEnMasse(
+        client,
+        inserees.map((a) => a.id),
+        utilisateurId,
+        'Vérifié en lot, tous des avoirs légitimes'
+      )
+    );
+
+    expect(resultat.nombreResolues).toBe(2);
+    const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode: '2025-10-01' }));
+    expect(liste.filter((a) => a.statut === 'resolu')).toHaveLength(2);
+  });
+
+  it('ignore silencieusement les ids déjà traités, ne compte que ceux réellement résolus', async () => {
+    const anomalie: Anomalie = {
+      type: 'avoir_a_verifier',
+      gravite: 'signale',
+      ledgerEntryId: 8003,
+      compte: '445711',
+      description: 'C',
+    };
+    const [inseree] = await avecClient((client) => enregistrerAnomalies(client, dossierId, '2025-10-02', [anomalie]));
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'Masse2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `masse2-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    await avecClient((client) => resoudreAnomalie(client, inseree!.id, utilisateurId, 'déjà traitée individuellement'));
+
+    const resultat = await avecClient((client) =>
+      resoudreAnomaliesEnMasse(client, [inseree!.id], utilisateurId, 'tentative en masse sur du déjà traité')
+    );
+    expect(resultat.nombreResolues).toBe(0);
+  });
+
+  it('liste vide : ne fait rien, ne plante pas', async () => {
+    const resultat = await avecClient((client) => resoudreAnomaliesEnMasse(client, [], 'peu-importe', 'x'));
+    expect(resultat).toEqual({ dossierId: null, nombreResolues: 0 });
   });
 });
