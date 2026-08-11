@@ -17,6 +17,7 @@ import {
   rejeterTauxHistorique,
   listerTauxHistoriqueTiers,
   confirmerTauxHistoriqueTiers,
+  assignerTauxHistoriqueTiersManuel,
   rejeterTauxHistoriqueTiers,
   listerTiersReference,
   corrigerNiveauConfianceTiers,
@@ -360,6 +361,21 @@ export function buildApp(pool: Pool): FastifyInstance {
     const { compte, taux, utilisateurId } = request.body;
     await avecContexteCabinet(pool, cabinetId, (client) =>
       assignerTauxCompte(client, request.params.dossierId, compte, taux, utilisateurId)
+    );
+    reply.code(204).send();
+  });
+
+  // --- Taux client assigné manuellement (distinct de la détection auto sur
+  // historique lettré, cf. analyserTauxHistoriqueParTiers) — confirme
+  // directement, pas de candidate à valider séparément.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { numeroCompteTiers: string; tauxHabituel: number; utilisateurId: string };
+  }>('/dossiers/:dossierId/taux-historique-tiers/assigner', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { numeroCompteTiers, tauxHabituel, utilisateurId } = request.body;
+    await avecContexteCabinet(pool, cabinetId, (client) =>
+      assignerTauxHistoriqueTiersManuel(client, request.params.dossierId, numeroCompteTiers, tauxHabituel, utilisateurId)
     );
     reply.code(204).send();
   });
