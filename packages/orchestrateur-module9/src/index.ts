@@ -13,6 +13,7 @@ export {
   type EvenementAudit,
   enregistrerAnomalies,
   resoudreAnomalie,
+  resoudreAnomaliesEnMasse,
   justifierAnomalie,
   enregistrerPropositionsConventions,
   ajouterConventionManuelle,
