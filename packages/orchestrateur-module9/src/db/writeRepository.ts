@@ -903,3 +903,37 @@ export async function resoudreAnomaliesEnMasse(
 
   return { dossierId, nombreResolues: res.rows.length };
 }
+
+// Assignation directe et immédiate d'un taux habituel pour un compte
+// client, sans attendre le seuil de 3 factures lettrées observées — demande
+// de Rami (08/08) : un collaborateur qui connaît déjà le taux d'un client
+// (ex: client toujours facturé à 10%) doit pouvoir le renseigner
+// directement, pas attendre que l'historique s'accumule. Contrairement à
+// enregistrerPropositionsTauxTiers (candidate, détecté automatiquement),
+// celle-ci confirme immédiatement — c'est une décision humaine directe, pas
+// une proposition à valider. Remplace toute confirmation précédente pour ce
+// même compte (upsert sur la ligne confirmed).
+export async function assignerTauxHistoriqueTiersManuel(
+  client: PoolClient,
+  dossierId: string,
+  numeroCompteTiers: string,
+  tauxHabituel: number,
+  utilisateurId: string
+): Promise<void> {
+  await client.query(
+    `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source, confirmed_by, confirmed_at)
+     VALUES ($1, $2, $3, 0, 'confirmed', 'saisie_manuelle', $4, now())
+     ON CONFLICT (dossier_id, numero_compte_tiers) WHERE statut = 'confirmed'
+     DO UPDATE SET taux_habituel = EXCLUDED.taux_habituel, source = 'saisie_manuelle',
+                    confirmed_by = EXCLUDED.confirmed_by, confirmed_at = now(), derniere_maj = now()`,
+    [dossierId, numeroCompteTiers, tauxHabituel, utilisateurId]
+  );
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'taux_tiers_assigne_manuellement',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { numeroCompteTiers, tauxHabituel },
+  });
+}
