@@ -41,11 +41,18 @@ export function identifierComptesACategoriser(
   // déjà catégorisé si '706' est déjà dans une convention).
   const estDejaConnu = (compte: string) => tousPrefixesConnus.some((prefixe) => compte.startsWith(prefixe));
 
+  // Filtre par classe de compte (PCG) : seules les charges (6), produits (7)
+  // et immobilisations (2) ont un sens pour ce popup. Bug réel trouvé le
+  // 08/08 : sans ce filtre, un compte de trésorerie (5121, banque) apparu
+  // par erreur dans autresLignes se retrouvait proposé à la catégorisation
+  // alors que la question ne se pose même pas pour ce type de compte.
+  const estClassePertinente = (compte: string) => /^[267]/.test(compte);
+
   const libellesParCompte = new Map<string, Set<string>>();
 
   for (const ecriture of ecritures) {
     for (const ligne of ecriture.autresLignes) {
-      if (estDejaConnu(ligne.compte)) continue;
+      if (estDejaConnu(ligne.compte) || !estClassePertinente(ligne.compte)) continue;
 
       const libelles = libellesParCompte.get(ligne.compte) ?? new Set<string>();
       if (ligne.libelle && libelles.size < 3) {
