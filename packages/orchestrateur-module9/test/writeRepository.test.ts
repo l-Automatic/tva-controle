@@ -13,6 +13,7 @@ import {
   enregistrerPropositionsTaux,
   enregistrerPropositionsTauxTiers,
   confirmerTauxHistoriqueTiers,
+  assignerTauxHistoriqueTiersManuel,
   rejeterTauxHistoriqueTiers,
   enregistrerCalcul,
   validerCalcul,
@@ -1236,5 +1237,44 @@ describe('resoudreAnomaliesEnMasse', () => {
   it('liste vide : ne fait rien, ne plante pas', async () => {
     const resultat = await avecClient((client) => resoudreAnomaliesEnMasse(client, [], 'peu-importe', 'x'));
     expect(resultat).toEqual({ dossierId: null, nombreResolues: 0 });
+  });
+});
+
+describe('assignerTauxHistoriqueTiersManuel', () => {
+  it('confirme directement, sans passer par candidate', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'TauxTiersManuel', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `tauxtiersmanuel-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+    const compte = `411manuel${Date.now()}`;
+
+    await avecClient((client) =>
+      assignerTauxHistoriqueTiersManuel(client, dossierId, compte, 10, utilisateurId)
+    );
+
+    const confirmes = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'confirmed'));
+    const ligne = confirmes.find((c) => c.numeroCompteTiers === compte);
+    expect(ligne?.tauxHabituel).toBe(10);
+    expect(ligne?.source).toBe('saisie_manuelle');
+  });
+
+  it('remplace une assignation manuelle précédente pour le même compte plutôt que d’en créer une seconde', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'TauxTiersManuel2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `tauxtiersmanuel2-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+    const compte = `411manuel2${Date.now()}`;
+
+    await avecClient((client) => assignerTauxHistoriqueTiersManuel(client, dossierId, compte, 20, utilisateurId));
+    await avecClient((client) => assignerTauxHistoriqueTiersManuel(client, dossierId, compte, 5.5, utilisateurId));
+
+    const confirmes = await avecClient((client) => listerTauxHistoriqueTiers(client, dossierId, 'confirmed'));
+    const pourCeCompte = confirmes.filter((c) => c.numeroCompteTiers === compte);
+    expect(pourCeCompte).toHaveLength(1);
+    expect(pourCeCompte[0]?.tauxHabituel).toBe(5.5);
   });
 });
