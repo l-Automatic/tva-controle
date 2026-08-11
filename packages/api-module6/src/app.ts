@@ -5,6 +5,7 @@ import {
   avecContexteCabinet,
   executerCycleTva,
   resoudreAnomalie,
+  resoudreAnomaliesEnMasse,
   justifierAnomalie,
   qualifierEncaissementNonAffecte,
   AnomalieNonQualifiableError,
@@ -108,6 +109,24 @@ export function buildApp(pool: Pool): FastifyInstance {
         resoudreAnomalie(client, request.params.id, request.body.utilisateurId, request.body.commentaire)
       );
       reply.code(204).send();
+    }
+  );
+
+  // Résolution en masse — pense à filtrer côté frontend AVANT d'appeler ça
+  // (par type d'anomalie, cf. filtre demandé) : ce n'est pas cette route qui
+  // décide quoi inclure, elle prend juste la liste d'ids déjà choisie.
+  app.post<{ Body: { anomalieIds: string[]; utilisateurId: string; commentaire: string } }>(
+    '/anomalies/resoudre-en-masse',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const { anomalieIds, utilisateurId, commentaire } = request.body;
+      if (!commentaire) {
+        return reply.code(400).send({ erreur: 'commentaire requis pour une resolution en masse' });
+      }
+      const resultat = await avecContexteCabinet(pool, cabinetId, (client) =>
+        resoudreAnomaliesEnMasse(client, anomalieIds, utilisateurId, commentaire)
+      );
+      return resultat;
     }
   );
 
