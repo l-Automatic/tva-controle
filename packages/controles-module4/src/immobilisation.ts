@@ -49,6 +49,7 @@ export function detecterImmobilisationManquee(
         lignes: lignesConcernees.map((l) => ({
           compte: l.compte,
           montant: Math.abs(l.debit - l.credit),
+          libelle: l.libelle,
         })),
       },
     });
