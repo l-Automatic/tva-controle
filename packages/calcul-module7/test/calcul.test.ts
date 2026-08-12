@@ -255,3 +255,32 @@ describe('integrerRegularisations — encaissements 471 qualifiés comme vente',
     );
   });
 });
+
+describe('calculerTva — cadeaux clients (09/08)', () => {
+  it('exclut totalement une ligne dont le compte de charge est un compte cadeaux configuré', () => {
+    const e = ecriture({
+      ligneTva: ligneTva({ compte: '44566', debit: 100, ledgerEntryId: 1 }),
+      autresLignes: [{ id: 1, compte: '623', compteId: 1, libelle: 'Cadeaux clients', debit: 500, credit: 0 }],
+    });
+
+    const resultat = calculerTva([e], [], [], [], { comptesCadeaux: ['623'] });
+    expect(resultat.lignes).toEqual([]);
+    expect(resultat.ecrituresExclues[0]?.motif).toContain('Cadeau client');
+  });
+
+  it('n’exclut pas une ligne déductible normale si comptesCadeaux ne matche pas', () => {
+    const e = ecriture({
+      ligneTva: ligneTva({ compte: '44566', debit: 100, ledgerEntryId: 1 }),
+      autresLignes: [{ id: 1, compte: '607', compteId: 1, libelle: null, debit: 500, credit: 0 }],
+    });
+
+    const resultat = calculerTva([e], [], [], [], { comptesCadeaux: ['623'] });
+    expect(resultat.lignes).toEqual([{ categorie: 'deductible_abs', montant: 100, referencesPieces: [1] }]);
+  });
+
+  it('n’affecte jamais la collecte, même si comptesCadeaux est configuré', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 200, ledgerEntryId: 1 }) });
+    const resultat = calculerTva([e], [], [], [], { comptesCadeaux: ['623'] });
+    expect(resultat.lignes.find((l) => l.categorie === 'collectee_20')?.montant).toBe(200);
+  });
+});
