@@ -38,6 +38,7 @@ export {
   type CompteSansTauxAssigne,
   type CompteClientSansTauxAssigne,
 } from './tauxSuggestions.js';
+export { verifierDeductibiliteVehiculeTourisme } from './vehiculeTourisme.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
