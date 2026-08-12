@@ -22,6 +22,11 @@ const LIBELLE_CATEGORIE: Record<string, string> = {
 
 function ResultatCycleView({ resultat }: { resultat: ResultatCycle }) {
   if (resultat.statut === 'bloque') {
+    // Pas de liste détaillée ici : le panneau « Anomalies » juste en dessous
+    // (variant="cycle") affiche déjà ces mêmes anomalies, en mieux — libellé
+    // lisible, actions Résoudre/Justifier/Qualifier. Les redupliquer ici en
+    // lecture seule n'ajoutait rien, juste un doublon moins bien formaté
+    // (cf. brief v5, vérification de non-redondance).
     return (
       <div className="resultat-cycle resultat-bloque">
         <p className="resultat-titre">
@@ -30,18 +35,6 @@ function ResultatCycleView({ resultat }: { resultat: ResultatCycle }) {
         <p className="reference">
           Traitez ces anomalies dans le panneau « Anomalies » ci-dessous, puis relancez le cycle.
         </p>
-        <ul className="card-list">
-          {resultat.anomalies.map((a, i) => (
-            <li key={i} className={`card anomalie gravite-${a.gravite}`}>
-              <div className="card-header">
-                <span className={`badge gravite-badge-${a.gravite}`}>{a.gravite}</span>
-                <span className="type-anomalie">{a.type}</span>
-              </div>
-              <p className="description">{a.description}</p>
-              <p className="reference">Compte : {a.compte}</p>
-            </li>
-          ))}
-        </ul>
       </div>
     );
   }

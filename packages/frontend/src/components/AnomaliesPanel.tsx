@@ -54,20 +54,35 @@ const LIBELLE_GRAVITE: Record<GraviteAnomalie, string> = {
 
 const TAUX_TVA = ['20', '10', '5.5', '2.1'];
 
-function detailsEncaissement(details: unknown): { montantTTC: number | null; libelle: string | null; date: string | null } {
-  if (!details || typeof details !== 'object') return { montantTTC: null, libelle: null, date: null };
+function detailsMontant(details: unknown): { montantTTC: number | null; date: string | null } {
+  if (!details || typeof details !== 'object') return { montantTTC: null, date: null };
   const d = details as Record<string, unknown>;
   return {
     montantTTC: typeof d.montantTTC === 'number' ? d.montantTTC : null,
-    libelle: typeof d.libelle === 'string' ? d.libelle : null,
     date: typeof d.date === 'string' ? d.date : null,
   };
 }
 
-function detailsLisibles(typeAnomalie: string, details: unknown): string | null {
-  // Rendu dédié pour encaissement_non_affecte (montant TTC + libellé/date) —
-  // voir EncaissementQualification, pas ce fallback générique.
-  if (typeAnomalie === 'encaissement_non_affecte') return null;
+// Le libellé de la pièce (quand Pennylane le renseigne) est bien plus
+// exploitable que l'ID technique pour retrouver une écriture — devient la
+// référence principale affichée (cf. brief v5). `exemplesLibelle` regroupe
+// plusieurs écritures (ex : compte_tva_non_reconnu) ; `libelle` est
+// singulier sur les autres types. Jamais les deux à la fois.
+function libellesDePiece(details: unknown): string[] {
+  if (!details || typeof details !== 'object') return [];
+  const d = details as Record<string, unknown>;
+  if (Array.isArray(d.exemplesLibelle)) {
+    return d.exemplesLibelle.filter((l): l is string => typeof l === 'string');
+  }
+  return typeof d.libelle === 'string' ? [d.libelle] : [];
+}
+
+// Champs déjà affichés séparément (libellé(s), montant, date) — le reste
+// (ex : tauxImplicite/tauxAttendu, nbEcritures/references) garde un intérêt
+// de vérification, affiché en JSON compact plutôt que perdu.
+const CLES_DEJA_AFFICHEES = new Set(['libelle', 'exemplesLibelle', 'montantTTC', 'date']);
+
+function detailsResiduels(details: unknown): string | null {
   if (!details || typeof details !== 'object') return null;
   const d = details as Record<string, unknown>;
   // Cas concret : anomalies de groupe de lettrage (paiement_partiel_a_verifier)
@@ -80,7 +95,10 @@ function detailsLisibles(typeAnomalie: string, details: unknown): string | null 
     const compteTiers = typeof d.compteTiers === 'string' ? `Compte tiers : ${d.compteTiers} — ` : '';
     return `${compteTiers}Autres pièces du même groupe de lettrage : ${d.groupeIds.join(', ')}`;
   }
-  return JSON.stringify(details, null, 2);
+  const clesRestantes = Object.keys(d).filter((k) => !CLES_DEJA_AFFICHEES.has(k));
+  if (clesRestantes.length === 0) return null;
+  const reste = Object.fromEntries(clesRestantes.map((k) => [k, d[k]]));
+  return JSON.stringify(reste, null, 2);
 }
 
 // Qualification structurée d'un encaissement non affecté (compte d'attente
@@ -267,8 +285,9 @@ function AnomalieRow({
 
   const estOuverte = anomalie.statut === 'ouvert';
   const estEncaissement = anomalie.typeAnomalie === 'encaissement_non_affecte';
-  const details = detailsLisibles(anomalie.typeAnomalie, anomalie.details);
-  const { montantTTC, libelle, date } = detailsEncaissement(anomalie.details);
+  const detailsRestants = detailsResiduels(anomalie.details);
+  const { montantTTC, date } = detailsMontant(anomalie.details);
+  const libelles = libellesDePiece(anomalie.details);
 
   return (
     <li className={`card anomalie gravite-${anomalie.gravite}`}>
@@ -290,18 +309,34 @@ function AnomalieRow({
           Montant TTC : <strong>{montantTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
         </p>
       )}
-      {estEncaissement && (libelle || date) && (
+
+      {/* Le libellé de la pièce est la référence principale — l'ID technique
+          Pennylane passe en information secondaire (cf. brief v5). */}
+      {libelles.length > 0 ? (
+        <>
+          {libelles.length === 1 ? (
+            <p className="label piece-libelle">{libelles[0]}</p>
+          ) : (
+            <ul className="piece-libelles-liste">
+              {libelles.map((l, i) => (
+                <li key={i}>{l}</li>
+              ))}
+            </ul>
+          )}
+          <p className="reference piece-technique">
+            (pièce {anomalie.referencePiece ?? '—'}
+            {date ? ` — ${date}` : ''})
+          </p>
+        </>
+      ) : (
         <p className="reference">
-          {libelle}
-          {libelle && date ? ' — ' : ''}
-          {date}
+          {date ? `${date} — ` : ''}
+          {anomalie.referencePiece ? `Pièce : ${anomalie.referencePiece}` : 'Pièce inconnue'}
         </p>
       )}
+
       {anomalie.compte && <p className="reference">Compte : {anomalie.compte}</p>}
-      {anomalie.referencePiece && (
-        <p className="reference">Pièce : {anomalie.referencePiece}</p>
-      )}
-      {details && <p className="reference details">{details}</p>}
+      {detailsRestants && <p className="reference details">{detailsRestants}</p>}
 
       {estOuverte &&
         (estEncaissement ? (

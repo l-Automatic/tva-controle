@@ -24,7 +24,7 @@
   --violet: #6a3fc0;
   --violet-soft-bg: #f0e9fb;
 
-  --degrade-actif: linear-gradient(135deg, #3499ff, #3a3985);
+  --degrade-actif: linear-gradient(135deg, #142174, #434d90);
   --sidebar-width: 250px;
 
   --radius: 8px;
@@ -705,6 +705,21 @@ button:focus-visible {
   margin: 0.2rem 0;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.piece-libelle {
+  font-weight: 600;
+}
+
+.piece-libelles-liste {
+  margin: 0.3rem 0 0.2rem;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.piece-technique {
+  font-style: italic;
 }
 
 .actions {
