@@ -79,3 +79,35 @@ describe('detecterEncaissementsClientAAffecter', () => {
     ]);
   });
 });
+
+describe('detecterEncaissementsClientAAffecter — regime TVA sur encaissement (09/08)', () => {
+  it('regime "bien" : aucune regularisation ni anomalie, meme sur un encaissement non lettre', () => {
+    const l = ligne({ credit: 1200, compte: '411ROUSSEAU' });
+    const { regularisations, anomalies } = detecterEncaissementsClientAAffecter(
+      [l],
+      contexte(),
+      'bien'
+    );
+    expect(regularisations).toEqual([]);
+    expect(anomalies).toEqual([]);
+  });
+
+  it('regime "service" (defaut) : comportement inchange, applique le taux comme avant', () => {
+    const l = ligne({ credit: 1200, compte: '411ROUSSEAU' });
+    const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte(), 'service');
+    expect(regularisations).toHaveLength(1);
+    expect(regularisations[0]?.taux).toBe(20);
+  });
+
+  it('sans regime precise, le defaut reste "service" (retro-compatible)', () => {
+    const l = ligne({ credit: 1200, compte: '411ROUSSEAU' });
+    const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte());
+    expect(regularisations).toHaveLength(1);
+  });
+
+  it('regime "mixte" : comportement prudent inchange (20% par defaut)', () => {
+    const l = ligne({ credit: 1200, compte: '411ROUSSEAU' });
+    const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte(), 'mixte');
+    expect(regularisations[0]?.taux).toBe(20);
+  });
+});
