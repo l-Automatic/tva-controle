@@ -61,11 +61,11 @@ export interface ConfigCalculTva {
   // que risquer une collecte/déduction non confirmée — régularisable à la
   // période suivante une fois l'anomalie traitée.
   politiqueIndetermine?: 'inclure' | 'exclure';
-  // Cadeaux clients : 0% déductible dès que le compte de charge concerné
-  // (typiquement un seul 623 par dossier) est identifié — pas de seuil
-  // (73€/bénéficiaire/an) appliqué ici, la donnée nécessaire (répartition
-  // par bénéficiaire) n'est pas disponible à ce niveau ; en pratique un
-  // compte 623 dédié cadeaux clients ne contient normalement que ça.
+  // Cadeaux clients : conditionné au seuil de 73€ HT — sous ou égal, TVA
+  // déductible normalement ; au-delà, 0% déductible. Appliqué par ligne
+  // (pas cumulé par bénéficiaire/an, donnée non disponible à ce niveau) —
+  // correction du 09/08, la première version excluait à tort 100% du
+  // compte sans condition de montant.
   comptesCadeaux?: string[];
 }
 
@@ -75,6 +75,8 @@ const TAUX_NATIONAL_PAR_DEFAUT: Record<string, number> = {
   '445713': 5.5,
   '445714': 2.1,
 };
+
+const SEUIL_CADEAUX_HT = 73;
 
 const CATEGORIE_PAR_TAUX: Record<number, CategorieLigneCalcul> = {
   20: 'collectee_20',
@@ -180,14 +182,24 @@ export function calculerTva(
     // ligne (ex: compte hors config comptesVenteService/comptesChargeService) ->
     // traité comme exigible par défaut (comportement historique, avant ce contrôle).
 
-    // --- Cadeaux clients : 0% déductible, exclusion totale ---
+    // --- Cadeaux clients : 0% déductible au-delà de 73€ HT, normal en dessous ---
     if (!estCollecte && config.comptesCadeaux?.length) {
-      const estCadeau = ecriture.autresLignes.some((l) =>
+      const ligneCadeau = ecriture.autresLignes.find((l) =>
         config.comptesCadeaux!.some((prefixe) => l.compte.startsWith(prefixe))
       );
-      if (estCadeau) {
-        exclues.push({ ledgerEntryId, compte, motif: 'Cadeau client : 0% déductible.', compteTiers, date });
-        continue;
+      if (ligneCadeau) {
+        const montantHtCadeau = Math.abs(ligneCadeau.debit - ligneCadeau.credit);
+        if (montantHtCadeau > SEUIL_CADEAUX_HT) {
+          exclues.push({
+            ledgerEntryId,
+            compte,
+            motif: `Cadeau client de ${montantHtCadeau.toFixed(2)}€ HT, au-delà du seuil de ${SEUIL_CADEAUX_HT}€ : 0% déductible.`,
+            compteTiers,
+            date,
+          });
+          continue;
+        }
+        // Sous le seuil : déductible normalement, on continue le traitement standard.
       }
     }
 
