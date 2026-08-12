@@ -94,6 +94,7 @@ export function ConfigurationZone({
       </nav>
       {ongletActif && <p className="sous-onglet-description">{ongletActif.description}</p>}
 
+      <div key={sousOnglet} className="sous-onglet-contenu">
       {sousOnglet === 'comptes' && (
         <ConventionsComptesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}
@@ -124,6 +125,7 @@ export function ConfigurationZone({
           onSuggestionClientConsommee={onSuggestionTauxClientConsommee}
         />
       )}
+      </div>
     </div>
   );
 }

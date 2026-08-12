@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ApiError, lancerCycle } from '../api';
 import { useToast } from '../toast';
 import type { ResultatCycle } from '../types';
+import { CycleLoadingPopup } from './CycleLoadingPopup';
 
 interface CycleFormProps {
   cabinetId: string;
@@ -103,6 +104,8 @@ export function CycleForm({ cabinetId, dossierId, onCycleLance }: CycleFormProps
   const [error, setError] = useState<string | null>(null);
   const [dejaValide, setDejaValide] = useState(false);
   const [resultat, setResultat] = useState<ResultatCycle | null>(null);
+  const [phasePopup, setPhasePopup] = useState<'chargement' | 'succes' | null>(null);
+  const [messageSucces, setMessageSucces] = useState('');
   const notifier = useToast();
 
   async function handleLancer() {
@@ -111,6 +114,7 @@ export function CycleForm({ cabinetId, dossierId, onCycleLance }: CycleFormProps
       return;
     }
     setSubmitting(true);
+    setPhasePopup('chargement');
     setError(null);
     setDejaValide(false);
     setResultat(null);
@@ -118,9 +122,16 @@ export function CycleForm({ cabinetId, dossierId, onCycleLance }: CycleFormProps
       const res = await lancerCycle(cabinetId, dossierId, { periodeDebut, periodeFin, pennylaneToken });
       setResultat(res);
       setPennylaneToken('');
-      notifier(res.statut === 'bloque' ? 'Cycle bloqué — anomalies à traiter' : 'Cycle calculé');
+      const message = res.statut === 'bloque' ? 'Cycle bloqué — anomalies à traiter' : 'Cycle calculé';
+      notifier(message);
+      setMessageSucces(message);
+      setPhasePopup('succes');
       onCycleLance?.(periodeDebut, periodeFin, res);
+      // Le check se laisse le temps de se dessiner avant que le popup ne se
+      // ferme — le résultat, déjà en place derrière, apparaît alors normalement.
+      setTimeout(() => setPhasePopup(null), 1100);
     } catch (err) {
+      setPhasePopup(null);
       if (err instanceof ApiError && err.status === 409) {
         setDejaValide(true);
         setError(err.message);
@@ -168,6 +179,7 @@ export function CycleForm({ cabinetId, dossierId, onCycleLance }: CycleFormProps
 
       {error && <p className={dejaValide ? 'error error-409' : 'error'}>{error}</p>}
       {resultat && <ResultatCycleView resultat={resultat} />}
+      {phasePopup && <CycleLoadingPopup phase={phasePopup} messageSucces={messageSucces} />}
     </div>
   );
 }

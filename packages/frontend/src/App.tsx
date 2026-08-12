@@ -184,7 +184,7 @@ export function App() {
               <p className="zone-description">{ZONES.find((z) => z.id === zone)?.description}</p>
             </div>
 
-            <main className="app-main">
+            <main className="app-main" key={zone}>
               {zone === 'cycle' && (
                 <CycleZone
                   cabinetId={cabinetId}
