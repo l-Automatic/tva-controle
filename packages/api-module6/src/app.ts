@@ -21,6 +21,10 @@ import {
   rejeterTauxHistoriqueTiers,
   listerTiersReference,
   corrigerNiveauConfianceTiers,
+  ajouterVehiculeManuel,
+  retirerVehicule,
+  listerVehicules,
+  type VehiculeManuel,
   assignerTauxCompte,
   listerTauxAssignes,
   type TauxAssigne,
@@ -317,6 +321,36 @@ export function buildApp(pool: Pool): FastifyInstance {
   );
 
   // --- Tiers de référence (mémoire de confiance — Module 9) ---
+  // --- Parc de véhicules (immobilisations) — table prête depuis le
+  // schéma initial, aucune route n'existait jusqu'ici pour l'alimenter.
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/vehicules', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) => listerVehicules(client, request.params.dossierId));
+  });
+
+  app.post<{
+    Params: { dossierId: string };
+    Body: VehiculeManuel & { utilisateurId: string };
+  }>('/dossiers/:dossierId/vehicules', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { utilisateurId, ...vehicule } = request.body;
+    const id = await avecContexteCabinet(pool, cabinetId, (client) =>
+      ajouterVehiculeManuel(client, request.params.dossierId, vehicule, utilisateurId)
+    );
+    reply.code(201).send({ id });
+  });
+
+  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+    '/vehicules/:id/retirer',
+    async (request, reply) => {
+      const cabinetId = request.headers[HEADER_CABINET] as string;
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        retirerVehicule(client, request.params.id, request.body.utilisateurId)
+      );
+      reply.code(204).send();
+    }
+  );
+
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/tiers', async (request) => {
     const cabinetId = request.headers[HEADER_CABINET] as string;
     return avecContexteCabinet(pool, cabinetId, (client) => listerTiersReference(client, request.params.dossierId));
