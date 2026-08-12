@@ -12,6 +12,7 @@ import {
   determinerExigibiliteTva,
   determinerDeductibiliteCarburant,
   detecterImmobilisationManquee,
+  verifierDeductibiliteVehiculeTourisme,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -211,6 +212,7 @@ export async function executerCycleTva(
   );
 
   const anomaliesImmobilisation = detecterImmobilisationManquee(ecritures, { comptesEquipement });
+  const anomaliesVehiculeTourisme = verifierDeductibiliteVehiculeTourisme(ecritures, contexteDossier);
 
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
@@ -282,6 +284,7 @@ export async function executerCycleTva(
     ...anomaliesExigibilite,
     ...anomaliesCarburant,
     ...anomaliesImmobilisation,
+    ...anomaliesVehiculeTourisme,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
