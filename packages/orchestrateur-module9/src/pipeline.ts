@@ -13,6 +13,7 @@ import {
   determinerDeductibiliteCarburant,
   detecterImmobilisationManquee,
   verifierDeductibiliteVehiculeTourisme,
+  verifierCoherenceTauxAutoliquidation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -213,6 +214,10 @@ export async function executerCycleTva(
 
   const anomaliesImmobilisation = detecterImmobilisationManquee(ecritures, { comptesEquipement });
   const anomaliesVehiculeTourisme = verifierDeductibiliteVehiculeTourisme(ecritures, contexteDossier);
+  const anomaliesCoherenceAutoliquidation =
+    compteAutoliquidationDeductible !== undefined
+      ? verifierCoherenceTauxAutoliquidation(ecritures, { compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductible })
+      : [];
 
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
@@ -285,6 +290,7 @@ export async function executerCycleTva(
     ...anomaliesCarburant,
     ...anomaliesImmobilisation,
     ...anomaliesVehiculeTourisme,
+    ...anomaliesCoherenceAutoliquidation,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
