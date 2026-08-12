@@ -19,6 +19,7 @@ import {
   validerCalcul,
   rejeterCalcul,
   resoudreAnomalie,
+  justifierAnomalie,
   resoudreAnomaliesEnMasse,
   qualifierEncaissementNonAffecte,
   definirParametreCabinet,
@@ -40,6 +41,7 @@ import {
   listerRegularisationsAIntegrer,
   listerParametresCabinet,
   listerElementsATraiter,
+  listerAnomaliesTraiteesParTypeEtPiece,
   parametreCabinetValeur,
   listerParametresDossier,
   listerTauxAssignes,
@@ -1276,5 +1278,60 @@ describe('assignerTauxHistoriqueTiersManuel', () => {
     const pourCeCompte = confirmes.filter((c) => c.numeroCompteTiers === compte);
     expect(pourCeCompte).toHaveLength(1);
     expect(pourCeCompte[0]?.tauxHabituel).toBe(5.5);
+  });
+});
+
+describe('listerAnomaliesTraiteesParTypeEtPiece', () => {
+  it('inclut les anomalies résolues et justifiées, exclut les ouvertes', async () => {
+    const periode = '2025-09-01';
+    const anomalies: Anomalie[] = [
+      { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 9101, compte: '445711', description: 'A' },
+      { type: 'parc_vehicules_non_renseigne', gravite: 'signale', ledgerEntryId: 9102, compte: '6061', description: 'B' },
+      { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 9103, compte: '445711', description: 'C' },
+    ];
+    const inserees = await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, anomalies));
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'Dedup1', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `dedup1-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    const [resolu, justifie] = inserees.filter((a) => a.type === 'avoir_a_verifier');
+    await avecClient((client) => resoudreAnomalie(client, resolu!.id, utilisateurId, 'traité'));
+    await avecClient((client) => justifierAnomalie(client, justifie!.id, utilisateurId, 'confirmé normal'));
+    // La 3e (parc_vehicules_non_renseigne) reste 'ouvert', volontairement.
+
+    const traitees = await avecClient((client) => listerAnomaliesTraiteesParTypeEtPiece(client, dossierId));
+
+    expect(traitees.has('avoir_a_verifier:9101')).toBe(true);
+    expect(traitees.has('avoir_a_verifier:9103')).toBe(true);
+    expect(traitees.has('parc_vehicules_non_renseigne:9102')).toBe(false);
+  });
+
+  it('ne mélange pas deux types différents sur le même numéro de pièce', async () => {
+    const periode = '2025-09-02';
+    // Deux anomalies de types différents mais avec le même ledgerEntryId
+    // (arrive en pratique : plusieurs contrôles peuvent viser la même pièce).
+    const anomalies: Anomalie[] = [
+      { type: 'avoir_a_verifier', gravite: 'signale', ledgerEntryId: 9200, compte: '445711', description: 'A' },
+      { type: 'paiement_partiel_a_verifier', gravite: 'signale', ledgerEntryId: 9200, compte: '445711', description: 'B' },
+    ];
+    const inserees = await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, anomalies));
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'Dedup2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `dedup2-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    const avoir = inserees.find((a) => a.type === 'avoir_a_verifier')!;
+    await avecClient((client) => resoudreAnomalie(client, avoir.id, utilisateurId, 'traité'));
+    // paiement_partiel_a_verifier reste ouvert, volontairement.
+
+    const traitees = await avecClient((client) => listerAnomaliesTraiteesParTypeEtPiece(client, dossierId));
+
+    expect(traitees.has('avoir_a_verifier:9200')).toBe(true);
+    expect(traitees.has('paiement_partiel_a_verifier:9200')).toBe(false);
   });
 });
