@@ -27,10 +27,10 @@ export function detecterComptesTvaNonReconnus(
   ecritures: EcritureTvaComplete[],
   config: ConfigComptesTva
 ): Anomalie[] {
-  const groupesParCompte = new Map<string, number[]>();
+  const groupesParCompte = new Map<string, { ledgerEntryIds: number[]; libelles: Set<string> }>();
 
   for (const ecriture of ecritures) {
-    const { compte, ledgerEntryId } = ecriture.ligneTva;
+    const { compte, ledgerEntryId, libelle } = ecriture.ligneTva;
 
     const estReconnu =
       PREFIXES_RECONNUS.some((p) => compte.startsWith(p)) ||
@@ -40,20 +40,25 @@ export function detecterComptesTvaNonReconnus(
 
     if (estReconnu) continue;
 
-    const liste = groupesParCompte.get(compte) ?? [];
-    liste.push(ledgerEntryId);
-    groupesParCompte.set(compte, liste);
+    const groupe = groupesParCompte.get(compte) ?? { ledgerEntryIds: [], libelles: new Set<string>() };
+    groupe.ledgerEntryIds.push(ledgerEntryId);
+    if (libelle && groupe.libelles.size < 3) groupe.libelles.add(libelle);
+    groupesParCompte.set(compte, groupe);
   }
 
   const anomalies: Anomalie[] = [];
-  for (const [compte, ledgerEntryIds] of groupesParCompte) {
+  for (const [compte, { ledgerEntryIds, libelles }] of groupesParCompte) {
     anomalies.push({
       type: 'compte_tva_non_reconnu',
       gravite: 'bloquant',
       ledgerEntryId: ledgerEntryIds[0]!,
       compte,
       description: `Compte de la famille TVA (${compte}) avec du mouvement mais non géré par cette version (ni collecte, ni déductible standard, ni autoliquidation configurée). Potentiellement hors périmètre actuel (ex: intracom) : calcul refusé tant que ce n'est pas vérifié manuellement.`,
-      details: { nbEcritures: ledgerEntryIds.length, references: ledgerEntryIds },
+      // L'id Pennylane brut (ledgerEntryId) ne correspond à rien de
+      // recherchable dans l'interface Pennylane elle-même — les libellés
+      // d'exemple sont la seule info réellement exploitable pour retrouver
+      // la pièce sans passer par un accès API direct.
+      details: { nbEcritures: ledgerEntryIds.length, references: ledgerEntryIds, exemplesLibelle: [...libelles] },
     });
   }
 
