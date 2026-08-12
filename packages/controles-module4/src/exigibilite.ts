@@ -38,7 +38,7 @@ export function determinerExigibiliteTva(
   const anomalies: Anomalie[] = [];
 
   for (const ecriture of ecritures) {
-    const { compte, ledgerEntryId } = ecriture.ligneTva;
+    const { compte, ledgerEntryId, libelle } = ecriture.ligneTva;
     const estCollecte = compte.startsWith(PREFIXE_COLLECTE);
     const estDeductible = PREFIXES_DEDUCTIBLE.some((p) => compte.startsWith(p));
 
@@ -56,6 +56,7 @@ export function determinerExigibiliteTva(
         ledgerEntryId,
         compte,
         description: 'Aucune ligne produit/charge trouvée sur la pièce : nature bien/service non déterminable.',
+        details: { libelle },
       });
       statuts.push({
         ledgerEntryId,
@@ -79,6 +80,7 @@ export function determinerExigibiliteTva(
         compte,
         description:
           'Pièce mêlant des lignes de nature bien et service : exigibilité à vérifier ligne par ligne, non calculée automatiquement.',
+        details: { libelle },
       });
       statuts.push({
         ledgerEntryId,
@@ -112,6 +114,7 @@ export function determinerExigibiliteTva(
         compte,
         description:
           'Prestation de service sans ligne tiers identifiée sur la pièce : exigibilité (TVA sur encaissement) non vérifiable.',
+        details: { libelle },
       });
       statuts.push({
         ledgerEntryId,
@@ -138,7 +141,7 @@ export function determinerExigibiliteTva(
         ledgerEntryId,
         compte,
         description: `Compte tiers ${ligneTiers.compte} : ce règlement est rapproché avec ${ligneTiers.lettrage.groupeIds.length} autres pièces à la fois (pas juste une facture et son paiement). Signe possible d'un paiement partiel dont le montant exigible n'est pas calculé automatiquement ici : à vérifier manuellement dans Pennylane.`,
-        details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds },
+        details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, libelle },
       });
     }
 
