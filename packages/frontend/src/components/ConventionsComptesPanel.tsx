@@ -11,6 +11,12 @@ import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
 import { CLES_CONVENTIONS_COMPTES, LIBELLE_CLE_CONVENTION, type CleConventionCompte, type Proposition } from '../types';
 import { BadgeStatut } from './BadgeStatut';
+import { InfoTooltip } from './InfoTooltip';
+
+// Source de confusion documentée (GLOSSAIRE_PARAMETRES.md) : ce nom laisse
+// penser à de l'autoliquidation, ce n'est pas le cas — cf. brief v3, section 2.
+const INFOBULLE_CHARGE_SERVICE =
+  "Tout achat de prestation de service, autoliquidé ou non — détermine si la TVA déductible attend le paiement de la facture. Pour configurer les comptes d'autoliquidation spécifiquement, voir l'onglet Conventions génériques.";
 
 interface ConventionsComptesPanelProps {
   cabinetId: string;
@@ -210,7 +216,10 @@ export function ConventionsComptesPanel({ cabinetId, dossierId, utilisateurId }:
             .filter((p) => afficherRejetees || p.statut !== 'rejected');
           return (
             <div key={cle} className="convention-compte-groupe">
-              <h3>{LIBELLE_CLE_CONVENTION[cle]}</h3>
+              <h3>
+                {LIBELLE_CLE_CONVENTION[cle]}
+                {cle === 'comptes_charge_service' && <InfoTooltip texte={INFOBULLE_CHARGE_SERVICE} />}
+              </h3>
               {pourCetteCle.length === 0 ? (
                 <p className="empty">Aucune valeur configurée.</p>
               ) : (

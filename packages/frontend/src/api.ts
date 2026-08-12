@@ -81,6 +81,20 @@ export function resoudreAnomalie(
   });
 }
 
+// Restreint aux anomalies encore 'ouvert' côté serveur (les autres ids sont
+// silencieusement ignorés) — un seul commentaire partagé pour tout le lot.
+export function resoudreAnomaliesEnMasse(
+  cabinetId: string,
+  anomalieIds: string[],
+  utilisateurId: string,
+  commentaire: string
+): Promise<{ dossierId: string | null; nombreResolues: number }> {
+  return request<{ dossierId: string | null; nombreResolues: number }>('/anomalies/resoudre-en-masse', cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ anomalieIds, utilisateurId, commentaire }),
+  });
+}
+
 export function justifierAnomalie(
   cabinetId: string,
   id: string,
@@ -256,6 +270,23 @@ export function rejeterTauxHistoriqueTiers(cabinetId: string, id: string, utilis
   return request<void>(`/taux-historique-tiers/${id}/rejeter`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId }),
+  });
+}
+
+// Assignation directe d'un taux habituel pour un compte client, sans
+// attendre la détection automatique sur historique lettré (qui reste
+// candidate/confirmed dans l'onglet Taux historique) — confirme
+// immédiatement, remplace toute confirmation précédente pour ce compte.
+export function assignerTauxHistoriqueTiersManuel(
+  cabinetId: string,
+  dossierId: string,
+  numeroCompteTiers: string,
+  tauxHabituel: number,
+  utilisateurId: string
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/taux-historique-tiers/assigner`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ numeroCompteTiers, tauxHabituel, utilisateurId }),
   });
 }
 

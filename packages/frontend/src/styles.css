@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --bg: #f6f7fa;
   --bg-raised: #ffffff;
@@ -254,6 +254,28 @@ body {
 
 .sidebar-footer-label input::placeholder {
   color: rgba(255, 255, 255, 0.6);
+}
+
+.zone-intro {
+  margin-bottom: 1.25rem;
+}
+
+.zone-intro h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+
+.zone-description,
+.sous-onglet-description {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+  max-width: 62ch;
+}
+
+.sous-onglet-description {
+  margin: -0.5rem 0 1rem;
 }
 
 .app-main {
@@ -729,8 +751,46 @@ button:focus-visible {
 }
 
 .convention-compte-groupe h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.9rem;
   margin: 0 0 0.5rem;
+}
+
+/* --- Info-bulle --- */
+
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.info-tooltip-bulle {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: 260px;
+  background: var(--text);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  box-shadow: 0 4px 14px rgba(23, 27, 33, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  z-index: 10;
+}
+
+.info-tooltip:hover .info-tooltip-bulle,
+.info-tooltip:focus-visible .info-tooltip-bulle {
+  opacity: 1;
+  visibility: visible;
 }
 
 .card.compte-confirme {

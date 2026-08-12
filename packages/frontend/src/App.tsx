@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { ATraiterPanel } from './components/ATraiterPanel';
 import { ParametresPanel } from './components/ParametresPanel';
 import { ProgressionPanel } from './components/ProgressionPanel';
-import { Sidebar, type Zone } from './components/Sidebar';
+import { Sidebar, ZONES, type Zone } from './components/Sidebar';
 import { ConfigurationZone, type SousOngletConfiguration } from './components/zones/ConfigurationZone';
 import { CycleZone } from './components/zones/CycleZone';
 import { HistoriqueZone } from './components/zones/HistoriqueZone';
@@ -172,6 +172,11 @@ export function App() {
               refreshKey={aTraiterRefreshKey}
             />
             <ProgressionPanel cabinetId={cabinetId} dossierId={dossier.id} refreshKey={aTraiterRefreshKey} />
+
+            <div className="zone-intro">
+              <h1>{ZONES.find((z) => z.id === zone)?.libelle}</h1>
+              <p className="zone-description">{ZONES.find((z) => z.id === zone)?.description}</p>
+            </div>
 
             <main className="app-main">
               {zone === 'cycle' && (

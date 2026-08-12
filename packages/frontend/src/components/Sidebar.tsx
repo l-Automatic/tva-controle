@@ -6,11 +6,30 @@ import type { Dossier } from '../types';
 
 export type Zone = 'cycle' | 'configuration' | 'historique' | 'parametres';
 
-const ZONES: { id: Zone; libelle: string }[] = [
-  { id: 'cycle', libelle: 'Cycle' },
-  { id: 'configuration', libelle: 'Configuration du dossier' },
-  { id: 'historique', libelle: 'Historique' },
-  { id: 'parametres', libelle: 'Paramètres' },
+export const ZONES: { id: Zone; libelle: string; description: string }[] = [
+  {
+    id: 'cycle',
+    libelle: 'Cycle',
+    description:
+      'Lance un calcul de TVA sur une période, affiche le résultat et les anomalies à traiter pour ce cycle précis.',
+  },
+  {
+    id: 'configuration',
+    libelle: 'Configuration du dossier',
+    description:
+      "Réglages fiscaux durables du dossier — s'appliquent à tous les cycles tant qu'ils ne sont pas modifiés.",
+  },
+  {
+    id: 'historique',
+    libelle: 'Historique',
+    description: 'Calculs et anomalies de toutes les périodes passées, journal d’audit complet.',
+  },
+  {
+    id: 'parametres',
+    libelle: 'Paramètres',
+    description:
+      'Réglages techniques — clé Mistral (cabinet), et décisions déjà validées modifiables (confiance des tiers, comptes retirés d’une convention, taux rejetés).',
+  },
 ];
 
 interface SidebarProps {

@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pencil, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import {
   ApiError,
-  assignerTauxCompte,
   corrigerNiveauConfianceTiers,
   fetchConventions,
-  fetchTauxAssignes,
   fetchTauxHistorique,
   fetchTauxHistoriqueTiers,
   fetchTiersReference,
@@ -13,18 +11,13 @@ import {
   rejeterTauxHistoriqueTiers,
   retirerCompteConvention,
 } from '../api';
-import { formatDate } from '../dateUtils';
 import { useToast } from '../toast';
 import {
   CLES_CONVENTIONS_COMPTES,
   LIBELLE_CLE_CONVENTION,
-  LIBELLE_TAUX_ASSIGNE,
-  VALEURS_TAUX_ASSIGNE,
   type CleConventionCompte,
   type NiveauConfianceTiers,
   type Proposition,
-  type TauxAssigne,
-  type TauxAssigneEntry,
   type TiersReference,
 } from '../types';
 
@@ -281,115 +274,6 @@ function TauxConfirmesSection({ cabinetId, dossierId, utilisateurId }: SectionPr
   );
 }
 
-function TauxAssigneSection({ cabinetId, dossierId, utilisateurId }: SectionProps) {
-  const [assignations, setAssignations] = useState<TauxAssigneEntry[]>([]);
-  const [compte, setCompte] = useState('');
-  const [taux, setTaux] = useState<TauxAssigne>('20');
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const notifier = useToast();
-
-  async function charger() {
-    setLoading(true);
-    setError(null);
-    try {
-      setAssignations(await fetchTauxAssignes(cabinetId, dossierId));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Impossible de charger les taux assignés');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (cabinetId && dossierId) void charger();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cabinetId, dossierId]);
-
-  async function handleAssigner(compteCible: string, tauxCible: TauxAssigne) {
-    if (!compteCible.trim()) {
-      setError('Un numéro de compte est requis');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await assignerTauxCompte(cabinetId, dossierId, compteCible.trim(), tauxCible, utilisateurId);
-      notifier('Taux assigné');
-      setCompte('');
-      await charger();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Échec de l’assignation');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="panel-section">
-      <div className="panel-header">
-        <h3>Taux assigné par compte</h3>
-      </div>
-      <p className="reference">
-        Assignation directe, pour un futur contrôle de cohérence de fin d’exercice (pas encore construit) — pas de
-        candidate/confirmed, juste la valeur courante.
-      </p>
-      {error && <p className="error">{error}</p>}
-      {!loading && assignations.length === 0 && <p className="empty">Aucun taux assigné pour l’instant.</p>}
-      <ul className="card-list">
-        {assignations.map((a) => (
-          <li key={a.compte} className="card">
-            <p className="label">
-              Compte {a.compte} : <strong>{LIBELLE_TAUX_ASSIGNE[a.tauxAssigne]}</strong>
-            </p>
-            <p className="reference">Mis à jour {formatDate(a.updatedAt)}</p>
-            <div className="actions">
-              <select
-                defaultValue={a.tauxAssigne}
-                disabled={submitting}
-                onChange={(e) => void handleAssigner(a.compte, e.target.value as TauxAssigne)}
-              >
-                {VALEURS_TAUX_ASSIGNE.map((v) => (
-                  <option key={v} value={v}>
-                    {LIBELLE_TAUX_ASSIGNE[v]}
-                  </option>
-                ))}
-              </select>
-              <Pencil size={14} aria-hidden="true" className="reference" />
-            </div>
-          </li>
-        ))}
-      </ul>
-      <div className="cycle-form">
-        <label>
-          Compte
-          <input
-            type="text"
-            placeholder="ex : 706100"
-            value={compte}
-            onChange={(e) => setCompte(e.target.value)}
-            disabled={submitting}
-          />
-        </label>
-        <label>
-          Taux
-          <select value={taux} onChange={(e) => setTaux(e.target.value as TauxAssigne)} disabled={submitting}>
-            {VALEURS_TAUX_ASSIGNE.map((v) => (
-              <option key={v} value={v}>
-                {LIBELLE_TAUX_ASSIGNE[v]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button onClick={() => void handleAssigner(compte, taux)} disabled={submitting}>
-          {submitting ? '…' : 'Assigner'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // Vue et correction de toutes les décisions déjà validées sur ce dossier —
 // distinct des écrans de traitement (Configuration/Cycle) qui ne montrent
 // que ce qui est encore en attente (cf. brief v2, section 6).
@@ -404,8 +288,6 @@ export function ParametresDecisionsPanel({ cabinetId, dossierId, utilisateurId }
       <ConventionsComptesRetraitSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <div className="panel-separateur" />
       <TauxConfirmesSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      <div className="panel-separateur" />
-      <TauxAssigneSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
     </section>
   );
 }

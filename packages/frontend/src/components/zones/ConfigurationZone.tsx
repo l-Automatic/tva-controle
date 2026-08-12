@@ -1,10 +1,11 @@
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
 import { TauxHistoriquePanel } from '../TauxHistoriquePanel';
+import { TauxAssigneZone } from './TauxAssigneZone';
 import { confirmerConvention, fetchConventions, rejeterConvention } from '../../api';
 import { CLES_CONVENTIONS_COMPTES, type CleConventionCompte, type Proposition } from '../../types';
 
-export type SousOngletConfiguration = 'comptes' | 'generiques' | 'taux';
+export type SousOngletConfiguration = 'comptes' | 'generiques' | 'taux' | 'tauxAssigne';
 
 interface ConfigurationZoneProps {
   cabinetId: string;
@@ -14,10 +15,31 @@ interface ConfigurationZoneProps {
   onChangeSousOnglet: (onglet: SousOngletConfiguration) => void;
 }
 
-const ONGLETS: { id: SousOngletConfiguration; libelle: string }[] = [
-  { id: 'comptes', libelle: 'Conventions de comptes' },
-  { id: 'generiques', libelle: 'Conventions génériques' },
-  { id: 'taux', libelle: 'Taux historique' },
+const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: string }[] = [
+  {
+    id: 'comptes',
+    libelle: 'Conventions de comptes',
+    description:
+      'Catégorise chaque compte de charge/produit en service, équipement, ou carburant — détermine si la TVA suit la règle du paiement (service) ou de la facturation (bien).',
+  },
+  {
+    id: 'generiques',
+    libelle: 'Conventions génériques',
+    description:
+      "Réglages ponctuels sans catégorie dédiée — aujourd'hui, les comptes utilisés pour l'autoliquidation (prestations intracommunautaires).",
+  },
+  {
+    id: 'taux',
+    libelle: 'Taux historique',
+    description:
+      "Vérifie que le taux de TVA appliqué correspond à l'habitude du dossier — signale un écart, ne choisit rien à ta place.",
+  },
+  {
+    id: 'tauxAssigne',
+    libelle: 'Taux assigné',
+    description:
+      'Attribue directement un taux de TVA à un compte ou un client, une fois pour toutes — utile pour un contrôle de cohérence en fin d’exercice, ou pour éviter d’attendre qu’un historique se constitue.',
+  },
 ];
 
 function libelleConvention(proposition: Proposition): string {
@@ -41,6 +63,8 @@ export function ConfigurationZone({
   sousOnglet,
   onChangeSousOnglet,
 }: ConfigurationZoneProps) {
+  const ongletActif = ONGLETS.find((o) => o.id === sousOnglet);
+
   return (
     <div>
       <nav className="sous-onglets">
@@ -54,6 +78,7 @@ export function ConfigurationZone({
           </button>
         ))}
       </nav>
+      {ongletActif && <p className="sous-onglet-description">{ongletActif.description}</p>}
 
       {sousOnglet === 'comptes' && (
         <ConventionsComptesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
@@ -72,6 +97,9 @@ export function ConfigurationZone({
       )}
       {sousOnglet === 'taux' && (
         <TauxHistoriquePanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      )}
+      {sousOnglet === 'tauxAssigne' && (
+        <TauxAssigneZone cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}
     </div>
   );

@@ -1,16 +1,33 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { CheckCheck, RefreshCw } from 'lucide-react';
 import {
   ApiError,
   fetchAnomalies,
   justifierAnomalie,
   qualifierEncaissement,
   resoudreAnomalie,
+  resoudreAnomaliesEnMasse,
 } from '../api';
 import { ICONE_ACTION, iconeTypeAnomalie } from '../icons';
 import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
 import { BadgeStatut } from './BadgeStatut';
+
+// Les 12 types possibles, libellés lisibles — cf. CATALOGUE_ANOMALIES.md.
+const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
+  compte_tva_non_reconnu: 'Compte de TVA non reconnu',
+  encaissement_non_affecte: 'Encaissement non affecté',
+  nature_operation_indeterminee: "Nature de l'opération indéterminée",
+  nature_operation_mixte: "Nature de l'opération mixte",
+  ligne_tiers_introuvable: 'Ligne tiers introuvable',
+  paiement_partiel_a_verifier: 'Paiement partiel à vérifier',
+  avoir_a_verifier: 'Avoir à vérifier',
+  parc_vehicules_non_renseigne: 'Parc de véhicules non renseigné',
+  flotte_mixte_carburant: 'Flotte mixte (carburant)',
+  immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
+  nouveau_tiers_a_verifier: 'Nouveau tiers à vérifier',
+  encaissement_client_taux_applique: 'Encaissement client — taux appliqué',
+};
 
 interface AnomaliesPanelProps {
   cabinetId: string;
@@ -263,7 +280,7 @@ function AnomalieRow({
             const Icone = iconeTypeAnomalie(anomalie.typeAnomalie);
             return <Icone size={13} aria-hidden="true" />;
           })()}
-          {anomalie.typeAnomalie}
+          {LIBELLE_TYPE_ANOMALIE[anomalie.typeAnomalie] ?? anomalie.typeAnomalie}
         </span>
         <span className="periode">{anomalie.periode}</span>
       </div>
@@ -319,6 +336,73 @@ function AnomalieRow({
 }
 
 const TOUS_STATUTS = 'tous';
+const TOUS_TYPES = 'tous';
+
+function ResolutionMasse({
+  cabinetId,
+  utilisateurId,
+  anomalieIds,
+  onResolues,
+}: {
+  cabinetId: string;
+  utilisateurId: string;
+  anomalieIds: string[];
+  onResolues: () => void;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+  const [commentaire, setCommentaire] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleConfirmer() {
+    if (!commentaire.trim()) {
+      setError('Un commentaire est requis pour une résolution groupée');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { nombreResolues } = await resoudreAnomaliesEnMasse(cabinetId, anomalieIds, utilisateurId, commentaire.trim());
+      notifier(`${nombreResolues} anomalie(s) résolue(s)`);
+      setOuvert(false);
+      setCommentaire('');
+      onResolues();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la résolution groupée');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button onClick={() => setOuvert(true)} disabled={anomalieIds.length === 0}>
+        <CheckCheck size={14} aria-hidden="true" />
+        Tout résoudre ({anomalieIds.length})
+      </button>
+    );
+  }
+
+  return (
+    <div className="actions">
+      <input
+        type="text"
+        placeholder="Commentaire (requis, partagé pour tout le lot)"
+        value={commentaire}
+        onChange={(e) => setCommentaire(e.target.value)}
+        disabled={submitting}
+      />
+      <button onClick={() => void handleConfirmer()} disabled={submitting}>
+        {submitting ? '…' : `Résoudre les ${anomalieIds.length} anomalies`}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
 
 export function AnomaliesPanel({
   cabinetId,
@@ -332,7 +416,7 @@ export function AnomaliesPanel({
   const [error, setError] = useState<string | null>(null);
   const [afficherTraitees, setAfficherTraitees] = useState(false);
   const [filtreStatut, setFiltreStatut] = useState<typeof TOUS_STATUTS | StatutAnomalie>(TOUS_STATUTS);
-  const [filtreType, setFiltreType] = useState('');
+  const [filtreType, setFiltreType] = useState(TOUS_TYPES);
 
   async function charger() {
     setLoading(true);
@@ -359,9 +443,10 @@ export function AnomaliesPanel({
         : anomalies.filter((a) => a.statut === 'ouvert')
       : anomalies
           .filter((a) => filtreStatut === TOUS_STATUTS || a.statut === filtreStatut)
-          .filter((a) => !filtreType.trim() || a.typeAnomalie.toLowerCase().includes(filtreType.trim().toLowerCase()))
+          .filter((a) => filtreType === TOUS_TYPES || a.typeAnomalie === filtreType)
   );
   const nbOuvertes = anomalies.filter((a) => a.statut === 'ouvert').length;
+  const idsOuvertesVisibles = visibles.filter((a) => a.statut === 'ouvert').map((a) => a.id);
 
   return (
     <section className={variant === 'cycle' ? 'panel-section' : 'panel panel-full'}>
@@ -387,12 +472,22 @@ export function AnomaliesPanel({
               <option value="resolu">Résolues</option>
               <option value="justifie">Justifiées</option>
             </select>
-            <input
-              type="text"
-              placeholder="Filtrer par type (ex : taux_incoherent)"
-              value={filtreType}
-              onChange={(e) => setFiltreType(e.target.value)}
-            />
+            <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
+              <option value={TOUS_TYPES}>Tous les types</option>
+              {Object.entries(LIBELLE_TYPE_ANOMALIE).map(([type, libelle]) => (
+                <option key={type} value={type}>
+                  {libelle}
+                </option>
+              ))}
+            </select>
+            {filtreType !== TOUS_TYPES && (
+              <ResolutionMasse
+                cabinetId={cabinetId}
+                utilisateurId={utilisateurId}
+                anomalieIds={idsOuvertesVisibles}
+                onResolues={() => void charger()}
+              />
+            )}
           </>
         )}
         <button onClick={() => void charger()} disabled={loading}>
