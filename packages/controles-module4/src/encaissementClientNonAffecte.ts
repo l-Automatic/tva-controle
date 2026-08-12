@@ -9,6 +9,8 @@ export interface RegularisationClientAAppliquer {
   source: 'taux_historique' | 'defaut_prudence_20';
 }
 
+export type RegimeTvaEncaissement = 'service' | 'bien' | 'mixte';
+
 const TAUX_PRUDENCE_PAR_DEFAUT = 20;
 
 // Chantier B : par prudence fiscale (le droit de collecter appartient à
@@ -16,18 +18,36 @@ const TAUX_PRUDENCE_PAR_DEFAUT = 20;
 // collectée même sans facture rapprochée — contrairement au compte
 // d'attente 471 (encaissementNonAffecte.ts), qui bloque et attend une
 // qualification humaine avant toute inclusion, ici on applique un taux par
-// défaut DIRECTEMENT, sans bloquer :
-//   - taux historique confirmé et mono-taux pour ce compte client -> ce taux
-//   - sinon (compte mixte ou jamais vu) -> 20%, le taux le plus élevé
+// défaut DIRECTEMENT, sans bloquer.
 //
-// Une anomalie 'signale' (jamais bloquante) trace systématiquement la
-// décision prise, pour que le collaborateur puisse la corriger s'il a une
-// information contraire (ex : il sait que c'est un acompte à 10%) — voir
-// qualifierEncaissementClient côté orchestrateur pour la correction.
+// Mais ATTENTION (correction du 09/08, vrai bug trouvé après relecture de
+// la conversation d'origine) : cette règle n'est valable QUE pour un
+// encaissement lié à une prestation de SERVICE. Sur un bien, un acompte
+// n'ouvre AUCUN droit à collecte (art. 269-2-a CGI) — la TVA sur bien est
+// exigible à la facturation/livraison, jamais à l'encaissement. Appliquer
+// 20% par défaut sur un acompte de bien serait une sur-collecte à tort.
+//
+// D'où regimeTvaEncaissement, paramètre dossier (paramétré une fois,
+// jamais déduit automatiquement) :
+//   - 'service' : le dossier ne vend (quasi) que des prestations -> la
+//     règle ci-dessous s'applique normalement (comportement historique).
+//   - 'bien' : le dossier vend des biens (ou encaisse comptant, ex: un
+//     commerce avec caisse — payé tout de suite, donc immédiatement
+//     collectable de toute façon, bien ou service) -> AUCUNE régularisation
+//     ici, un encaissement non lettré sur ce type de dossier ne doit rien
+//     déclencher automatiquement.
+//   - 'mixte' : on ne peut pas savoir sans info supplémentaire si tel
+//     encaissement précis se rapporte à un bien ou un service -> on garde
+//     le comportement prudent actuel (20% par défaut), comme avant ce fix.
 export function detecterEncaissementsClientAAffecter(
   lignes: LigneEcritureAvecLettrage[],
-  contexteDossier: ContexteDossier
+  contexteDossier: ContexteDossier,
+  regimeTvaEncaissement: RegimeTvaEncaissement = 'service'
 ): { regularisations: RegularisationClientAAppliquer[]; anomalies: Anomalie[] } {
+  if (regimeTvaEncaissement === 'bien') {
+    return { regularisations: [], anomalies: [] };
+  }
+
   const regularisations: RegularisationClientAAppliquer[] = [];
   const anomalies: Anomalie[] = [];
 
