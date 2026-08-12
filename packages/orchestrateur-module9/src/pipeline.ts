@@ -17,6 +17,10 @@ import {
   detecterEncaissementsClientAAffecter,
   identifierComptesACategoriser,
   type CompteACategoriser,
+  identifierComptesSansTauxAssigne,
+  identifierComptesClientSansTaux,
+  type CompteSansTauxAssigne,
+  type CompteClientSansTauxAssigne,
 } from '@tva-controle/controles-module4';
 import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
 import { analyserTauxHistorique, analyserTauxHistoriqueParTiers } from '@tva-controle/onboarding-module3';
@@ -35,6 +39,7 @@ import {
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
   listerAnomaliesTraiteesParTypeEtPiece,
+  listerTauxAssignes,
 } from './db/readRepository.js';
 
 export interface ParametresCycleTva {
@@ -76,13 +81,21 @@ export interface ParametresCycleTva {
 }
 
 export type ResultatCycleTva =
-  | { statut: 'bloque'; anomalies: Anomalie[]; comptesACategoriser: CompteACategoriser[] }
+  | {
+      statut: 'bloque';
+      anomalies: Anomalie[];
+      comptesACategoriser: CompteACategoriser[];
+      comptesSansTauxAssigne: CompteSansTauxAssigne[];
+      comptesClientSansTaux: CompteClientSansTauxAssigne[];
+    }
   | {
       statut: 'calcule';
       anomalies: Anomalie[];
       resultat: ResultatCalculTva;
       calculId: string;
       comptesACategoriser: CompteACategoriser[];
+      comptesSansTauxAssigne: CompteSansTauxAssigne[];
+      comptesClientSansTaux: CompteClientSansTauxAssigne[];
     };
 
 // Enchaîne : charge le contexte dossier (Module 2) -> récupère les écritures
@@ -159,6 +172,25 @@ export async function executerCycleTva(
     comptesEquipement,
     comptesCarburant,
   });
+
+  // Suggestions pour l'onglet "Taux assigné" (09/08) — comptes mouvementés
+  // sans taux encore assigné, produit/charge et client.
+  const tauxAssignesExistants = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerTauxAssignes(client, params.dossierId)
+  );
+  const comptesSansTauxAssigne = identifierComptesSansTauxAssigne(
+    ecritures,
+    tauxAssignesExistants.map((t) => t.compte)
+  );
+  // contexteDossier.tauxHistorique contient déjà les taux clients confirmés
+  // (fusionnés avec ceux de compte produit/charge dans chargerContexteDossier,
+  // cf. dossierRepository.ts) — les comptes 445xxx y figurent aussi
+  // (collecte), donc on exclut ce préfixe pour ne garder que les comptes
+  // client (411xxx typiquement) déjà connus.
+  const comptesClientConnusAvecTaux = contexteDossier.tauxHistorique
+    .map((t) => t.compteOuTiers)
+    .filter((c) => !c.startsWith('445'));
+  const comptesClientSansTaux = identifierComptesClientSansTaux(ecritures, comptesClientConnusAvecTaux);
 
   const anomaliesPreControles = executerPreControles(ecritures, {
     contexteDossier,
@@ -312,7 +344,13 @@ export async function executerCycleTva(
         },
       })
     );
-    return { statut: 'bloque', anomalies: toutesAnomalies, comptesACategoriser };
+    return {
+      statut: 'bloque',
+      anomalies: toutesAnomalies,
+      comptesACategoriser,
+      comptesSansTauxAssigne,
+      comptesClientSansTaux,
+    };
   }
 
   if (process.env.DEBUG_CYCLE) {
@@ -384,5 +422,13 @@ export async function executerCycleTva(
     return id;
   });
 
-  return { statut: 'calcule', anomalies: toutesAnomalies, resultat, calculId, comptesACategoriser };
+  return {
+    statut: 'calcule',
+    anomalies: toutesAnomalies,
+    resultat,
+    calculId,
+    comptesACategoriser,
+    comptesSansTauxAssigne,
+    comptesClientSansTaux,
+  };
 }
