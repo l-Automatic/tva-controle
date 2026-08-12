@@ -40,6 +40,7 @@ import {
   listerRegularisationsAIntegrer,
   listerAnomaliesTraiteesParTypeEtPiece,
   listerTauxAssignes,
+  parametreDossierValeur,
 } from './db/readRepository.js';
 
 export interface ParametresCycleTva {
@@ -256,8 +257,23 @@ export async function executerCycleTva(
           periodeFin: params.periodeFin,
         })
       : [];
-  const { regularisations: regularisationsClient, anomalies: anomaliesClient } =
-    detecterEncaissementsClientAAffecter(lignesClient, contexteDossier);
+  // Régime TVA sur encaissement (09/08) : 'service' par défaut si non
+  // paramétré (comportement historique, rétrocompatible avec les dossiers
+  // déjà en test). Un dossier vendant des biens (ou fonctionnant en caisse
+  // comptant) doit être explicitement basculé sur 'bien' dans les
+  // paramètres du dossier, sinon les acomptes sur biens seraient à tort
+  // soumis à la règle "collecte à l'encaissement" (art. 269-2-a CGI : pas
+  // de TVA sur un acompte de bien).
+  const regimeTvaEncaissementBrut = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    parametreDossierValeur(client, params.dossierId, 'regime_tva_encaissement')
+  );
+  const regimeTvaEncaissement: 'service' | 'bien' | 'mixte' =
+    regimeTvaEncaissementBrut === 'bien' || regimeTvaEncaissementBrut === 'mixte' ? regimeTvaEncaissementBrut : 'service';
+  const { regularisations: regularisationsClient, anomalies: anomaliesClient } = detecterEncaissementsClientAAffecter(
+    lignesClient,
+    contexteDossier,
+    regimeTvaEncaissement
+  );
 
   const { statuts: statutsTiers, anomalies: anomaliesTiers } = verifierNouveauxTiers(ecritures, contexteDossier);
 
