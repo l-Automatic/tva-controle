@@ -25,6 +25,7 @@ export { verifierNouveauxTiers, type StatutTiers } from './tiersReference.js';
 export {
   detecterEncaissementsClientAAffecter,
   type RegularisationClientAAppliquer,
+  type RegimeTvaEncaissement,
 } from './encaissementClientNonAffecte.js';
 export {
   identifierComptesACategoriser,
