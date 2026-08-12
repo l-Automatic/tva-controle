@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { ApiError, lancerCycle } from '../api';
 import { useToast } from '../toast';
-import type { CompteACategoriser, ResultatCycle } from '../types';
+import type { ResultatCycle } from '../types';
 
 interface CycleFormProps {
   cabinetId: string;
   dossierId: string;
-  onCycleLance?: (periodeDebut: string, periodeFin: string, comptesACategoriser: CompteACategoriser[]) => void;
+  onCycleLance?: (periodeDebut: string, periodeFin: string, resultat: ResultatCycle) => void;
 }
 
 const LIBELLE_CATEGORIE: Record<string, string> = {
@@ -126,7 +126,7 @@ export function CycleForm({ cabinetId, dossierId, onCycleLance }: CycleFormProps
       setResultat(res);
       setPennylaneToken('');
       notifier(res.statut === 'bloque' ? 'Cycle bloqué — anomalies à traiter' : 'Cycle calculé');
-      onCycleLance?.(periodeDebut, periodeFin, res.comptesACategoriser);
+      onCycleLance?.(periodeDebut, periodeFin, res);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setDejaValide(true);

@@ -5,7 +5,7 @@ import { AnomaliesPanel } from '../AnomaliesPanel';
 import { CalculRow } from '../CalculsPanel';
 import { CategorisationPopup } from '../CategorisationPopup';
 import { CycleForm } from '../CycleForm';
-import type { Calcul, CompteACategoriser } from '../../types';
+import type { Calcul, CompteACategoriser, CompteClientSansTauxAssigne, CompteSansTauxAssigne } from '../../types';
 
 interface CycleZoneProps {
   cabinetId: string;
@@ -13,6 +13,7 @@ interface CycleZoneProps {
   utilisateurId: string;
   periode: { debut: string; fin: string } | null;
   onPeriodeChange: (periode: { debut: string; fin: string } | null) => void;
+  onSuggestionsTaux: (comptes: CompteSansTauxAssigne[], clients: CompteClientSansTauxAssigne[]) => void;
 }
 
 function CalculsDuCycle({
@@ -73,7 +74,14 @@ function CalculsDuCycle({
 // résultat, anomalies de la période et validation/rejet du calcul dans un
 // seul flux, plutôt que trois panneaux séparés à faire défiler (cf. brief
 // refonte, section 3).
-export function CycleZone({ cabinetId, dossierId, utilisateurId, periode, onPeriodeChange }: CycleZoneProps) {
+export function CycleZone({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  periode,
+  onPeriodeChange,
+  onSuggestionsTaux,
+}: CycleZoneProps) {
   const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
 
   useEffect(() => {
@@ -97,9 +105,10 @@ export function CycleZone({ cabinetId, dossierId, utilisateurId, periode, onPeri
       <CycleForm
         cabinetId={cabinetId}
         dossierId={dossierId}
-        onCycleLance={(debut, fin, comptes) => {
+        onCycleLance={(debut, fin, resultat) => {
           onPeriodeChange({ debut, fin });
-          if (comptes.length > 0) setComptesACategoriser(comptes);
+          if (resultat.comptesACategoriser.length > 0) setComptesACategoriser(resultat.comptesACategoriser);
+          onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
         }}
       />
       {periode && (

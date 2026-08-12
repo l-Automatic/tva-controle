@@ -55,7 +55,7 @@ export type CleConventionCompte = (typeof CLES_CONVENTIONS_COMPTES)[number];
 
 export const LIBELLE_CLE_CONVENTION: Record<CleConventionCompte, string> = {
   comptes_vente_service: 'Comptes de vente de service',
-  comptes_charge_service: 'Comptes de charge de service (sous-traitance)',
+  comptes_charge_service: 'Comptes de charge de service',
   comptes_equipement: 'Comptes d’équipement (immobilisations)',
   comptes_carburant: 'Comptes de carburant',
 };
@@ -98,14 +98,37 @@ export interface CompteACategoriser {
   exemplesLibelle: string[];
 }
 
+// Comptes produit/charge (classes 6/7) mouvementés sans taux assigné, et
+// comptes clients mouvementés sans taux historique ni assignation manuelle
+// — suggestions pour l'onglet Taux assigné (brief v4, section 4), même
+// principe que comptesACategoriser mais pour le taux plutôt que la
+// convention.
+export interface CompteSansTauxAssigne {
+  compte: string;
+  exemplesLibelle: string[];
+}
+
+export interface CompteClientSansTauxAssigne {
+  numeroCompteTiers: string;
+  nomTiers: string | null;
+}
+
 export type ResultatCycle =
-  | { statut: 'bloque'; anomalies: AnomalieCycle[]; comptesACategoriser: CompteACategoriser[] }
+  | {
+      statut: 'bloque';
+      anomalies: AnomalieCycle[];
+      comptesACategoriser: CompteACategoriser[];
+      comptesSansTauxAssigne: CompteSansTauxAssigne[];
+      comptesClientSansTaux: CompteClientSansTauxAssigne[];
+    }
   | {
       statut: 'calcule';
       anomalies: AnomalieCycle[];
       resultat: ResultatCalculCycle;
       calculId: string;
       comptesACategoriser: CompteACategoriser[];
+      comptesSansTauxAssigne: CompteSansTauxAssigne[];
+      comptesClientSansTaux: CompteClientSansTauxAssigne[];
     };
 
 // --- Calculs persistés (panneau "Calculs") ---
@@ -186,15 +209,15 @@ export const VALEURS_TAUX_ASSIGNE = [
 export type TauxAssigne = (typeof VALEURS_TAUX_ASSIGNE)[number];
 
 export const LIBELLE_TAUX_ASSIGNE: Record<TauxAssigne, string> = {
-  '0': '0 %',
-  '2.1': '2,1 %',
-  '5.5': '5,5 %',
-  '10': '10 %',
-  '20': '20 %',
-  autoliquide_intracom: 'Autoliquidé — intracommunautaire',
-  autoliquide_20: 'Autoliquidé — 20 %',
-  autoliquide_10: 'Autoliquidé — 10 %',
-  'autoliquide_5.5': 'Autoliquidé — 5,5 %',
+  '0': 'Exonéré (0%)',
+  '2.1': '2,1%',
+  '5.5': '5,5%',
+  '10': '10%',
+  '20': '20%',
+  autoliquide_intracom: 'Intracommunautaire (taux non précisé)',
+  autoliquide_20: 'Intracommunautaire - 20%',
+  autoliquide_10: 'Intracommunautaire - 10%',
+  'autoliquide_5.5': 'Intracommunautaire - 5,5%',
 };
 
 export interface TauxAssigneEntry {

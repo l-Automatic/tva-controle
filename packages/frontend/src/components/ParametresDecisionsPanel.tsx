@@ -253,7 +253,7 @@ function TauxConfirmesSection({ cabinetId, dossierId, utilisateurId }: SectionPr
         {toutes.map(({ p, estTiers }) => (
           <li key={p.id} className="card proposition">
             <div className="card-header">
-              <span className="badge badge-origine">{estTiers ? 'Compte client' : 'Compte produit/charge'}</span>
+              <span className="badge badge-origine">{estTiers ? 'Compte client' : 'Compte de TVA collectée'}</span>
             </div>
             <p className="label">
               {estTiers ? p.numeroCompteTiers : p.compteProduitOuCharge} — taux habituel {p.tauxHabituel}%

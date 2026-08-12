@@ -13,6 +13,8 @@ import {
   CLES_CONVENTIONS_COMPTES,
   DEGRADE_PAR_DEFAUT,
   type CleConventionCompte,
+  type CompteClientSansTauxAssigne,
+  type CompteSansTauxAssigne,
   type Dossier,
   type ElementATraiter,
 } from './types';
@@ -53,6 +55,8 @@ export function App() {
   const [periodeCycle, setPeriodeCycle] = useState<{ debut: string; fin: string } | null>(null);
   const [aTraiterRefreshKey, setATraiterRefreshKey] = useState(0);
   const [degrade, setDegrade] = useState<string>(DEGRADE_PAR_DEFAUT);
+  const [suggestionsTauxComptes, setSuggestionsTauxComptes] = useState<CompteSansTauxAssigne[]>([]);
+  const [suggestionsTauxClients, setSuggestionsTauxClients] = useState<CompteClientSansTauxAssigne[]>([]);
 
   const { cabinetId, utilisateurId } = identite;
 
@@ -84,6 +88,8 @@ export function App() {
     setZone('cycle');
     setPeriodeCycle(null);
     setATraiterRefreshKey((k) => k + 1);
+    setSuggestionsTauxComptes([]);
+    setSuggestionsTauxClients([]);
   }
 
   function allerVersZone(z: Zone) {
@@ -186,6 +192,10 @@ export function App() {
                   utilisateurId={utilisateurId}
                   periode={periodeCycle}
                   onPeriodeChange={setPeriodeCycle}
+                  onSuggestionsTaux={(comptes, clients) => {
+                    setSuggestionsTauxComptes(comptes);
+                    setSuggestionsTauxClients(clients);
+                  }}
                 />
               )}
               {zone === 'configuration' && (
@@ -195,6 +205,14 @@ export function App() {
                   utilisateurId={utilisateurId}
                   sousOnglet={sousOngletConfiguration}
                   onChangeSousOnglet={setSousOngletConfiguration}
+                  suggestionsTauxComptes={suggestionsTauxComptes}
+                  suggestionsTauxClients={suggestionsTauxClients}
+                  onSuggestionTauxCompteConsommee={(compte) =>
+                    setSuggestionsTauxComptes((prev) => prev.filter((c) => c.compte !== compte))
+                  }
+                  onSuggestionTauxClientConsommee={(numeroCompteTiers) =>
+                    setSuggestionsTauxClients((prev) => prev.filter((c) => c.numeroCompteTiers !== numeroCompteTiers))
+                  }
                 />
               )}
               {zone === 'historique' && (

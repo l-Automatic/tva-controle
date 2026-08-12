@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { ApiError } from '../api';
 import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
@@ -15,6 +15,11 @@ interface PropositionsPanelProps {
   confirmer: (cabinetId: string, id: string, utilisateurId: string) => Promise<void>;
   rejeter: (cabinetId: string, id: string, utilisateurId: string) => Promise<void>;
   renderLabel: (proposition: Proposition) => string;
+  // Optionnel : si fourni, affiche un formulaire d'ajout clé/valeur libre
+  // au-dessus de la liste — même mécanique que Conventions de comptes, sans
+  // laquelle il n'existait aucun moyen de re-créer une convention perdue
+  // (cf. brief v4, section 3).
+  ajouter?: (cabinetId: string, dossierId: string, utilisateurId: string, cle: string, valeur: string) => Promise<{ id: string }>;
 }
 
 const LIBELLE_STATUT: Record<StatutProposition, string> = {
@@ -99,6 +104,68 @@ function PropositionRow({
   );
 }
 
+function AjoutForm({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  ajouter,
+  onAjoute,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  ajouter: NonNullable<PropositionsPanelProps['ajouter']>;
+  onAjoute: () => void;
+}) {
+  const [cle, setCle] = useState('');
+  const [valeur, setValeur] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleAjouter() {
+    if (!cle.trim() || !valeur.trim()) {
+      setError('Clé et valeur sont requises');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ajouter(cabinetId, dossierId, utilisateurId, cle.trim(), valeur.trim());
+      setCle('');
+      setValeur('');
+      onAjoute();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de l’ajout');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="ajout-convention">
+      <input
+        type="text"
+        placeholder="Clé (ex : compte_tva_due_autoliquidee)"
+        value={cle}
+        onChange={(e) => setCle(e.target.value)}
+        disabled={submitting}
+      />
+      <input
+        type="text"
+        placeholder="Valeur"
+        value={valeur}
+        onChange={(e) => setValeur(e.target.value)}
+        disabled={submitting}
+      />
+      <button onClick={() => void handleAjouter()} disabled={submitting}>
+        <Plus size={14} aria-hidden="true" />
+        {submitting ? '…' : 'Ajouter'}
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 export function PropositionsPanel({
   title,
   cabinetId,
@@ -108,6 +175,7 @@ export function PropositionsPanel({
   confirmer,
   rejeter,
   renderLabel,
+  ajouter,
 }: PropositionsPanelProps) {
   const [propositions, setPropositions] = useState<Proposition[]>([]);
   const [loading, setLoading] = useState(false);
@@ -155,6 +223,17 @@ export function PropositionsPanel({
         </button>
       </div>
       {error && <p className="error">{error}</p>}
+
+      {ajouter && (
+        <AjoutForm
+          cabinetId={cabinetId}
+          dossierId={dossierId}
+          utilisateurId={utilisateurId}
+          ajouter={ajouter}
+          onAjoute={() => void charger()}
+        />
+      )}
+
       {!loading && visibles.length === 0 && <p className="empty">Aucune proposition à afficher.</p>}
       <ul className="card-list">
         {visibles.map((p) => (

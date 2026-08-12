@@ -2,8 +2,14 @@ import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
 import { TauxHistoriquePanel } from '../TauxHistoriquePanel';
 import { TauxAssigneZone } from './TauxAssigneZone';
-import { confirmerConvention, fetchConventions, rejeterConvention } from '../../api';
-import { CLES_CONVENTIONS_COMPTES, type CleConventionCompte, type Proposition } from '../../types';
+import { ajouterConvention, confirmerConvention, fetchConventions, rejeterConvention } from '../../api';
+import {
+  CLES_CONVENTIONS_COMPTES,
+  type CleConventionCompte,
+  type CompteClientSansTauxAssigne,
+  type CompteSansTauxAssigne,
+  type Proposition,
+} from '../../types';
 
 export type SousOngletConfiguration = 'comptes' | 'generiques' | 'taux' | 'tauxAssigne';
 
@@ -13,6 +19,10 @@ interface ConfigurationZoneProps {
   utilisateurId: string;
   sousOnglet: SousOngletConfiguration;
   onChangeSousOnglet: (onglet: SousOngletConfiguration) => void;
+  suggestionsTauxComptes: CompteSansTauxAssigne[];
+  suggestionsTauxClients: CompteClientSansTauxAssigne[];
+  onSuggestionTauxCompteConsommee: (compte: string) => void;
+  onSuggestionTauxClientConsommee: (numeroCompteTiers: string) => void;
 }
 
 const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: string }[] = [
@@ -62,6 +72,10 @@ export function ConfigurationZone({
   utilisateurId,
   sousOnglet,
   onChangeSousOnglet,
+  suggestionsTauxComptes,
+  suggestionsTauxClients,
+  onSuggestionTauxCompteConsommee,
+  onSuggestionTauxClientConsommee,
 }: ConfigurationZoneProps) {
   const ongletActif = ONGLETS.find((o) => o.id === sousOnglet);
 
@@ -93,13 +107,22 @@ export function ConfigurationZone({
           confirmer={confirmerConvention}
           rejeter={rejeterConvention}
           renderLabel={libelleConvention}
+          ajouter={ajouterConvention}
         />
       )}
       {sousOnglet === 'taux' && (
         <TauxHistoriquePanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}
       {sousOnglet === 'tauxAssigne' && (
-        <TauxAssigneZone cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+        <TauxAssigneZone
+          cabinetId={cabinetId}
+          dossierId={dossierId}
+          utilisateurId={utilisateurId}
+          suggestionsComptes={suggestionsTauxComptes}
+          suggestionsClients={suggestionsTauxClients}
+          onSuggestionCompteConsommee={onSuggestionTauxCompteConsommee}
+          onSuggestionClientConsommee={onSuggestionTauxClientConsommee}
+        />
       )}
     </div>
   );

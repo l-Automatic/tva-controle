@@ -11,6 +11,8 @@ import { useToast } from '../../toast';
 import {
   LIBELLE_TAUX_ASSIGNE,
   VALEURS_TAUX_ASSIGNE,
+  type CompteClientSansTauxAssigne,
+  type CompteSansTauxAssigne,
   type Proposition,
   type TauxAssigne,
   type TauxAssigneEntry,
@@ -22,7 +24,84 @@ interface SectionProps {
   utilisateurId: string;
 }
 
-function TauxAssigneProduitChargeSection({ cabinetId, dossierId, utilisateurId }: SectionProps) {
+const TAUX_TIERS_SUGGERES = ['20', '10', '5.5', '2.1'];
+
+function SuggestionsProduitCharge({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  suggestions,
+  onConsommee,
+  onAssigne,
+}: SectionProps & { suggestions: CompteSansTauxAssigne[]; onConsommee: (compte: string) => void; onAssigne: () => void }) {
+  const [choix, setChoix] = useState<Record<string, TauxAssigne>>({});
+  const [enCours, setEnCours] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleConfirmer(compte: string) {
+    const taux = choix[compte] ?? '20';
+    setEnCours(compte);
+    setError(null);
+    try {
+      await assignerTauxCompte(cabinetId, dossierId, compte, taux, utilisateurId);
+      notifier('Taux assigné');
+      onConsommee(compte);
+      onAssigne();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de l’assignation');
+    } finally {
+      setEnCours(null);
+    }
+  }
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="suggestions-taux">
+      <p className="reference">
+        Comptes mouvementés au dernier cycle sans taux assigné — choisissez un taux pour chacun, ou ignorez-les (ils
+        réapparaîtront au prochain cycle).
+      </p>
+      <ul className="card-list">
+        {suggestions.map((s) => (
+          <li key={s.compte} className="card statut-carte-brouillon">
+            <p className="label">Compte {s.compte}</p>
+            {s.exemplesLibelle.length > 0 && <p className="reference">{s.exemplesLibelle.join(' · ')}</p>}
+            <div className="actions">
+              <select
+                value={choix[s.compte] ?? '20'}
+                disabled={enCours === s.compte}
+                onChange={(e) => setChoix((prev) => ({ ...prev, [s.compte]: e.target.value as TauxAssigne }))}
+              >
+                {VALEURS_TAUX_ASSIGNE.map((v) => (
+                  <option key={v} value={v}>
+                    {LIBELLE_TAUX_ASSIGNE[v]}
+                  </option>
+                ))}
+              </select>
+              <button onClick={() => void handleConfirmer(s.compte)} disabled={enCours === s.compte}>
+                {enCours === s.compte ? '…' : 'Assigner'}
+              </button>
+              <button className="secondary" onClick={() => onConsommee(s.compte)} disabled={enCours === s.compte}>
+                Ignorer
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+function TauxAssigneProduitChargeSection({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  suggestions,
+  onSuggestionConsommee,
+}: SectionProps & { suggestions: CompteSansTauxAssigne[]; onSuggestionConsommee: (compte: string) => void }) {
   const [assignations, setAssignations] = useState<TauxAssigneEntry[]>([]);
   const [compte, setCompte] = useState('');
   const [taux, setTaux] = useState<TauxAssigne>('20');
@@ -72,6 +151,14 @@ function TauxAssigneProduitChargeSection({ cabinetId, dossierId, utilisateurId }
       <div className="panel-header">
         <h3>Produit/charge</h3>
       </div>
+      <SuggestionsProduitCharge
+        cabinetId={cabinetId}
+        dossierId={dossierId}
+        utilisateurId={utilisateurId}
+        suggestions={suggestions}
+        onConsommee={onSuggestionConsommee}
+        onAssigne={() => void charger()}
+      />
       {error && <p className="error">{error}</p>}
       {!loading && assignations.length === 0 && <p className="empty">Aucun taux assigné pour l’instant.</p>}
       <ul className="card-list">
@@ -126,7 +213,92 @@ function TauxAssigneProduitChargeSection({ cabinetId, dossierId, utilisateurId }
   );
 }
 
-function TauxAssigneClientSection({ cabinetId, dossierId, utilisateurId }: SectionProps) {
+function SuggestionsClient({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  suggestions,
+  onConsommee,
+  onAssigne,
+}: SectionProps & {
+  suggestions: CompteClientSansTauxAssigne[];
+  onConsommee: (numeroCompteTiers: string) => void;
+  onAssigne: () => void;
+}) {
+  const [choix, setChoix] = useState<Record<string, string>>({});
+  const [enCours, setEnCours] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleConfirmer(numeroCompteTiers: string) {
+    const taux = Number.parseFloat(choix[numeroCompteTiers] ?? '20');
+    setEnCours(numeroCompteTiers);
+    setError(null);
+    try {
+      await assignerTauxHistoriqueTiersManuel(cabinetId, dossierId, numeroCompteTiers, taux, utilisateurId);
+      notifier('Taux client assigné');
+      onConsommee(numeroCompteTiers);
+      onAssigne();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de l’assignation');
+    } finally {
+      setEnCours(null);
+    }
+  }
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="suggestions-taux">
+      <p className="reference">
+        Comptes clients mouvementés au dernier cycle sans taux connu — choisissez un taux pour chacun, ou ignorez-les
+        (ils réapparaîtront au prochain cycle).
+      </p>
+      <ul className="card-list">
+        {suggestions.map((s) => (
+          <li key={s.numeroCompteTiers} className="card statut-carte-brouillon">
+            <p className="label">
+              Client {s.numeroCompteTiers}
+              {s.nomTiers && ` — ${s.nomTiers}`}
+            </p>
+            <div className="actions">
+              <select
+                value={choix[s.numeroCompteTiers] ?? '20'}
+                disabled={enCours === s.numeroCompteTiers}
+                onChange={(e) => setChoix((prev) => ({ ...prev, [s.numeroCompteTiers]: e.target.value }))}
+              >
+                {TAUX_TIERS_SUGGERES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.replace('.', ',')} %
+                  </option>
+                ))}
+              </select>
+              <button onClick={() => void handleConfirmer(s.numeroCompteTiers)} disabled={enCours === s.numeroCompteTiers}>
+                {enCours === s.numeroCompteTiers ? '…' : 'Assigner'}
+              </button>
+              <button
+                className="secondary"
+                onClick={() => onConsommee(s.numeroCompteTiers)}
+                disabled={enCours === s.numeroCompteTiers}
+              >
+                Ignorer
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+function TauxAssigneClientSection({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  suggestions,
+  onSuggestionConsommee,
+}: SectionProps & { suggestions: CompteClientSansTauxAssigne[]; onSuggestionConsommee: (numeroCompteTiers: string) => void }) {
   const [assignations, setAssignations] = useState<Proposition[]>([]);
   const [numeroCompteTiers, setNumeroCompteTiers] = useState('');
   const [taux, setTaux] = useState('20');
@@ -188,6 +360,14 @@ function TauxAssigneClientSection({ cabinetId, dossierId, utilisateurId }: Secti
         Assignation directe, distincte de la détection automatique sur historique lettré (onglet Taux historique) —
         utile si le taux habituel d’un client est déjà connu, sans attendre qu’un historique se constitue.
       </p>
+      <SuggestionsClient
+        cabinetId={cabinetId}
+        dossierId={dossierId}
+        utilisateurId={utilisateurId}
+        suggestions={suggestions}
+        onConsommee={onSuggestionConsommee}
+        onAssigne={() => void charger()}
+      />
       {error && <p className="error">{error}</p>}
       {!loading && assignations.length === 0 && <p className="empty">Aucun taux client assigné pour l’instant.</p>}
       <ul className="card-list">
@@ -230,17 +410,47 @@ function TauxAssigneClientSection({ cabinetId, dossierId, utilisateurId }: Secti
   );
 }
 
+interface TauxAssigneZoneProps extends SectionProps {
+  suggestionsComptes: CompteSansTauxAssigne[];
+  suggestionsClients: CompteClientSansTauxAssigne[];
+  onSuggestionCompteConsommee: (compte: string) => void;
+  onSuggestionClientConsommee: (numeroCompteTiers: string) => void;
+}
+
 // Attribue directement un taux de TVA à un compte ou un client, une fois
 // pour toutes — pas de workflow candidate/confirmed, distinct de la
 // détection automatique sur historique (onglet Taux historique). Demande
 // explicite de Rami (09/08) : accessible directement dans Configuration du
-// dossier, pas enterré dans Paramètres (cf. brief v3, section 4).
-export function TauxAssigneZone({ cabinetId, dossierId, utilisateurId }: SectionProps) {
+// dossier, pas enterré dans Paramètres (cf. brief v3, section 4). Les
+// suggestions (brief v4, section 4) viennent du dernier cycle lancé — pas de
+// GET dédié, cette donnée est transitoire, calculée à la volée par le
+// pipeline et jamais persistée telle quelle.
+export function TauxAssigneZone({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  suggestionsComptes,
+  suggestionsClients,
+  onSuggestionCompteConsommee,
+  onSuggestionClientConsommee,
+}: TauxAssigneZoneProps) {
   return (
     <section className="panel panel-full">
-      <TauxAssigneProduitChargeSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      <TauxAssigneProduitChargeSection
+        cabinetId={cabinetId}
+        dossierId={dossierId}
+        utilisateurId={utilisateurId}
+        suggestions={suggestionsComptes}
+        onSuggestionConsommee={onSuggestionCompteConsommee}
+      />
       <div className="panel-separateur" />
-      <TauxAssigneClientSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      <TauxAssigneClientSection
+        cabinetId={cabinetId}
+        dossierId={dossierId}
+        utilisateurId={utilisateurId}
+        suggestions={suggestionsClients}
+        onSuggestionConsommee={onSuggestionClientConsommee}
+      />
     </section>
   );
 }

@@ -86,14 +86,14 @@ function TauxRow({
   const estCandidate = proposition.statut === 'candidate';
   const libelle =
     origine === 'compte'
-      ? `Compte produit/charge ${proposition.compteProduitOuCharge ?? '—'} — taux habituel ${proposition.tauxHabituel ?? '—'}%`
+      ? `Compte de TVA collectée ${proposition.compteProduitOuCharge ?? '—'} — taux habituel ${proposition.tauxHabituel ?? '—'}%`
       : `Client ${proposition.numeroCompteTiers ?? '—'} — taux habituel ${proposition.tauxHabituel ?? '—'}%`;
 
   return (
     <li className="card proposition">
       <div className="card-header">
         <BadgeStatut statut={proposition.statut} libelle={LIBELLE_STATUT[proposition.statut]} />
-        <span className="badge badge-origine">{origine === 'compte' ? 'Compte produit/charge' : 'Compte client'}</span>
+        <span className="badge badge-origine">{origine === 'compte' ? 'Compte de TVA collectée' : 'Compte client'}</span>
         <span className="source">{proposition.source}</span>
       </div>
       <p className="label">{libelle}</p>
@@ -161,7 +161,7 @@ export function TauxHistoriquePanel({ cabinetId, dossierId, utilisateurId }: Tau
         <h2>Taux historique ({nbEnAttente} en attente)</h2>
         <select value={filtreOrigine} onChange={(e) => setFiltreOrigine(e.target.value as 'tous' | Origine)}>
           <option value="tous">Comptes et clients</option>
-          <option value="compte">Comptes produit/charge</option>
+          <option value="compte">Comptes de TVA collectée</option>
           <option value="tiers">Comptes clients</option>
         </select>
         <label className="toggle">
