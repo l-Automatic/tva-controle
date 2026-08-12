@@ -14,6 +14,7 @@ import {
   detecterImmobilisationManquee,
   verifierDeductibiliteVehiculeTourisme,
   verifierCoherenceTauxAutoliquidation,
+  verifierCoherenceCompteImmobilisation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -73,6 +74,7 @@ export interface ParametresCycleTva {
   comptesEquipementOverride?: string[];
   comptesCarburantOverride?: string[];
   comptesCadeauxOverride?: string[];
+  comptesImmobilisationOverride?: string[];
   // Comptes d'attente (471 par défaut) sur lesquels chercher des encaissements
   // non identifiés — préfixes, pas numéros exacts (comme comptesTva), car un
   // dossier peut subdiviser en plusieurs sous-comptes 471x.
@@ -166,6 +168,8 @@ export async function executerCycleTva(
     params.comptesCarburantOverride ?? conventionListe(contexteDossier, 'comptes_carburant') ?? [];
   const comptesCadeaux =
     params.comptesCadeauxOverride ?? conventionListe(contexteDossier, 'comptes_cadeaux') ?? [];
+  const comptesImmobilisation =
+    params.comptesImmobilisationOverride ?? conventionListe(contexteDossier, 'comptes_immobilisation') ?? [];
   const comptesAttentePrefixes =
     params.comptesAttenteOverride ?? conventionListe(contexteDossier, 'comptes_attente') ?? ['471'];
 
@@ -178,6 +182,7 @@ export async function executerCycleTva(
     comptesEquipement,
     comptesCarburant,
     comptesCadeaux,
+    comptesImmobilisation,
   });
 
   // Suggestions pour l'onglet "Taux assigné" (09/08) — comptes mouvementés
@@ -222,6 +227,9 @@ export async function executerCycleTva(
     compteAutoliquidationDeductible !== undefined
       ? verifierCoherenceTauxAutoliquidation(ecritures, { compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductible })
       : [];
+  const anomaliesCoherenceCompteImmobilisation = verifierCoherenceCompteImmobilisation(ecritures, {
+    comptesImmobilisation,
+  });
 
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
@@ -295,6 +303,7 @@ export async function executerCycleTva(
     ...anomaliesImmobilisation,
     ...anomaliesVehiculeTourisme,
     ...anomaliesCoherenceAutoliquidation,
+    ...anomaliesCoherenceCompteImmobilisation,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
