@@ -501,3 +501,30 @@ export async function listerAnomaliesTraiteesParTypeEtPiece(
   );
   return new Set(res.rows.map((r) => `${r.type_anomalie}:${r.reference_piece}`));
 }
+
+export interface VehiculeDb {
+  id: string;
+  designation: string | null;
+  typeBien: 'vehicule_tourisme' | 'vehicule_utilitaire' | 'autre';
+  montantHt: number | null;
+  dateAcquisition: string | null;
+  statut: 'candidate' | 'confirmed' | 'rejected';
+}
+
+export async function listerVehicules(client: PoolClient, dossierId: string): Promise<VehiculeDb[]> {
+  const res = await client.query(
+    `SELECT id, designation, type_bien, montant_ht, date_acquisition, statut
+     FROM immobilisations
+     WHERE dossier_id = $1 AND type_bien IS NOT NULL AND statut != 'rejected'
+     ORDER BY created_at DESC`,
+    [dossierId]
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    designation: r.designation,
+    typeBien: r.type_bien,
+    montantHt: r.montant_ht !== null ? Number.parseFloat(r.montant_ht) : null,
+    dateAcquisition: r.date_acquisition,
+    statut: r.statut,
+  }));
+}
