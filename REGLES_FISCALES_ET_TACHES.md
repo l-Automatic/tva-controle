@@ -365,3 +365,74 @@ extraites, le site ne les expose pas en texte brut) : fond très clair,
 accent bleu-violet profond utilisé avec parcimonie, beaucoup d'espace
 blanc, typographie sans-serif fine. À reprendre pour une vraie refonte
 quand Rami sera prêt.
+
+---
+
+## Audit complet du 09/08 — croisement avec la conversation d'origine
+
+Rami a fourni un document exhaustif rédigé dans la conversation d'origine
+("conception du système de contrôle/calcul TVA"), organisé par thème
+métier. Croisement fait point par point contre ce qui est réellement
+construit. Arbitrages tranchés par Rami ce jour-là :
+
+### Traité et construit ce jour
+
+- **Acompte sur un bien = 0% de TVA (art. 269-2-a CGI)** — bug réel :
+  chantier B appliquait un taux par défaut à TOUT encaissement client non
+  lettré, sans distinguer bien/service. Corrigé : nouveau paramètre dossier
+  `regime_tva_encaissement` (`service` / `bien` / `mixte`, défaut
+  `service`). En régime `bien`, plus aucune régularisation automatique sur
+  encaissement non lettré. Un dossier avec caisse/paiement comptant doit
+  être classé `bien` (payé immédiatement, donc collectable tout de suite
+  de toute façon, que ce soit un bien ou un service).
+- **Parc de véhicules** — la table `immobilisations` était prête depuis le
+  schéma initial (candidate/confirmed, source saisie_manuelle) mais AUCUNE
+  fonction ne l'alimentait. `ajouterVehiculeManuel`, `retirerVehicule`,
+  `listerVehicules` + routes construits. Aucun frontend encore.
+- **0% déductible sur l'achat d'un véhicule de tourisme** — nouveau
+  contrôle `verifierDeductibiliteVehiculeTourisme`. Limite assumée : pas de
+  lien fiable entre une ligne de TVA déductible précise et un véhicule
+  précis (surtout pour un véhicule ajouté manuellement, sans référence vers
+  une écriture) — signale pour vérification humaine, n'exclut jamais
+  automatiquement.
+- **Cohérence HT/TVA sur le compte d'autoliquidation spécifique** — nouveau
+  contrôle `verifierCoherenceTauxAutoliquidation`, identifie le compte de
+  charge lié par co-occurrence sur la même pièce que la ligne 445664
+  confirmée (permet de distinguer un 604 autoliquidation d'un 604 classique
+  au même taux).
+- **Cadeaux clients** — nouvelle 5ᵉ catégorie de convention
+  `comptes_cadeaux` (aux côtés de vente/charge service, équipement,
+  carburant), 0% déductible dès qu'un compte y est identifié. Pas de seuil
+  73€/bénéficiaire appliqué (donnée non disponible à ce niveau) — en
+  pratique un seul compte 623 dédié par dossier suffit à trancher.
+
+### Confirmé hors scope, ne pas y revenir sans nouvel arbitrage
+
+Logement dirigeant, mentions obligatoires sur facture (impossible avec
+l'architecture actuelle — écritures comptables uniquement, jamais le
+contenu réel d'une facture), franchise en base, prorata d'activité mixte,
+taux DOM-TOM.
+
+### Toujours en attente
+
+- Restauration — gros morceau, mis de côté volontairement.
+- Numérotation de facture / trou de séquence — confirmé nécessiter un LLM
+  pour la découverte du motif (une fois par dossier, candidate/confirmed,
+  jamais recalculé), dépend du chantier Mistral (Groupe D).
+- Sous-traitant BTP qui facture de la TVA à tort (ne devrait jamais en
+  facturer) — jamais détecté, pas discuté avec Rami.
+
+### Trouvé en auditant CETTE conversation-ci (pas la conversation d'origine)
+
+**`BRIEF_FRONTEND_V4.md` a été poussé sur le dépôt mais aucune confirmation
+n'a jamais été reçue que Claude Code l'a exécuté** — contrairement à tous
+les autres briefs (v1/v2/v3/v5), le message suivant de Rami est passé
+directement à autre chose. À vérifier/relancer : retrait de
+"(sous-traitance)", renommage de la section Taux historique, formulaire
+"Ajouter" manquant dans Conventions génériques, suggestions de taux
+assigné, libellés lisibles pour les valeurs de taux.
+
+La vérification demandée sur la redondance CycleForm/AnomaliesPanel n'a
+jamais été confirmée comme une vérification active de Claude Code — la
+réponse de Rami ("plus de redondance") pourrait être une supposition
+plutôt qu'un test réel.
