@@ -937,3 +937,68 @@ export async function assignerTauxHistoriqueTiersManuel(
     details: { numeroCompteTiers, tauxHabituel },
   });
 }
+
+// ============================================================================
+// PARC VÉHICULES (immobilisations) — gestion manuelle
+// ============================================================================
+// La table immobilisations existe depuis le schéma initial (candidate/
+// confirmed, source saisie_manuelle déjà prévue) mais rien ne l'alimentait
+// jusqu'ici — aucune fonction d'écriture n'existait, malgré le contrôle
+// carburant qui en dépend entièrement (parc_vehicules_non_renseigne
+// systématique en conséquence). Demande de Rami (09/08) : ajout manuel
+// direct, confirmé tout de suite — pas de friction candidate/confirmed
+// pour une saisie humaine directe (même logique que assignerTauxCompte).
+
+export interface VehiculeManuel {
+  designation?: string;
+  typeBien: 'vehicule_tourisme' | 'vehicule_utilitaire' | 'autre';
+  montantHt?: number;
+  dateAcquisition?: string;
+}
+
+export async function ajouterVehiculeManuel(
+  client: PoolClient,
+  dossierId: string,
+  vehicule: VehiculeManuel,
+  utilisateurId: string
+): Promise<string> {
+  const res = await client.query<{ id: string }>(
+    `INSERT INTO immobilisations (dossier_id, compte, designation, montant_ht, date_acquisition, type_bien, statut, source, confirmed_by, confirmed_at)
+     VALUES ($1, '2182', $2, $3, $4, $5, 'confirmed', 'saisie_manuelle', $6, now())
+     RETURNING id`,
+    [
+      dossierId,
+      vehicule.designation ?? null,
+      vehicule.montantHt ?? null,
+      vehicule.dateAcquisition ?? null,
+      vehicule.typeBien,
+      utilisateurId,
+    ]
+  );
+  const id = res.rows[0]!.id;
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'vehicule_ajoute_manuellement',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { immobilisationId: id, typeBien: vehicule.typeBien, designation: vehicule.designation },
+  });
+  return id;
+}
+
+export async function retirerVehicule(client: PoolClient, immobilisationId: string, utilisateurId: string): Promise<void> {
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE immobilisations SET statut = 'rejected' WHERE id = $1 RETURNING dossier_id`,
+    [immobilisationId]
+  );
+  const dossierId = res.rows[0]?.dossier_id ?? null;
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'vehicule_retire',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { immobilisationId },
+  });
+}
