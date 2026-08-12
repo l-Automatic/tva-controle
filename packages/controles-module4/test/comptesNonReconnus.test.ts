@@ -62,6 +62,37 @@ describe('detecterComptesTvaNonReconnus', () => {
     const ecritures = [ecriture('4452', 1), ecriture('4452', 2), ecriture('4452', 3)];
     const anomalies = detecterComptesTvaNonReconnus(ecritures, {});
     expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.details).toEqual({ nbEcritures: 3, references: [1, 2, 3] });
+    expect(anomalies[0]?.details).toEqual({ nbEcritures: 3, references: [1, 2, 3], exemplesLibelle: [] });
+  });
+
+  it('inclut des libellés d’exemple dans les details quand ils existent — seule info réellement recherchable dans Pennylane, l’id interne ne l’est pas', () => {
+    function ecritureAvecLibelle(compte: string, ledgerEntryId: number, libelle: string): EcritureTvaComplete {
+      return {
+        ledgerEntryId,
+        ligneTva: {
+          id: ledgerEntryId,
+          compte,
+          compteId: 1,
+          libelle,
+          debit: 0,
+          credit: 100,
+          date: '2025-01-15',
+          ledgerEntryId,
+          lettrage: { estLettree: false, groupeIds: [] },
+        },
+        autresLignes: [],
+        lignesTiers: [],
+      };
+    }
+    const ecritures = [
+      ecritureAvecLibelle('4452', 1, 'FACT INTRACOM 001'),
+      ecritureAvecLibelle('4452', 2, 'FACT INTRACOM 002'),
+    ];
+    const anomalies = detecterComptesTvaNonReconnus(ecritures, {});
+    expect(anomalies[0]?.details).toEqual({
+      nbEcritures: 2,
+      references: [1, 2],
+      exemplesLibelle: ['FACT INTRACOM 001', 'FACT INTRACOM 002'],
+    });
   });
 });
