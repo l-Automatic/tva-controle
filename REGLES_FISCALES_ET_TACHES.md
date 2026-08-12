@@ -436,3 +436,36 @@ La vérification demandée sur la redondance CycleForm/AnomaliesPanel n'a
 jamais été confirmée comme une vérification active de Claude Code — la
 réponse de Rami ("plus de redondance") pourrait être une supposition
 plutôt qu'un test réel.
+
+---
+
+## Fin de session du 09/08 — dernier point avant pause
+
+**Nouveau, construit en fin de session** : 6ᵉ catégorie de convention
+`comptes_immobilisation`, distincte de `comptes_equipement` (qui reste le
+seuil "petit équipement à surveiller"). Sert à confirmer les vrais comptes
+d'immobilisation (218X, 215X...) pour un contrôle **bloquant** : si une
+pièce touche un compte immobilisation confirmé mais que sa TVA déductible
+est passée en 44566 au lieu de 44562, c'est une erreur de saisie réelle,
+pas une nuance — `verifierCoherenceCompteImmobilisation`. Backend fait et
+poussé, **aucun frontend construit ce soir** (Rami arrête la session avant
+que ce tour de brief soit lancé).
+
+**`BRIEF_FRONTEND_V6.md` très probablement jamais exécuté non plus** —
+même schéma que v4/v5 : aucune confirmation reçue, le fil est passé
+directement à v7 (couleurs) et v8 (polish). Concrètement manquant côté
+interface, à vérifier à la reprise : catégorie "Cadeaux clients" absente
+du popup et de l'onglet Conventions de comptes, écran de gestion du parc
+de véhicules jamais construit, paramètre "régime TVA sur encaissement"
+jamais exposé dans Paramètres dossier.
+
+**Ajout à la liste des gros morceaux mis de côté** : TVA intracommunautaire
+— Rami précise que ça inclut aussi la vérification du statut du
+fournisseur concerné (probablement une validation VIES ou équivalent),
+pas juste le traitement comptable de l'autoliquidation intracom.
+
+**Prochaine étape annoncée par Rami** : reprendre la liste complète des
+contrôles listés tout au début du projet (avant même la conversation
+d'origine dont le document exhaustif a été fourni le 09/08) et vérifier,
+un par un, si une fonctionnalité du logiciel les couvre. À faire à la
+reprise.
