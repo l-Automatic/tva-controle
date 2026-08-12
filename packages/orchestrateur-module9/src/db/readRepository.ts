@@ -384,6 +384,17 @@ export async function parametreCabinetValeur(client: PoolClient, cabinetId: stri
   return res.rows[0]?.valeur ?? null;
 }
 
+// Symétrique de parametreCabinetValeur — premier vrai consommateur d'un
+// paramètre dossier (09/08) : le régime TVA sur encaissement, qui influence
+// directement le calcul (cf. chantier B, pipeline.ts).
+export async function parametreDossierValeur(client: PoolClient, dossierId: string, cle: string): Promise<unknown> {
+  const res = await client.query(`SELECT valeur FROM parametres_dossier WHERE dossier_id = $1 AND cle = $2`, [
+    dossierId,
+    cle,
+  ]);
+  return res.rows[0]?.valeur ?? null;
+}
+
 export async function listerParametresDossier(client: PoolClient, dossierId: string): Promise<ParametreDb[]> {
   const res = await client.query(`SELECT cle, valeur, updated_at FROM parametres_dossier WHERE dossier_id = $1`, [
     dossierId,
