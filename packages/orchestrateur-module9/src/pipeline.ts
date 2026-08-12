@@ -72,6 +72,7 @@ export interface ParametresCycleTva {
   comptesChargeServiceOverride?: string[];
   comptesEquipementOverride?: string[];
   comptesCarburantOverride?: string[];
+  comptesCadeauxOverride?: string[];
   // Comptes d'attente (471 par défaut) sur lesquels chercher des encaissements
   // non identifiés — préfixes, pas numéros exacts (comme comptesTva), car un
   // dossier peut subdiviser en plusieurs sous-comptes 471x.
@@ -163,6 +164,8 @@ export async function executerCycleTva(
     params.comptesEquipementOverride ?? conventionListe(contexteDossier, 'comptes_equipement') ?? [];
   const comptesCarburant =
     params.comptesCarburantOverride ?? conventionListe(contexteDossier, 'comptes_carburant') ?? [];
+  const comptesCadeaux =
+    params.comptesCadeauxOverride ?? conventionListe(contexteDossier, 'comptes_cadeaux') ?? [];
   const comptesAttentePrefixes =
     params.comptesAttenteOverride ?? conventionListe(contexteDossier, 'comptes_attente') ?? ['471'];
 
@@ -174,6 +177,7 @@ export async function executerCycleTva(
     comptesChargeService,
     comptesEquipement,
     comptesCarburant,
+    comptesCadeaux,
   });
 
   // Suggestions pour l'onglet "Taux assigné" (09/08) — comptes mouvementés
@@ -403,6 +407,7 @@ export async function executerCycleTva(
 
   const resultatBrut = calculerTva(ecritures, toutesAnomalies, statutsExigibilite, statutsCarburant, {
     contexteDossier,
+    comptesCadeaux,
     ...(compteAutoliquidationDue !== undefined ? { compteAutoliquidationDue } : {}),
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
   });
