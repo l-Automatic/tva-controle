@@ -31,7 +31,11 @@ import {
   enregistrerPropositionsTaux,
   enregistrerPropositionsTauxTiers,
 } from './db/writeRepository.js';
-import { listerLedgerEntryIdsQualifies, listerRegularisationsAIntegrer } from './db/readRepository.js';
+import {
+  listerLedgerEntryIdsQualifies,
+  listerRegularisationsAIntegrer,
+  listerAnomaliesTraiteesParTypeEtPiece,
+} from './db/readRepository.js';
 
 export interface ParametresCycleTva {
   cabinetId: string;
@@ -225,7 +229,7 @@ export async function executerCycleTva(
 
   const { statuts: statutsTiers, anomalies: anomaliesTiers } = verifierNouveauxTiers(ecritures, contexteDossier);
 
-  const toutesAnomalies: Anomalie[] = [
+  const toutesAnomaliesBrutes: Anomalie[] = [
     ...anomaliesPreControles,
     ...anomaliesExigibilite,
     ...anomaliesCarburant,
@@ -234,6 +238,20 @@ export async function executerCycleTva(
     ...anomaliesClient,
     ...anomaliesTiers,
   ];
+
+  // Filtre générique anti-doublon (09/08) : une anomalie déjà résolue ou
+  // justifiée pour cette même pièce ne doit pas réapparaître à la relance
+  // du cycle, quel que soit son type — cf. listerAnomaliesTraiteesParTypeEtPiece.
+  // La détection elle-même reste stateless et relit les mêmes écritures à
+  // chaque cycle (comme avant), c'est uniquement l'AFFICHAGE/persistance
+  // qui est filtré ici, jamais le calcul lui-même (une régularisation déjà
+  // intégrée au calcul, ex: chantier B, continue de s'appliquer).
+  const anomaliesTraitees = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerAnomaliesTraiteesParTypeEtPiece(client, params.dossierId)
+  );
+  const toutesAnomalies = toutesAnomaliesBrutes.filter(
+    (a) => !anomaliesTraitees.has(`${a.type}:${a.ledgerEntryId}`)
+  );
 
   // enregistrerAnomalies retourne les lignes réellement insérées (avec leur
   // id généré par Postgres) : nécessaire pour référencer les anomalies
