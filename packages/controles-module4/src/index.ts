@@ -39,6 +39,10 @@ export {
   type CompteClientSansTauxAssigne,
 } from './tauxSuggestions.js';
 export { verifierDeductibiliteVehiculeTourisme } from './vehiculeTourisme.js';
+export {
+  verifierCoherenceTauxAutoliquidation,
+  type ConfigCoherenceAutoliquidation,
+} from './coherenceAutoliquidation.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
