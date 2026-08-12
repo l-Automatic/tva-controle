@@ -350,3 +350,18 @@ ligne à ligne, cf. point 2 de la partie 1) : deviner un taux n'a de sens
 que côté client, où l'encaissement arrive sans aucune facture en face. Et
 un paiement fournisseur sans facture du tout n'ouvre simplement aucun
 droit à déduction — pas besoin d'appliquer un défaut comme côté client.
+
+---
+
+## Note (09/08) — charte graphique, à reprendre plus tard
+
+Direction retenue par Rami, explicitement mise de côté pour l'instant (pas
+un chantier actif) : couleurs unies ou en léger dégradé foncé-vers-clair,
+teintes "premium" plutôt que vives — référence citée : le violet-rouge du
+site Inqom, le vert de Pennylane. Fond général clair conservé, une seule
+couleur d'accent cohérente plutôt que le choix actuel de 15 dégradés.
+Recherche qualitative faite sur le site Inqom (pas de valeurs CSS exactes
+extraites, le site ne les expose pas en texte brut) : fond très clair,
+accent bleu-violet profond utilisé avec parcimonie, beaucoup d'espace
+blanc, typographie sans-serif fine. À reprendre pour une vraie refonte
+quand Rami sera prêt.
