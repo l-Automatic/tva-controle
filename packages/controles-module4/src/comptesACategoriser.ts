@@ -5,6 +5,7 @@ export interface ComptesConnus {
   comptesChargeService: string[];
   comptesEquipement: string[];
   comptesCarburant: string[];
+  comptesCadeaux?: string[];
 }
 
 export interface CompteACategoriser {
@@ -34,6 +35,7 @@ export function identifierComptesACategoriser(
     ...connus.comptesChargeService,
     ...connus.comptesEquipement,
     ...connus.comptesCarburant,
+    ...(connus.comptesCadeaux ?? []),
   ];
   // Comparaison par préfixe, cohérente avec exigibilite.ts/carburant.ts/
   // immobilisation.ts : les conventions contiennent des préfixes ('706'),
