@@ -467,3 +467,26 @@ export async function listerTauxAssignes(client: PoolClient, dossierId: string):
     updatedAt: r.updated_at,
   }));
 }
+
+// Toute anomalie (type + pièce) déjà résolue ou justifiée pour ce dossier —
+// filtre générique appliqué à TOUTES les anomalies avant persistance
+// (pipeline.ts), pas seulement au 471. Bug réel trouvé le 09/08 : seuls
+// encaissement_non_affecte (via listerLedgerEntryIdsQualifies) et
+// nouveau_tiers_a_verifier (via tiers_reference) étaient protégés contre la
+// réapparition d'une anomalie déjà traitée à la relance d'un cycle — les 8
+// autres types (avoir_a_verifier, paiement_partiel_a_verifier,
+// encaissement_client_taux_applique, etc.) revenaient systématiquement,
+// même après Résoudre/Justifier. La clé "type:pièce" reste stable d'un
+// cycle à l'autre pour une même écriture Pennylane, donc fiable pour ce
+// rapprochement.
+export async function listerAnomaliesTraiteesParTypeEtPiece(
+  client: PoolClient,
+  dossierId: string
+): Promise<Set<string>> {
+  const res = await client.query<{ type_anomalie: string; reference_piece: string | null }>(
+    `SELECT type_anomalie, reference_piece FROM anomalies
+     WHERE dossier_id = $1 AND statut IN ('resolu', 'justifie') AND reference_piece IS NOT NULL`,
+    [dossierId]
+  );
+  return new Set(res.rows.map((r) => `${r.type_anomalie}:${r.reference_piece}`));
+}
