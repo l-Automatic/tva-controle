@@ -61,6 +61,12 @@ export interface ConfigCalculTva {
   // que risquer une collecte/déduction non confirmée — régularisable à la
   // période suivante une fois l'anomalie traitée.
   politiqueIndetermine?: 'inclure' | 'exclure';
+  // Cadeaux clients : 0% déductible dès que le compte de charge concerné
+  // (typiquement un seul 623 par dossier) est identifié — pas de seuil
+  // (73€/bénéficiaire/an) appliqué ici, la donnée nécessaire (répartition
+  // par bénéficiaire) n'est pas disponible à ce niveau ; en pratique un
+  // compte 623 dédié cadeaux clients ne contient normalement que ça.
+  comptesCadeaux?: string[];
 }
 
 const TAUX_NATIONAL_PAR_DEFAUT: Record<string, number> = {
@@ -173,6 +179,17 @@ export function calculerTva(
     // Absence de statut = pas concerné par le contrôle d'exigibilité pour cette
     // ligne (ex: compte hors config comptesVenteService/comptesChargeService) ->
     // traité comme exigible par défaut (comportement historique, avant ce contrôle).
+
+    // --- Cadeaux clients : 0% déductible, exclusion totale ---
+    if (!estCollecte && config.comptesCadeaux?.length) {
+      const estCadeau = ecriture.autresLignes.some((l) =>
+        config.comptesCadeaux!.some((prefixe) => l.compte.startsWith(prefixe))
+      );
+      if (estCadeau) {
+        exclues.push({ ledgerEntryId, compte, motif: 'Cadeau client : 0% déductible.', compteTiers, date });
+        continue;
+      }
+    }
 
     // --- Carburant : peut réduire le montant déductible, ou l'exclure si indéterminé ---
     const statutCarb = carburantParPiece.get(cle);
