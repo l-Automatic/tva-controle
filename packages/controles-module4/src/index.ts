@@ -31,6 +31,12 @@ export {
   type ComptesConnus,
   type CompteACategoriser,
 } from './comptesACategoriser.js';
+export {
+  identifierComptesSansTauxAssigne,
+  identifierComptesClientSansTaux,
+  type CompteSansTauxAssigne,
+  type CompteClientSansTauxAssigne,
+} from './tauxSuggestions.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
