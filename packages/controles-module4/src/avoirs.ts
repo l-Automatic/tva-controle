@@ -12,7 +12,7 @@ export function verifierAvoirsCollecte(
   const anomalies: Anomalie[] = [];
 
   for (const ecriture of ecritures) {
-    const { compte, debit, ledgerEntryId } = ecriture.ligneTva;
+    const { compte, debit, ledgerEntryId, libelle } = ecriture.ligneTva;
     const estCompteCollecte = prefixesCollecte.some((p) => compte.startsWith(p));
     if (estCompteCollecte && debit > 0) {
       anomalies.push({
@@ -21,7 +21,7 @@ export function verifierAvoirsCollecte(
         ledgerEntryId,
         compte,
         description: `Débit de ${debit} sur le compte de TVA collectée ${compte} : à confirmer qu'il s'agit bien d'un avoir ou d'une OD de régularisation.`,
-        details: { debit },
+        details: { debit, libelle },
       });
     }
   }
