@@ -256,8 +256,9 @@ describe('integrerRegularisations — encaissements 471 qualifiés comme vente',
   });
 });
 
-describe('calculerTva — cadeaux clients, seuil 73€ HT (09/08, corrigé après retour de Rami)', () => {
-  it('exclut totalement une ligne dont le cadeau dépasse 73€ HT', () => {
+describe('calculerTva — cadeaux clients, seuil 73€ TTC (10/08, corrigé : c’était HT par erreur, la règle est TTC)', () => {
+  it('exclut totalement une ligne dont le cadeau dépasse 73€ TTC', () => {
+    // HT 500 + TVA 100 = TTC 600, au-delà de 73€ TTC.
     const e = ecriture({
       ligneTva: ligneTva({ compte: '44566', debit: 100, ledgerEntryId: 1 }),
       autresLignes: [{ id: 1, compte: '623', compteId: 1, libelle: 'Cadeaux clients', debit: 500, credit: 0 }],
@@ -267,23 +268,26 @@ describe('calculerTva — cadeaux clients, seuil 73€ HT (09/08, corrigé aprè
     expect(resultat.lignes).toEqual([]);
     expect(resultat.ecrituresExclues[0]?.motif).toContain('Cadeau client');
     expect(resultat.ecrituresExclues[0]?.motif).toContain('73');
+    expect(resultat.ecrituresExclues[0]?.motif).toContain('TTC');
   });
 
-  it('déduit normalement un cadeau sous le seuil de 73€ HT', () => {
+  it('déduit normalement un cadeau sous le seuil de 73€ TTC', () => {
+    // HT 50 + TVA 10 = TTC 60, sous 73€ TTC.
     const e = ecriture({
-      ligneTva: ligneTva({ compte: '44566', debit: 12, ledgerEntryId: 1 }),
-      autresLignes: [{ id: 1, compte: '623', compteId: 1, libelle: 'Petit cadeau', debit: 60, credit: 0 }],
+      ligneTva: ligneTva({ compte: '44566', debit: 10, ledgerEntryId: 1 }),
+      autresLignes: [{ id: 1, compte: '623', compteId: 1, libelle: 'Petit cadeau', debit: 50, credit: 0 }],
     });
 
     const resultat = calculerTva([e], [], [], [], { comptesCadeaux: ['623'] });
-    expect(resultat.lignes).toEqual([{ categorie: 'deductible_abs', montant: 12, referencesPieces: [1] }]);
+    expect(resultat.lignes).toEqual([{ categorie: 'deductible_abs', montant: 10, referencesPieces: [1] }]);
     expect(resultat.ecrituresExclues).toEqual([]);
   });
 
-  it('déduit normalement un cadeau exactement à 73€ HT (seuil inclus, pas exclu)', () => {
+  it('déduit normalement un cadeau exactement à 73€ TTC (seuil inclus, pas exclu)', () => {
+    // HT 60.83 + TVA 12.17 = TTC 73 pile (20%).
     const e = ecriture({
-      ligneTva: ligneTva({ compte: '44566', debit: 14.6, ledgerEntryId: 1 }),
-      autresLignes: [{ id: 1, compte: '623', compteId: 1, libelle: null, debit: 73, credit: 0 }],
+      ligneTva: ligneTva({ compte: '44566', debit: 12.17, ledgerEntryId: 1 }),
+      autresLignes: [{ id: 1, compte: '623', compteId: 1, libelle: null, debit: 60.83, credit: 0 }],
     });
 
     const resultat = calculerTva([e], [], [], [], { comptesCadeaux: ['623'] });
