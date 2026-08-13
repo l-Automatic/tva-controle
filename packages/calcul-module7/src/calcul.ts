@@ -76,7 +76,7 @@ const TAUX_NATIONAL_PAR_DEFAUT: Record<string, number> = {
   '445714': 2.1,
 };
 
-const SEUIL_CADEAUX_HT = 73;
+const SEUIL_CADEAUX_TTC = 73;
 
 const CATEGORIE_PAR_TAUX: Record<number, CategorieLigneCalcul> = {
   20: 'collectee_20',
@@ -182,18 +182,23 @@ export function calculerTva(
     // ligne (ex: compte hors config comptesVenteService/comptesChargeService) ->
     // traité comme exigible par défaut (comportement historique, avant ce contrôle).
 
-    // --- Cadeaux clients : 0% déductible au-delà de 73€ HT, normal en dessous ---
+    // --- Cadeaux clients : 0% déductible au-delà de 73€ TTC, normal en dessous ---
+    // Bug réel corrigé le 10/08 : comparait le HT au seuil, alors que la
+    // règle officielle est 73€ TTC (confirmé deux fois indépendamment par
+    // Rami, dont une reprise de notes du tout début du projet).
     if (!estCollecte && config.comptesCadeaux?.length) {
       const ligneCadeau = ecriture.autresLignes.find((l) =>
         config.comptesCadeaux!.some((prefixe) => l.compte.startsWith(prefixe))
       );
       if (ligneCadeau) {
         const montantHtCadeau = Math.abs(ligneCadeau.debit - ligneCadeau.credit);
-        if (montantHtCadeau > SEUIL_CADEAUX_HT) {
+        const montantTvaCadeau = Math.abs(ecriture.ligneTva.debit - ecriture.ligneTva.credit);
+        const montantTtcCadeau = montantHtCadeau + montantTvaCadeau;
+        if (montantTtcCadeau > SEUIL_CADEAUX_TTC) {
           exclues.push({
             ledgerEntryId,
             compte,
-            motif: `Cadeau client de ${montantHtCadeau.toFixed(2)}€ HT, au-delà du seuil de ${SEUIL_CADEAUX_HT}€ : 0% déductible.`,
+            motif: `Cadeau client de ${montantTtcCadeau.toFixed(2)}€ TTC, au-delà du seuil de ${SEUIL_CADEAUX_TTC}€ TTC : 0% déductible.`,
             compteTiers,
             date,
           });
