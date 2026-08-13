@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Fuel, Package, ShoppingCart, Wrench, X } from 'lucide-react';
+import { Fuel, Gift, Package, ShoppingCart, Wrench, X } from 'lucide-react';
 import { ApiError, ajouterConvention, confirmerConvention } from '../api';
 import { useToast } from '../toast';
 import type { CompteACategoriser } from '../types';
@@ -17,12 +17,14 @@ const CHOIX = [
   { cle: 'comptes_charge_service', libelle: 'Charge de service', Icone: Wrench },
   { cle: 'comptes_equipement', libelle: 'Équipement', Icone: Package },
   { cle: 'comptes_carburant', libelle: 'Carburant', Icone: Fuel },
+  { cle: 'comptes_cadeaux', libelle: 'Cadeaux clients', Icone: Gift },
 ] as const;
 
-// Comptes produit/charge mouvementés sur la période mais absents des 4
+// Comptes produit/charge mouvementés sur la période mais absents des 5
 // conventions — proposés nus, sans présélection IA (chantier séparé pas
-// construit, cf. brief v2 section 5). Fermer sans tout traiter est normal :
-// les comptes non traités réapparaîtront au prochain cycle.
+// construit, cf. brief v2 section 5 ; 5ᵉ catégorie "cadeaux clients"
+// ajoutée en v6). Fermer sans tout traiter est normal : les comptes non
+// traités réapparaîtront au prochain cycle.
 export function CategorisationPopup({
   cabinetId,
   dossierId,
@@ -64,7 +66,7 @@ export function CategorisationPopup({
           </button>
         </div>
         <p className="reference">
-          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 4 conventions. Les
+          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 5 conventions. Les
           comptes non traités réapparaîtront au prochain cycle.
         </p>
         {error && <p className="error">{error}</p>}

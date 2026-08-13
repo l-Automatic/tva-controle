@@ -41,15 +41,17 @@ export interface ApiErrorBody {
   erreur: string;
 }
 
-// Les 4 conventions de comptes configurables via l'écran dédié — chacune
+// Les 5 conventions de comptes configurables via l'écran dédié — chacune
 // prend une liste de numéros de compte (`valeur` en JSONB côté API).
 // Distinctes des conventions à valeur unique (ex: compte_tva_due_autoliquidee),
-// gérées par le panneau générique "Conventions".
+// gérées par le panneau générique "Conventions". `comptes_cadeaux` est la
+// 5ᵉ catégorie (brief v6) — cadeaux clients, TVA jamais déductible dessus.
 export const CLES_CONVENTIONS_COMPTES = [
   'comptes_vente_service',
   'comptes_charge_service',
   'comptes_equipement',
   'comptes_carburant',
+  'comptes_cadeaux',
 ] as const;
 export type CleConventionCompte = (typeof CLES_CONVENTIONS_COMPTES)[number];
 
@@ -58,6 +60,7 @@ export const LIBELLE_CLE_CONVENTION: Record<CleConventionCompte, string> = {
   comptes_charge_service: 'Comptes de charge de service',
   comptes_equipement: 'Comptes d’équipement (immobilisations)',
   comptes_carburant: 'Comptes de carburant',
+  comptes_cadeaux: 'Cadeaux clients',
 };
 
 // --- Cycle TVA (Module 9) ---
@@ -263,3 +266,40 @@ export interface AuditEvenement {
   details: unknown;
   horodatage: string;
 }
+
+// --- Parc de véhicules (brief v6) — confirmé immédiatement, pas de
+// candidate/confirmed, alimente le contrôle "flotte mixte" / déductibilité
+// carburant déjà existant côté véhicules tourisme. ---
+
+export const TYPES_BIEN_VEHICULE = ['vehicule_tourisme', 'vehicule_utilitaire', 'autre'] as const;
+export type TypeBienVehicule = (typeof TYPES_BIEN_VEHICULE)[number];
+
+export const LIBELLE_TYPE_BIEN_VEHICULE: Record<TypeBienVehicule, string> = {
+  vehicule_tourisme: 'Véhicule de tourisme',
+  vehicule_utilitaire: 'Véhicule utilitaire',
+  autre: 'Autre',
+};
+
+export interface Vehicule {
+  id: string;
+  designation: string | null;
+  typeBien: TypeBienVehicule;
+  montantHt: number | null;
+  dateAcquisition: string | null;
+  statut: 'candidate' | 'confirmed' | 'rejected';
+}
+
+// --- Régime TVA sur encaissement (brief v6) — nouveau paramètre dossier,
+// détermine le traitement par défaut d'un encaissement client sans facture
+// rapprochée (cf. encaissementClientNonAffecte.ts côté backend). ---
+
+export const CLE_REGIME_TVA_ENCAISSEMENT = 'regime_tva_encaissement';
+
+export const VALEURS_REGIME_TVA_ENCAISSEMENT = ['service', 'bien', 'mixte'] as const;
+export type RegimeTvaEncaissement = (typeof VALEURS_REGIME_TVA_ENCAISSEMENT)[number];
+
+export const LIBELLE_REGIME_TVA_ENCAISSEMENT: Record<RegimeTvaEncaissement, string> = {
+  service: "Prestations de service (TVA à l'encaissement)",
+  bien: 'Vente de biens ou encaissement comptant (TVA à la facturation)',
+  mixte: 'Mixte (par défaut prudent)',
+};

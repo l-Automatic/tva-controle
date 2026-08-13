@@ -1,6 +1,7 @@
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
 import { TauxHistoriquePanel } from '../TauxHistoriquePanel';
+import { VehiculesPanel } from '../VehiculesPanel';
 import { TauxAssigneZone } from './TauxAssigneZone';
 import { ajouterConvention, confirmerConvention, fetchConventions, rejeterConvention } from '../../api';
 import {
@@ -11,7 +12,7 @@ import {
   type Proposition,
 } from '../../types';
 
-export type SousOngletConfiguration = 'comptes' | 'generiques' | 'taux' | 'tauxAssigne';
+export type SousOngletConfiguration = 'comptes' | 'generiques' | 'taux' | 'tauxAssigne' | 'vehicules';
 
 interface ConfigurationZoneProps {
   cabinetId: string;
@@ -50,13 +51,19 @@ const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: stri
     description:
       'Attribue directement un taux de TVA à un compte ou un client, une fois pour toutes — utile pour un contrôle de cohérence en fin d’exercice, ou pour éviter d’attendre qu’un historique se constitue.',
   },
+  {
+    id: 'vehicules',
+    libelle: 'Parc de véhicules',
+    description:
+      'Renseigne les véhicules du dossier — détermine la déductibilité du carburant (tourisme/utilitaire) et signale les flottes mixtes.',
+  },
 ];
 
 function libelleConvention(proposition: Proposition): string {
   return `${proposition.cle ?? '—'} : ${JSON.stringify(proposition.valeur)}`;
 }
 
-// Les 4 conventions de comptes ont leur propre onglet (ConventionsComptesPanel)
+// Les 5 conventions de comptes ont leur propre onglet (ConventionsComptesPanel)
 // — exclues ici pour ne pas apparaître en double dans les "génériques".
 async function fetchConventionsGeneriques(cabinetId: string, dossierId: string, statut?: string): Promise<Proposition[]> {
   const toutes = await fetchConventions(cabinetId, dossierId, statut);
@@ -124,6 +131,9 @@ export function ConfigurationZone({
           onSuggestionCompteConsommee={onSuggestionTauxCompteConsommee}
           onSuggestionClientConsommee={onSuggestionTauxClientConsommee}
         />
+      )}
+      {sousOnglet === 'vehicules' && (
+        <VehiculesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}
       </div>
     </div>

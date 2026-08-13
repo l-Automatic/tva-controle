@@ -8,7 +8,15 @@ import {
   fetchParametresDossier,
 } from '../api';
 import { useToast } from '../toast';
-import { CLE_THEME_DEGRADE, DEGRADES_SIDEBAR, type Parametre } from '../types';
+import {
+  CLE_REGIME_TVA_ENCAISSEMENT,
+  CLE_THEME_DEGRADE,
+  DEGRADES_SIDEBAR,
+  LIBELLE_REGIME_TVA_ENCAISSEMENT,
+  VALEURS_REGIME_TVA_ENCAISSEMENT,
+  type Parametre,
+  type RegimeTvaEncaissement,
+} from '../types';
 import { ParametresDecisionsPanel } from './ParametresDecisionsPanel';
 
 interface ParametresPanelProps {
@@ -168,6 +176,82 @@ function DegradeSection({
   );
 }
 
+function RegimeTvaSection({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+}) {
+  const [valeur, setValeur] = useState<RegimeTvaEncaissement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function charger() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchParametresDossier(cabinetId, dossierId);
+      const param = data.find((p) => p.cle === CLE_REGIME_TVA_ENCAISSEMENT);
+      setValeur(typeof param?.valeur === 'string' ? (param.valeur as RegimeTvaEncaissement) : null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger le régime TVA');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (cabinetId && dossierId) void charger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId, dossierId]);
+
+  async function handleChanger(nouvelleValeur: RegimeTvaEncaissement) {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await definirParametreDossier(cabinetId, dossierId, utilisateurId, CLE_REGIME_TVA_ENCAISSEMENT, nouvelleValeur);
+      setValeur(nouvelleValeur);
+      notifier('Régime TVA sur encaissement mis à jour');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Régime TVA sur encaissement</h2>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <select
+        value={valeur ?? ''}
+        disabled={loading || submitting}
+        onChange={(e) => void handleChanger(e.target.value as RegimeTvaEncaissement)}
+      >
+        <option value="" disabled>
+          {loading ? 'Chargement…' : 'Choisir…'}
+        </option>
+        {VALEURS_REGIME_TVA_ENCAISSEMENT.map((v) => (
+          <option key={v} value={v}>
+            {LIBELLE_REGIME_TVA_ENCAISSEMENT[v]}
+          </option>
+        ))}
+      </select>
+      <p className="reference cycle-form-warning">
+        Détermine si un encaissement client sans facture rapprochée doit générer de la TVA collectée par défaut. Un
+        commerce avec caisse ou vente comptant doit choisir « biens ».
+      </p>
+    </section>
+  );
+}
+
 function DossierSection({
   cabinetId,
   dossierId,
@@ -232,7 +316,9 @@ function DossierSection({
         Clé/valeur libres, pour préparer le terrain — aucun paramètre ici n'est encore exploité par un contrôle.
       </p>
       {(() => {
-        const visibles = parametres.filter((p) => p.cle !== CLE_THEME_DEGRADE);
+        const visibles = parametres.filter(
+          (p) => p.cle !== CLE_THEME_DEGRADE && p.cle !== CLE_REGIME_TVA_ENCAISSEMENT
+        );
         return (
           <>
             {!loading && visibles.length === 0 && <p className="empty">Aucun paramètre défini pour ce dossier.</p>}
@@ -283,6 +369,7 @@ export function ParametresPanel({
     <>
       <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <DegradeSection
         cabinetId={cabinetId}
         dossierId={dossierId}

@@ -12,6 +12,8 @@ import type {
   TauxAssigne,
   TauxAssigneEntry,
   TiersReference,
+  TypeBienVehicule,
+  Vehicule,
 } from './types';
 
 const BASE_URL = '/api';
@@ -410,6 +412,31 @@ export function assignerTauxCompte(
   return request<void>(`/dossiers/${dossierId}/taux-assignes`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ compte, taux, utilisateurId }),
+  });
+}
+
+// --- Parc de véhicules ---
+
+export function fetchVehicules(cabinetId: string, dossierId: string): Promise<Vehicule[]> {
+  return request<Vehicule[]>(`/dossiers/${dossierId}/vehicules`, cabinetId);
+}
+
+export function ajouterVehicule(
+  cabinetId: string,
+  dossierId: string,
+  vehicule: { designation?: string; typeBien: TypeBienVehicule; montantHt?: number; dateAcquisition?: string },
+  utilisateurId: string
+): Promise<{ id: string }> {
+  return request<{ id: string }>(`/dossiers/${dossierId}/vehicules`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ ...vehicule, utilisateurId }),
+  });
+}
+
+export function retirerVehicule(cabinetId: string, id: string, utilisateurId: string): Promise<void> {
+  return request<void>(`/vehicules/${id}/retirer`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
   });
 }
 
