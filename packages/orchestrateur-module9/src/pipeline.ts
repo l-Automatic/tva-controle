@@ -15,6 +15,7 @@ import {
   verifierDeductibiliteVehiculeTourisme,
   verifierCoherenceTauxAutoliquidation,
   verifierCoherenceCompteImmobilisation,
+  verifierExhaustiviteAutoliquidation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -151,6 +152,7 @@ export async function executerCycleTva(
     contexteDossier,
     'compte_tva_deductible_autoliquidee'
   );
+  const comptesChargeAutoliquidation = conventionListe(contexteDossier, 'comptes_charge_autoliquidation') ?? [];
 
   // Dérivés de la mémoire de dossier — [] si le dossier n'a encore aucune
   // convention confirmée pour ce point (ex: pas encore onboardé). Un tableau
@@ -230,6 +232,14 @@ export async function executerCycleTva(
   const anomaliesCoherenceCompteImmobilisation = verifierCoherenceCompteImmobilisation(ecritures, {
     comptesImmobilisation,
   });
+  const anomaliesExhaustiviteAutoliquidation =
+    compteAutoliquidationDue !== undefined && compteAutoliquidationDeductible !== undefined
+      ? verifierExhaustiviteAutoliquidation(ecritures, {
+          comptesChargeAutoliquidation,
+          compteTvaDueAutoliquidee: compteAutoliquidationDue,
+          compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductible,
+        })
+      : [];
 
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
@@ -304,6 +314,7 @@ export async function executerCycleTva(
     ...anomaliesVehiculeTourisme,
     ...anomaliesCoherenceAutoliquidation,
     ...anomaliesCoherenceCompteImmobilisation,
+    ...anomaliesExhaustiviteAutoliquidation,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
