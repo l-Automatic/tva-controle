@@ -1,47 +1,35 @@
-# Brief frontend v9 — relance complète de v6, jamais appliqué
+# Brief frontend v9 (corrigé) — cadeaux manquants + nouvelle catégorie
 
 ## Contexte
-`BRIEF_FRONTEND_V6.md` n'a jamais été exécuté (confirmé le 10/08 : cadeaux
-clients absent du popup et de Conventions de comptes). Ce brief reprend
-tout son contenu, plus un ajout du 10/08.
+Correction du diagnostic initial : `BRIEF_FRONTEND_V6.md` **a bien été
+appliqué** (parc de véhicules et régime TVA sur encaissement existent déjà
+dans l'interface) — pas besoin de les reconstruire, juste les vérifier
+rapidement au passage. En revanche, la catégorie "Cadeaux clients" reste
+absente du popup de catégorisation et de l'onglet Conventions de comptes,
+malgré le fait qu'elle faisait partie de v6 — à investiguer et corriger.
 
-## 1. Écran de gestion du parc de véhicules
-Dans **Configuration du dossier** :
-- `GET /dossiers/:id/vehicules` — liste (id, désignation, type, montant HT,
-  date d'acquisition, statut).
-- `POST /dossiers/:id/vehicules` — ajout, body
-  `{designation?, typeBien: 'vehicule_tourisme'|'vehicule_utilitaire'|'autre', montantHt?, dateAcquisition?, utilisateurId}`.
-- `POST /vehicules/:id/retirer` — retrait, body `{utilisateurId}`.
-- Formulaire simple : désignation (texte libre), type (select 3 options),
-  montant HT et date optionnels. Confirmé immédiatement, pas de
-  candidate/confirmed.
+## 1. Vérification rapide (pas de reconstruction attendue)
+Confirmer que ces deux éléments de v6 sont bien fonctionnels :
+- Écran de gestion du parc de véhicules dans Configuration du dossier
+  (ajout/liste/retrait).
+- Select "régime TVA sur encaissement" dans Paramètres dossier.
 
-## 2. Cadeaux clients — 5ᵉ catégorie du popup et de Conventions de comptes
+## 2. Corriger : Cadeaux clients manquant
 Le popup de catégorisation et l'onglet Conventions de comptes doivent
-proposer 5 choix au lieu de 4 : Prestation de service, Compte
-d'équipement, Carburant, **Cadeaux clients**, Aucune de celles-là. Même
-route existante (`POST /dossiers/:id/conventions`) avec
-`cle: 'comptes_cadeaux'`.
+proposer "Cadeaux clients" comme option — `cle: 'comptes_cadeaux'`, même
+route existante (`POST /dossiers/:id/conventions`). Vérifier pourquoi ça
+n'est pas passé la première fois (bug d'implémentation, oubli, ou
+condition qui masque cette catégorie) plutôt que de simplement re-coder à
+l'identique.
 
-## 3. NOUVEAU (10/08) — 6ᵉ catégorie : Comptes d'immobilisations
-S'ajoute aux 5 précédentes, dans le popup ET l'onglet Conventions de
-comptes : **Compte d'immobilisation**, `cle: 'comptes_immobilisation'`.
+## 3. Nouveau (10/08) — Comptes d'immobilisations
+S'ajoute aux catégories existantes, dans le popup ET l'onglet Conventions
+de comptes : **Compte d'immobilisation**, `cle: 'comptes_immobilisation'`.
 Sert à un contrôle bloquant : si une pièce touche un compte confirmé dans
 cette catégorie mais que sa TVA déductible est en 44566 au lieu de 44562,
-c'est signalé comme une erreur de saisie à corriger.
-
-## 4. Régime TVA sur encaissement — paramètre dossier
-Dans **Paramètres dossier**, select à 3 options : "Prestations de service
-(TVA à l'encaissement)" / "Vente de biens ou encaissement comptant (TVA à
-la facturation)" / "Mixte (par défaut prudent)" — clé
-`regime_tva_encaissement`, valeurs `service`/`bien`/`mixte`. Route
-`POST /dossiers/:id/parametres`, body
-`{cle: 'regime_tva_encaissement', valeur, utilisateurId}`. Explication
-courte sous le select : "Détermine si un encaissement client sans facture
-rapprochée doit générer de la TVA collectée par défaut. Un commerce avec
-caisse ou vente comptant doit choisir 'biens'."
+c'est signalé comme erreur de saisie à corriger.
 
 ## Vérification
-Comme toujours : dev server, actions réelles. Vérifier explicitement,
-avant de clore, que les 6 catégories apparaissent bien ensemble dans le
-même popup et le même onglet — pas seulement 5 ou 4.
+Avant de clore : toutes les catégories de comptes (service vente, service
+charge, équipement, carburant, cadeaux, immobilisation — 6 au total)
+doivent apparaître ensemble dans le même popup et le même onglet.
