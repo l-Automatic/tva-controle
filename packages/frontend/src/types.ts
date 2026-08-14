@@ -41,17 +41,22 @@ export interface ApiErrorBody {
   erreur: string;
 }
 
-// Les 5 conventions de comptes configurables via l'écran dédié — chacune
+// Les 6 conventions de comptes configurables via l'écran dédié — chacune
 // prend une liste de numéros de compte (`valeur` en JSONB côté API).
 // Distinctes des conventions à valeur unique (ex: compte_tva_due_autoliquidee),
 // gérées par le panneau générique "Conventions". `comptes_cadeaux` est la
 // 5ᵉ catégorie (brief v6) — cadeaux clients, TVA jamais déductible dessus.
+// `comptes_immobilisation` est la 6ᵉ (brief v9) — distincte de
+// `comptes_equipement` malgré le libellé proche : sert au contrôle bloquant
+// qui signale une TVA déductible saisie en 44566 au lieu de 44562 sur ces
+// comptes (cf. coherenceCompteImmobilisation.ts côté backend).
 export const CLES_CONVENTIONS_COMPTES = [
   'comptes_vente_service',
   'comptes_charge_service',
   'comptes_equipement',
   'comptes_carburant',
   'comptes_cadeaux',
+  'comptes_immobilisation',
 ] as const;
 export type CleConventionCompte = (typeof CLES_CONVENTIONS_COMPTES)[number];
 
@@ -61,6 +66,7 @@ export const LIBELLE_CLE_CONVENTION: Record<CleConventionCompte, string> = {
   comptes_equipement: 'Comptes d’équipement (immobilisations)',
   comptes_carburant: 'Comptes de carburant',
   comptes_cadeaux: 'Cadeaux clients',
+  comptes_immobilisation: 'Comptes d’immobilisation',
 };
 
 // --- Cycle TVA (Module 9) ---

@@ -18,6 +18,12 @@ import { InfoTooltip } from './InfoTooltip';
 const INFOBULLE_CHARGE_SERVICE =
   "Tout achat de prestation de service, autoliquidé ou non — détermine si la TVA déductible attend le paiement de la facture. Pour configurer les comptes d'autoliquidation spécifiquement, voir l'onglet Conventions génériques.";
 
+// Distinction volontaire de "Comptes d'équipement" : ici les vrais comptes
+// d'immobilisation confirmés (218X, 215X...), pour un contrôle bloquant
+// distinct — cf. brief v9, coherenceCompteImmobilisation.ts côté backend.
+const INFOBULLE_IMMOBILISATION =
+  "Distinct des comptes d'équipement (petit équipement à surveiller) : ici les vrais comptes d'immobilisation (218X, 215X…). Sert à détecter une erreur de saisie fréquente — TVA déductible passée en 44566 au lieu de 44562.";
+
 interface ConventionsComptesPanelProps {
   cabinetId: string;
   dossierId: string;
@@ -219,6 +225,7 @@ export function ConventionsComptesPanel({ cabinetId, dossierId, utilisateurId }:
               <h3>
                 {LIBELLE_CLE_CONVENTION[cle]}
                 {cle === 'comptes_charge_service' && <InfoTooltip texte={INFOBULLE_CHARGE_SERVICE} />}
+                {cle === 'comptes_immobilisation' && <InfoTooltip texte={INFOBULLE_IMMOBILISATION} />}
               </h3>
               {pourCetteCle.length === 0 ? (
                 <p className="empty">Aucune valeur configurée.</p>
