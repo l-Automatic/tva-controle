@@ -469,3 +469,19 @@ contrôles listés tout au début du projet (avant même la conversation
 d'origine dont le document exhaustif a été fourni le 09/08) et vérifier,
 un par un, si une fonctionnalité du logiciel les couvre. À faire à la
 reprise.
+
+---
+
+## Correction du 10/08 — fausse alerte sur les cadeaux clients
+
+Le signalement précédent ("cadeaux clients absent du popup") était une
+observation sur un état antérieur, pas un bug réel — la catégorie était
+déjà entièrement câblée depuis le commit v6. Confirmé en conditions
+réelles après investigation ciblée (backend vérifié sans whitelist
+bloquante, frontend vérifié câblé, test de bout en bout après rechargement
+de page). Aucune leçon technique à en tirer, sinon : vérifier avant de
+recoder, ce qui a été fait cette fois-ci.
+
+**6ᵉ catégorie de convention "Comptes d'immobilisation" : fait, frontend
+et backend.** Popup + onglet Conventions de comptes, icône dédiée,
+info-bulle expliquant la distinction avec "Comptes d'équipement".
