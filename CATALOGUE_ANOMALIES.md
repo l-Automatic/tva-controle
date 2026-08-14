@@ -121,6 +121,43 @@ prudence), et cette anomalie trace la décision prise.
 construit : un moyen de corriger ce taux pour cette écriture précise si le
 défaut ne convient pas (voir `REGLES_FISCALES_ET_TACHES.md`, Groupe C).
 
+### `immobilisation_vehicule_tourisme_a_verifier`
+**Déclencheur** : une ligne de TVA déductible sur immobilisation (44562)
+existe, et le dossier a au moins un véhicule de tourisme confirmé dans son
+parc de véhicules.
+**Pourquoi signalée, pas bloquante** : impossible de lier de façon fiable
+une ligne d'immobilisation précise à un véhicule précis (surtout pour un
+véhicule ajouté manuellement, sans référence vers une écriture source).
+**Action attendue** : vérifier si cette écriture précise concerne le
+véhicule de tourisme (0% déductible) ou un autre bien (déductible
+normalement).
+
+### `incoherence_taux_autoliquidation`
+**Déclencheur** : le taux implicite (TVA/HT) d'une écriture sur le compte
+de charge spécifiquement identifié comme lié à l'autoliquidation
+(via co-occurrence avec la ligne 445664 confirmée) s'écarte du taux
+dominant observé pour ce même compte sur la période.
+**Action attendue** : vérifier une possible erreur de saisie.
+
+### `immobilisation_sur_compte_tva_incorrect`
+**Déclencheur** : une pièce touche un compte confirmé dans la catégorie
+"Comptes d'immobilisation", mais sa TVA déductible est passée en 44566
+(autres biens et services) au lieu de 44562 (immobilisations).
+**Pourquoi bloquante** : contrairement à la plupart des contrôles de ce
+module, c'est une erreur de saisie certaine, pas une nuance d'appréciation.
+**Action attendue** : corriger le compte de TVA dans Pennylane, puis
+relancer le cycle.
+
+### `autoliquidation_incomplete`
+**Déclencheur** : le nombre de pièces distinctes touchant le(s) compte(s)
+de charge confirmés comme liés à l'autoliquidation ne correspond pas au
+nombre de pièces touchant 4454 (TVA due) et 445664 (TVA déductible) sur
+la même période.
+**Pourquoi bloquante** : signale un oubli probable de l'écriture
+d'autoliquidation, un vrai manquement de conformité.
+**Action attendue** : vérifier et compléter l'écriture manquante dans
+Pennylane.
+
 ---
 
 ## Ce que "Résoudre" et "Justifier" veulent dire, dans l'interface
