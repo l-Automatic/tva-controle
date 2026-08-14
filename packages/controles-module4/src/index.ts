@@ -47,6 +47,10 @@ export {
   verifierCoherenceCompteImmobilisation,
   type ConfigCoherenceCompteImmobilisation,
 } from './coherenceCompteImmobilisation.js';
+export {
+  verifierExhaustiviteAutoliquidation,
+  type ConfigExhaustiviteAutoliquidation,
+} from './exhaustiviteAutoliquidation.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
