@@ -21,6 +21,7 @@ import {
   detecterEncaissementsClientAAffecter,
   identifierComptesACategoriser,
   type CompteACategoriser,
+  identifierComptesServiceSansSousCategorieAutoliquidation,
   identifierComptesSansTauxAssigne,
   identifierComptesClientSansTaux,
   type CompteSansTauxAssigne,
@@ -28,6 +29,11 @@ import {
 } from '@tva-controle/controles-module4';
 import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
 import { analyserTauxHistorique, analyserTauxHistoriqueParTiers } from '@tva-controle/onboarding-module3';
+import {
+  MistralClient,
+  suggererClassificationComptes,
+  type SuggestionClassificationCompte,
+} from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur, conventionListe } from './db/dossierRepository.js';
@@ -45,6 +51,7 @@ import {
   listerAnomaliesTraiteesParTypeEtPiece,
   listerTauxAssignes,
   parametreDossierValeur,
+  parametreCabinetValeur,
 } from './db/readRepository.js';
 
 export interface ParametresCycleTva {
@@ -87,22 +94,32 @@ export interface ParametresCycleTva {
   comptesClientOverride?: string[];
 }
 
+// Présélection IA (10/08) : optionnelle, ajoutée après coup à un compte déjà
+// détecté déterministiquement — jamais l'inverse. Absente si aucune clé
+// Mistral n'est configurée pour ce cabinet, ou si l'appel échoue (dégradation
+// gracieuse, cf. plus bas).
+export interface CompteACategoriserAvecSuggestion extends CompteACategoriser {
+  suggestionIA?: SuggestionClassificationCompte;
+}
+
 export type ResultatCycleTva =
   | {
       statut: 'bloque';
       anomalies: Anomalie[];
-      comptesACategoriser: CompteACategoriser[];
+      comptesACategoriser: CompteACategoriserAvecSuggestion[];
       comptesSansTauxAssigne: CompteSansTauxAssigne[];
       comptesClientSansTaux: CompteClientSansTauxAssigne[];
+      comptesAutoliquidationSuggeres: CompteACategoriserAvecSuggestion[];
     }
   | {
       statut: 'calcule';
       anomalies: Anomalie[];
       resultat: ResultatCalculTva;
       calculId: string;
-      comptesACategoriser: CompteACategoriser[];
+      comptesACategoriser: CompteACategoriserAvecSuggestion[];
       comptesSansTauxAssigne: CompteSansTauxAssigne[];
       comptesClientSansTaux: CompteClientSansTauxAssigne[];
+      comptesAutoliquidationSuggeres: CompteACategoriserAvecSuggestion[];
     };
 
 // Enchaîne : charge le contexte dossier (Module 2) -> récupère les écritures
@@ -120,6 +137,17 @@ export type ResultatCycleTva =
 // La persistance se fait dans des transactions séparées de la lecture du
 // contexte et de l'appel réseau Pennylane, pour ne jamais garder une
 // transaction Postgres ouverte pendant une opération lente/externe.
+function fusionnerSuggestions(
+  comptes: CompteACategoriser[],
+  suggestions: SuggestionClassificationCompte[]
+): CompteACategoriserAvecSuggestion[] {
+  const suggestionParCompte = new Map(suggestions.map((s) => [s.compte, s]));
+  return comptes.map((c) => {
+    const suggestion = suggestionParCompte.get(c.compte);
+    return suggestion ? { ...c, suggestionIA: suggestion } : c;
+  });
+}
+
 export async function executerCycleTva(
   pool: Pool,
   params: ParametresCycleTva
@@ -177,7 +205,7 @@ export async function executerCycleTva(
 
   // Détection déterministe pour le popup de catégorisation (08/08) — ne
   // dépend que des 4 conventions déjà connues, calculée une fois qu'elles
-  // le sont toutes. Pas de présélection IA ici, cf. comptesACategoriser.ts.
+  // le sont toutes.
   const comptesACategoriser = identifierComptesACategoriser(ecritures, {
     comptesVenteService,
     comptesChargeService,
@@ -186,6 +214,66 @@ export async function executerCycleTva(
     comptesCadeaux,
     comptesImmobilisation,
   });
+
+  // Comptes déjà "charge de service" mais pas encore marqués spécifiquement
+  // autoliquidation — distinct du popup ci-dessus (un compte peut être les
+  // deux à la fois, ce n'est pas une catégorie exclusive).
+  const comptesAutoliquidationBruts = identifierComptesServiceSansSousCategorieAutoliquidation(
+    ecritures,
+    comptesChargeService,
+    comptesChargeAutoliquidation
+  );
+
+  // Présélection IA (10/08) — premier vrai usage du LLM du projet. Purement
+  // additive : si aucune clé Mistral n'est configurée pour ce cabinet, ou
+  // si l'appel échoue pour n'importe quelle raison (réseau, quota, réponse
+  // malformée), le cycle continue normalement SANS suggestion — jamais un
+  // aléa d'un service tiers optionnel ne doit faire échouer un cycle TVA.
+  let comptesACategoriserEnrichi: CompteACategoriserAvecSuggestion[] = comptesACategoriser;
+  let comptesAutoliquidationEnrichi: CompteACategoriserAvecSuggestion[] = comptesAutoliquidationBruts;
+
+  const mistralApiKey = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    parametreCabinetValeur(client, params.cabinetId, 'mistral_api_key')
+  );
+
+  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
+    const mistralClient = new MistralClient({ apiKey: mistralApiKey });
+
+    if (comptesACategoriser.length > 0) {
+      try {
+        const suggestions = await suggererClassificationComptes(mistralClient, comptesACategoriser, [
+          { cle: 'comptes_vente_service', description: 'Ventes de prestations de service' },
+          { cle: 'comptes_charge_service', description: 'Achats de prestations de service (autoliquidés ou non)' },
+          { cle: 'comptes_equipement', description: 'Petit équipement à surveiller pour passage en immobilisation' },
+          { cle: 'comptes_carburant', description: 'Achats de carburant' },
+          { cle: 'comptes_cadeaux', description: 'Cadeaux offerts aux clients' },
+          { cle: 'comptes_immobilisation', description: 'Comptes d\'immobilisation confirmés (218X, 215X...)' },
+        ]);
+        comptesACategoriserEnrichi = fusionnerSuggestions(comptesACategoriser, suggestions);
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec présélection IA (popup catégorisation) : ${String(err)}`);
+        }
+      }
+    }
+
+    if (comptesAutoliquidationBruts.length > 0) {
+      try {
+        const suggestions = await suggererClassificationComptes(mistralClient, comptesAutoliquidationBruts, [
+          {
+            cle: 'comptes_charge_autoliquidation',
+            description:
+              "Compte de charge spécifiquement dédié aux achats de sous-traitance autoliquidée (le libellé du compte l'indique généralement, ex: mention explicite d'autoliquidation)",
+          },
+        ]);
+        comptesAutoliquidationEnrichi = fusionnerSuggestions(comptesAutoliquidationBruts, suggestions);
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec présélection IA (compte autoliquidation) : ${String(err)}`);
+        }
+      }
+    }
+  }
 
   // Suggestions pour l'onglet "Taux assigné" (09/08) — comptes mouvementés
   // sans taux encore assigné, produit/charge et client.
@@ -396,9 +484,10 @@ export async function executerCycleTva(
     return {
       statut: 'bloque',
       anomalies: toutesAnomalies,
-      comptesACategoriser,
+      comptesACategoriser: comptesACategoriserEnrichi,
       comptesSansTauxAssigne,
       comptesClientSansTaux,
+      comptesAutoliquidationSuggeres: comptesAutoliquidationEnrichi,
     };
   }
 
@@ -477,8 +566,9 @@ export async function executerCycleTva(
     anomalies: toutesAnomalies,
     resultat,
     calculId,
-    comptesACategoriser,
+    comptesACategoriser: comptesACategoriserEnrichi,
     comptesSansTauxAssigne,
     comptesClientSansTaux,
+    comptesAutoliquidationSuggeres: comptesAutoliquidationEnrichi,
   };
 }
