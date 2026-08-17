@@ -15,6 +15,7 @@
     "@tva-controle/controles-module4": "*",
     "@tva-controle/calcul-module7": "*",
     "@tva-controle/onboarding-module3": "*",
+    "@tva-controle/connector-mistral": "*",
     "pg": "^8.12.0"
   },
   "devDependencies": {
