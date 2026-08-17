@@ -1,0 +1,20 @@
+{
+  "name": "@tva-controle/connector-mistral",
+  "version": "0.1.0",
+  "description": "Connecteur Mistral (chat completions, JSON mode) — premier appel LLM réel du projet. Jamais utilisé pour trancher seul un chiffre fiscal : uniquement des propositions 'candidate', toujours confirmées par un humain.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tva-controle/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "@types/node": "^22.5.0"
+  }
+}
