@@ -70,3 +70,39 @@ export function identifierComptesACategoriser(
     .map(([compte, libelles]) => ({ compte, exemplesLibelle: [...libelles] }))
     .sort((a, b) => a.compte.localeCompare(b.compte));
 }
+
+// Distinct de identifierComptesACategoriser : ici on cherche des comptes
+// DÉJÀ catégorisés en "charge de service" (comptesChargeService confirmé),
+// mais pas encore dans le sous-ensemble "spécifiquement autoliquidation"
+// (comptesChargeAutoliquidation). Un compte peut être les deux à la fois
+// (charge de service ET autoliquidation) — ce n'est pas une catégorie
+// exclusive du popup principal, d'où une détection séparée. Demande de
+// Rami (10/08) : suggérer une présélection IA sur le libellé, distincte du
+// popup de catégorisation principal.
+export function identifierComptesServiceSansSousCategorieAutoliquidation(
+  ecritures: EcritureTvaComplete[],
+  comptesChargeService: string[],
+  comptesChargeAutoliquidationDejaConnus: string[]
+): CompteACategoriser[] {
+  const estDejaMarqueAutoliquidation = (compte: string) =>
+    comptesChargeAutoliquidationDejaConnus.some((prefixe) => compte.startsWith(prefixe));
+  const estChargeService = (compte: string) => comptesChargeService.some((prefixe) => compte.startsWith(prefixe));
+
+  const libellesParCompte = new Map<string, Set<string>>();
+
+  for (const ecriture of ecritures) {
+    for (const ligne of ecriture.autresLignes) {
+      if (!estChargeService(ligne.compte) || estDejaMarqueAutoliquidation(ligne.compte)) continue;
+
+      const libelles = libellesParCompte.get(ligne.compte) ?? new Set<string>();
+      if (ligne.libelle && libelles.size < 3) {
+        libelles.add(ligne.libelle);
+      }
+      libellesParCompte.set(ligne.compte, libelles);
+    }
+  }
+
+  return [...libellesParCompte.entries()]
+    .map(([compte, libelles]) => ({ compte, exemplesLibelle: [...libelles] }))
+    .sort((a, b) => a.compte.localeCompare(b.compte));
+}
