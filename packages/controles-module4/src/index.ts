@@ -29,6 +29,7 @@ export {
 } from './encaissementClientNonAffecte.js';
 export {
   identifierComptesACategoriser,
+  identifierComptesServiceSansSousCategorieAutoliquidation,
   type ComptesConnus,
   type CompteACategoriser,
 } from './comptesACategoriser.js';
