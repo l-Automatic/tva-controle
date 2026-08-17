@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EcritureTvaComplete } from '@tva-controle/core';
-import { identifierComptesACategoriser } from '../src/comptesACategoriser.js';
+import { identifierComptesACategoriser, identifierComptesServiceSansSousCategorieAutoliquidation } from '../src/comptesACategoriser.js';
 
 function ecriture(autresLignes: EcritureTvaComplete['autresLignes']): EcritureTvaComplete {
   return {
@@ -82,5 +82,34 @@ describe('identifierComptesACategoriser', () => {
     const e = ecriture([{ id: 1, compte: '401FOURNISSEUR', compteId: 1, libelle: null, debit: 0, credit: 200 }]);
 
     expect(identifierComptesACategoriser([e], connusVides)).toEqual([]);
+  });
+});
+
+describe('identifierComptesServiceSansSousCategorieAutoliquidation', () => {
+  it('signale un compte charge service pas encore marqué autoliquidation', () => {
+    const e = ecriture([
+      { id: 1, compte: '604AUTOLIQ', compteId: 1, libelle: 'Sous-traitance autoliquidée', debit: 500, credit: 0 },
+    ]);
+    const resultat = identifierComptesServiceSansSousCategorieAutoliquidation(
+      [e],
+      ['604', '611'],
+      []
+    );
+    expect(resultat).toEqual([{ compte: '604AUTOLIQ', exemplesLibelle: ['Sous-traitance autoliquidée'] }]);
+  });
+
+  it('ignore un compte déjà marqué autoliquidation', () => {
+    const e = ecriture([{ id: 1, compte: '604AUTOLIQ', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
+    const resultat = identifierComptesServiceSansSousCategorieAutoliquidation(
+      [e],
+      ['604'],
+      ['604AUTOLIQ']
+    );
+    expect(resultat).toEqual([]);
+  });
+
+  it('ignore un compte qui n’est même pas charge de service', () => {
+    const e = ecriture([{ id: 1, compte: '607', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
+    expect(identifierComptesServiceSansSousCategorieAutoliquidation([e], ['604', '611'], [])).toEqual([]);
   });
 });
