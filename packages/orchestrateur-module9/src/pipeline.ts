@@ -16,6 +16,7 @@ import {
   verifierDeductibiliteVehiculeTourisme,
   verifierCoherenceTauxAutoliquidation,
   verifierCoherenceCompteImmobilisation,
+  verifierCoherenceTvaHotel,
   verifierExhaustiviteAutoliquidation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
@@ -358,6 +359,27 @@ export async function executerCycleTva(
         })
       : [];
 
+  // Contrôle hôtel (10/08) : résout le nom réel des comptes fournisseurs
+  // touchés par une ligne déductible ABS (44566) — jamais un libellé
+  // d'écriture, même raison que pour la présélection IA plus haut.
+  const comptesFournisseurConcernes = [
+    ...new Set(
+      ecritures
+        .filter((e) => e.ligneTva.compte.startsWith('44566'))
+        .map((e) => e.lignesTiers[0]?.compte)
+        .filter((c): c is string => c !== undefined)
+    ),
+  ];
+  const nomsComptesFournisseur =
+    comptesFournisseurConcernes.length > 0
+      ? new Map(
+          [...(await resolveLedgerAccounts(params.client, comptesFournisseurConcernes)).entries()].map(
+            ([numero, resolu]) => [numero, resolu.libelle]
+          )
+        )
+      : new Map<string, string>();
+  const anomaliesHotel = verifierCoherenceTvaHotel(ecritures, nomsComptesFournisseur);
+
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
   // par définition aucune ligne TVA associée (c'est justement le problème),
@@ -432,6 +454,7 @@ export async function executerCycleTva(
     ...anomaliesCoherenceAutoliquidation,
     ...anomaliesCoherenceCompteImmobilisation,
     ...anomaliesExhaustiviteAutoliquidation,
+    ...anomaliesHotel,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
