@@ -42,11 +42,28 @@ export async function suggererClassificationComptes(
     `Tu es un assistant qui aide à catégoriser des comptes comptables français ` +
     `(plan comptable général) à partir de leur numéro et des libellés observés ` +
     `sur leurs écritures. Tu ne prends aucune décision définitive : tes réponses ` +
-    `sont des suggestions qu'un comptable humain validera ou rejettera. Si tu ` +
-    `n'es pas raisonnablement confiant, réponds categorie: null plutôt que de ` +
-    `deviner — une suggestion fausse présentée avec assurance est pire qu'une ` +
-    `absence de suggestion. Réponds uniquement en JSON, au format demandé, sans ` +
-    `texte hors du JSON.`;
+    `sont des suggestions qu'un comptable humain validera ou rejettera.\n\n` +
+    `RÈGLE LA PLUS IMPORTANTE : la plupart des comptes qu'on te donne ne rentrent ` +
+    `dans AUCUNE des catégories listées — c'est normal et attendu, pas un échec. ` +
+    `Les catégories listées sont des EXCEPTIONS à repérer, pas des cases que tu dois ` +
+    `remplir à tout prix. Réponds categorie: null dès que le compte ne correspond ` +
+    `clairement à aucune catégorie, ou si tu hésites — ne choisis JAMAIS "la moins ` +
+    `mauvaise option" par défaut. Une suggestion fausse présentée avec assurance ` +
+    `est pire qu'une absence de suggestion.\n\n` +
+    `Repères du plan comptable général à connaître, pour éviter les confusions ` +
+    `fréquentes bien/service :\n` +
+    `- Comptes 601 à 607 (achats stockés : matières premières, fournitures, ` +
+    `marchandises) : ce sont des BIENS, presque jamais des prestations de service, ` +
+    `même si le libellé contient des mots génériques comme "achat" ou "fourniture".\n` +
+    `- Comptes 6063/6064/6068 (fournitures non stockables, petites fournitures ` +
+    `d'entretien ou administratives) : à rapprocher d'une catégorie "petit ` +
+    `équipement" si elle existe dans la liste, jamais d'une catégorie "service".\n` +
+    `- Comptes 611 (sous-traitance) et 61x/62x en général : souvent des services, ` +
+    `mais vérifie quand même le libellé plutôt que de te fier uniquement au préfixe.\n` +
+    `- Comptes 6061/6062 (eau, énergie, fournitures non stockables) : ni un bien ` +
+    `classique ni une prestation de service au sens fiscal du terme — categorie: ` +
+    `null sauf si une catégorie de la liste les couvre explicitement (ex: carburant).\n\n` +
+    `Réponds uniquement en JSON, au format demandé, sans texte hors du JSON.`;
 
   const categoriesTexte = categories.map((c) => `- ${c.cle} : ${c.description}`).join('\n');
   const comptesTexte = comptes
