@@ -52,6 +52,7 @@ export {
   verifierExhaustiviteAutoliquidation,
   type ConfigExhaustiviteAutoliquidation,
 } from './exhaustiviteAutoliquidation.js';
+export { verifierCoherenceTvaHotel } from './coherenceHotel.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
