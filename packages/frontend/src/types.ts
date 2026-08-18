@@ -99,12 +99,28 @@ export interface ResultatCalculCycle {
   ecrituresExclues: EcritureExclue[];
 }
 
-// Comptes produit/charge mouvementés sur la période mais absents des 4
-// conventions de comptes — popup de catégorisation (brief v2). Sans
-// présélection IA pour l'instant (chantier séparé, pas construit).
+// Présélection IA (brief v10) — premier usage du LLM (Mistral) dans le
+// projet. Purement une suggestion : absente si aucune clé Mistral n'est
+// configurée pour le cabinet ou si l'appel a échoué (dégradation gracieuse
+// côté backend), jamais garantie d'être présente. Ne doit jamais permettre
+// une validation sans geste conscient de l'utilisateur (cf. brief v10,
+// contexte).
+export type ConfianceSuggestionIA = 'haute' | 'moyenne' | 'basse';
+
+export interface SuggestionIA {
+  compte: string;
+  categorieSuggeree: string | null;
+  confiance: ConfianceSuggestionIA;
+  justification: string;
+}
+
+// Comptes produit/charge mouvementés sur la période mais absents des 6
+// conventions de comptes — popup de catégorisation (brief v2). `suggestionIA`
+// ajoutée en v10 : présélection optionnelle, jamais une auto-validation.
 export interface CompteACategoriser {
   compte: string;
   exemplesLibelle: string[];
+  suggestionIA?: SuggestionIA;
 }
 
 // Comptes produit/charge (classes 6/7) mouvementés sans taux assigné, et
@@ -129,6 +145,7 @@ export type ResultatCycle =
       comptesACategoriser: CompteACategoriser[];
       comptesSansTauxAssigne: CompteSansTauxAssigne[];
       comptesClientSansTaux: CompteClientSansTauxAssigne[];
+      comptesAutoliquidationSuggeres: CompteACategoriser[];
     }
   | {
       statut: 'calcule';
@@ -138,6 +155,7 @@ export type ResultatCycle =
       comptesACategoriser: CompteACategoriser[];
       comptesSansTauxAssigne: CompteSansTauxAssigne[];
       comptesClientSansTaux: CompteClientSansTauxAssigne[];
+      comptesAutoliquidationSuggeres: CompteACategoriser[];
     };
 
 // --- Calculs persistés (panneau "Calculs") ---

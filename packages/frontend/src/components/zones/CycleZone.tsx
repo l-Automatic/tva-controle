@@ -14,6 +14,7 @@ interface CycleZoneProps {
   periode: { debut: string; fin: string } | null;
   onPeriodeChange: (periode: { debut: string; fin: string } | null) => void;
   onSuggestionsTaux: (comptes: CompteSansTauxAssigne[], clients: CompteClientSansTauxAssigne[]) => void;
+  onSuggestionsAutoliquidation: (comptes: CompteACategoriser[]) => void;
 }
 
 function CalculsDuCycle({
@@ -81,6 +82,7 @@ export function CycleZone({
   periode,
   onPeriodeChange,
   onSuggestionsTaux,
+  onSuggestionsAutoliquidation,
 }: CycleZoneProps) {
   const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
 
@@ -109,6 +111,7 @@ export function CycleZone({
           onPeriodeChange({ debut, fin });
           if (resultat.comptesACategoriser.length > 0) setComptesACategoriser(resultat.comptesACategoriser);
           onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
+          onSuggestionsAutoliquidation(resultat.comptesAutoliquidationSuggeres);
         }}
       />
       {periode && (

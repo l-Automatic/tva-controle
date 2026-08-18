@@ -13,6 +13,7 @@ import {
   CLES_CONVENTIONS_COMPTES,
   DEGRADE_PAR_DEFAUT,
   type CleConventionCompte,
+  type CompteACategoriser,
   type CompteClientSansTauxAssigne,
   type CompteSansTauxAssigne,
   type Dossier,
@@ -57,6 +58,7 @@ export function App() {
   const [degrade, setDegrade] = useState<string>(DEGRADE_PAR_DEFAUT);
   const [suggestionsTauxComptes, setSuggestionsTauxComptes] = useState<CompteSansTauxAssigne[]>([]);
   const [suggestionsTauxClients, setSuggestionsTauxClients] = useState<CompteClientSansTauxAssigne[]>([]);
+  const [suggestionsAutoliquidation, setSuggestionsAutoliquidation] = useState<CompteACategoriser[]>([]);
 
   const { cabinetId, utilisateurId } = identite;
 
@@ -196,6 +198,7 @@ export function App() {
                     setSuggestionsTauxComptes(comptes);
                     setSuggestionsTauxClients(clients);
                   }}
+                  onSuggestionsAutoliquidation={setSuggestionsAutoliquidation}
                 />
               )}
               {zone === 'configuration' && (
@@ -212,6 +215,10 @@ export function App() {
                   }
                   onSuggestionTauxClientConsommee={(numeroCompteTiers) =>
                     setSuggestionsTauxClients((prev) => prev.filter((c) => c.numeroCompteTiers !== numeroCompteTiers))
+                  }
+                  suggestionsAutoliquidation={suggestionsAutoliquidation}
+                  onSuggestionAutoliquidationConsommee={(compte) =>
+                    setSuggestionsAutoliquidation((prev) => prev.filter((c) => c.compte !== compte))
                   }
                 />
               )}

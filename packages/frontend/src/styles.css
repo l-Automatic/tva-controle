@@ -1216,4 +1216,37 @@ pre.details {
   gap: 0.4rem;
   flex-wrap: wrap;
   margin-top: 0.5rem;
+  align-items: center;
+}
+
+/* Présélection IA (brief v10) — même vocabulaire visuel que
+   .niveau-confiance-* (TiersReference) : haute confiance = succès, moyenne
+   = alerte discrète, basse = neutre (ce n'est pas une erreur, juste une
+   suggestion faible, pas la peine de l'alarmer visuellement). */
+.suggestion-ia {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.suggestion-ia svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--accent);
+}
+
+.confiance-haute {
+  background: var(--success-soft-bg);
+  color: var(--success);
+}
+.confiance-moyenne {
+  background: var(--warning-soft-bg);
+  color: var(--warning);
+}
+.confiance-basse {
+  background: var(--neutral-soft-bg);
+  color: var(--neutral);
 }

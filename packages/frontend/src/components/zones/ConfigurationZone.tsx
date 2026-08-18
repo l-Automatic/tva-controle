@@ -1,5 +1,6 @@
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
+import { SuggestionsAutoliquidationPanel } from '../SuggestionsAutoliquidationPanel';
 import { TauxHistoriquePanel } from '../TauxHistoriquePanel';
 import { VehiculesPanel } from '../VehiculesPanel';
 import { TauxAssigneZone } from './TauxAssigneZone';
@@ -7,6 +8,7 @@ import { ajouterConvention, confirmerConvention, fetchConventions, rejeterConven
 import {
   CLES_CONVENTIONS_COMPTES,
   type CleConventionCompte,
+  type CompteACategoriser,
   type CompteClientSansTauxAssigne,
   type CompteSansTauxAssigne,
   type Proposition,
@@ -24,6 +26,8 @@ interface ConfigurationZoneProps {
   suggestionsTauxClients: CompteClientSansTauxAssigne[];
   onSuggestionTauxCompteConsommee: (compte: string) => void;
   onSuggestionTauxClientConsommee: (numeroCompteTiers: string) => void;
+  suggestionsAutoliquidation: CompteACategoriser[];
+  onSuggestionAutoliquidationConsommee: (compte: string) => void;
 }
 
 const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: string }[] = [
@@ -83,6 +87,8 @@ export function ConfigurationZone({
   suggestionsTauxClients,
   onSuggestionTauxCompteConsommee,
   onSuggestionTauxClientConsommee,
+  suggestionsAutoliquidation,
+  onSuggestionAutoliquidationConsommee,
 }: ConfigurationZoneProps) {
   const ongletActif = ONGLETS.find((o) => o.id === sousOnglet);
 
@@ -106,17 +112,26 @@ export function ConfigurationZone({
         <ConventionsComptesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}
       {sousOnglet === 'generiques' && (
-        <PropositionsPanel
-          title="Conventions génériques"
-          cabinetId={cabinetId}
-          dossierId={dossierId}
-          utilisateurId={utilisateurId}
-          fetchPropositions={fetchConventionsGeneriques}
-          confirmer={confirmerConvention}
-          rejeter={rejeterConvention}
-          renderLabel={libelleConvention}
-          ajouter={ajouterConvention}
-        />
+        <>
+          <SuggestionsAutoliquidationPanel
+            cabinetId={cabinetId}
+            dossierId={dossierId}
+            utilisateurId={utilisateurId}
+            suggestions={suggestionsAutoliquidation}
+            onConsomme={onSuggestionAutoliquidationConsommee}
+          />
+          <PropositionsPanel
+            title="Conventions génériques"
+            cabinetId={cabinetId}
+            dossierId={dossierId}
+            utilisateurId={utilisateurId}
+            fetchPropositions={fetchConventionsGeneriques}
+            confirmer={confirmerConvention}
+            rejeter={rejeterConvention}
+            renderLabel={libelleConvention}
+            ajouter={ajouterConvention}
+          />
+        </>
       )}
       {sousOnglet === 'taux' && (
         <TauxHistoriquePanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
