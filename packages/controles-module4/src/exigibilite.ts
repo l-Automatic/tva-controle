@@ -7,6 +7,13 @@ import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
 export interface ConfigExigibiliteTva {
   comptesVenteService: string[]; // ex: ['706', '704'] — côté collecte
   comptesChargeService: string[]; // ex: ['611'] — côté déductible
+  // Comptes systématiquement payés au comptant (péages, restaurants, frais
+  // postaux, frais bancaires...) — demande de Rami (10/08) : pour ces
+  // comptes, ne JAMAIS regarder le lettrage, même si c'est un service. Le
+  // paiement étant simultané à la facturation par nature de la dépense, le
+  // lettrage n'a rien à apporter et peut même induire une exclusion à tort
+  // (ex: une pièce mal lettrée dans Pennylane alors que payée en réalité).
+  comptesPaiementComptant?: string[];
 }
 
 export type NatureOperation = 'bien' | 'service' | 'indetermine';
@@ -46,6 +53,23 @@ export function determinerExigibiliteTva(
     // différente (liée à l'achat lui-même, pas à un encaissement client) —
     // hors scope de ce contrôle, couverte par verifierAutoliquidationEquilibree.
     if (!estCollecte && !estDeductible) continue;
+
+    // Comptes "toujours payé comptant" (10/08) : court-circuite tout le
+    // reste de la logique, y compris la détection bien/service — le
+    // lettrage n'a rien à apporter ici, ne jamais l'examiner.
+    const estPaiementComptant = ecriture.autresLignes.some((l) =>
+      (config.comptesPaiementComptant ?? []).some((prefixe) => l.compte.startsWith(prefixe))
+    );
+    if (estPaiementComptant) {
+      statuts.push({
+        ledgerEntryId,
+        compte,
+        natureOperation: 'service',
+        exigible: true,
+        motif: 'Compte systématiquement payé au comptant (frais de déplacement, postaux, bancaires...) : exigible sans vérification de lettrage.',
+      });
+      continue;
+    }
 
     const comptesServiceApplicables = estCollecte ? config.comptesVenteService : config.comptesChargeService;
 
