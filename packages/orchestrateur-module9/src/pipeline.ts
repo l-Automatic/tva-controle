@@ -193,6 +193,7 @@ export async function executerCycleTva(
     params.comptesVenteServiceOverride ?? conventionListe(contexteDossier, 'comptes_vente_service') ?? [];
   const comptesChargeService =
     params.comptesChargeServiceOverride ?? conventionListe(contexteDossier, 'comptes_charge_service') ?? [];
+  const comptesPaiementComptant = conventionListe(contexteDossier, 'comptes_paiement_comptant') ?? [];
   const comptesEquipement =
     params.comptesEquipementOverride ?? conventionListe(contexteDossier, 'comptes_equipement') ?? [];
   const comptesCarburant =
@@ -330,7 +331,7 @@ export async function executerCycleTva(
 
   const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
     ecritures,
-    { comptesVenteService, comptesChargeService }
+    { comptesVenteService, comptesChargeService, comptesPaiementComptant }
   );
 
   const { statuts: statutsCarburant, anomalies: anomaliesCarburant } = determinerDeductibiliteCarburant(
