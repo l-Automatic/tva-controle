@@ -47,7 +47,7 @@ describe('suggererClassificationComptes', () => {
 
     const resultat = await suggererClassificationComptes(
       client,
-      [{ compte: '604AUTOLIQ', exemplesLibelle: ['Achats sous-traitance autoliquidée'] }],
+      [{ compte: '604AUTOLIQ', nomCompte: 'Sous-traitance autoliquidée' }],
       categories
     );
 
@@ -73,7 +73,7 @@ describe('suggererClassificationComptes', () => {
 
     const resultat = await suggererClassificationComptes(
       client,
-      [{ compte: '607', exemplesLibelle: [] }],
+      [{ compte: '607', nomCompte: 'Achats de marchandises' }],
       categories
     );
     expect(resultat[0]?.categorieSuggeree).toBeNull();
@@ -94,7 +94,7 @@ describe('suggererClassificationComptes', () => {
 
     const resultat = await suggererClassificationComptes(
       client,
-      [{ compte: '607', exemplesLibelle: [] }],
+      [{ compte: '607', nomCompte: 'Achats de marchandises' }],
       categories
     );
     expect(resultat).toHaveLength(1);
@@ -105,7 +105,7 @@ describe('suggererClassificationComptes', () => {
     const client = new MistralClient({ apiKey: 'x', fetchImpl: fakeFetch(JSON.stringify({ inattendu: true })) });
     const resultat = await suggererClassificationComptes(
       client,
-      [{ compte: '607', exemplesLibelle: [] }],
+      [{ compte: '607', nomCompte: 'Achats de marchandises' }],
       categories
     );
     expect(resultat).toEqual([]);
@@ -125,7 +125,7 @@ describe('suggererClassificationComptes', () => {
 
     const resultat = await suggererClassificationComptes(
       client,
-      [{ compte: '607', exemplesLibelle: [] }],
+      [{ compte: '607', nomCompte: 'Achats de marchandises' }],
       categories
     );
     expect(resultat).toEqual([]);
