@@ -152,3 +152,66 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(anomalies).toEqual([]);
   });
 });
+
+describe('determinerExigibiliteTva — comptes toujours payés au comptant (10/08)', () => {
+  it('exigible sans jamais vérifier le lettrage, même non lettré', () => {
+    const e: EcritureTvaComplete = {
+      ledgerEntryId: 1,
+      ligneTva: {
+        id: 1,
+        compte: '44566',
+        compteId: 1,
+        libelle: 'Péage A6',
+        debit: 20,
+        credit: 0,
+        date: '2025-01-15',
+        ledgerEntryId: 1,
+        lettrage: { estLettree: false, groupeIds: [] },
+      },
+      autresLignes: [{ id: 1, compte: '6251', compteId: 1, libelle: null, debit: 100, credit: 0 }],
+      lignesTiers: [], // volontairement vide : le lettrage ne doit même pas être regardé
+    };
+
+    const { statuts, anomalies } = determinerExigibiliteTva([e], {
+      ...configReelle,
+      comptesPaiementComptant: ['6251'],
+    });
+
+    expect(statuts).toEqual([
+      {
+        ledgerEntryId: 1,
+        compte: '44566',
+        natureOperation: 'service',
+        exigible: true,
+        motif: 'Compte systématiquement payé au comptant (frais de déplacement, postaux, bancaires...) : exigible sans vérification de lettrage.',
+      },
+    ]);
+    expect(anomalies).toEqual([]); // pas de "ligne_tiers_introuvable" malgré lignesTiers vide
+  });
+
+  it('sans la convention configurée, le comportement habituel (ligne_tiers_introuvable) reprend le dessus', () => {
+    const e: EcritureTvaComplete = {
+      ledgerEntryId: 1,
+      ligneTva: {
+        id: 1,
+        compte: '44566',
+        compteId: 1,
+        libelle: null,
+        debit: 20,
+        credit: 0,
+        date: '2025-01-15',
+        ledgerEntryId: 1,
+        lettrage: { estLettree: false, groupeIds: [] },
+      },
+      autresLignes: [{ id: 1, compte: '6251', compteId: 1, libelle: null, debit: 100, credit: 0 }],
+      lignesTiers: [],
+    };
+
+    const { anomalies } = determinerExigibiliteTva([e], {
+      ...configReelle,
+      comptesChargeService: ['6251'],
+      // comptesPaiementComptant absent
+    });
+    expect(anomalies.some((a) => a.type === 'ligne_tiers_introuvable')).toBe(true);
+  });
+});
