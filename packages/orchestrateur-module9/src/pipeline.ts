@@ -6,6 +6,7 @@ import {
   filterComptesParPrefixe,
   fetchLignesParCompte,
   decouvrirComptesParPrefixe,
+  resolveLedgerAccounts,
 } from '@tva-controle/connector-pennylane';
 import {
   executerPreControles,
@@ -239,16 +240,36 @@ export async function executerCycleTva(
   if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
     const mistralClient = new MistralClient({ apiKey: mistralApiKey });
 
+    // Bug réel corrigé (10/08) : le LLM classait à tort des comptes en se
+    // basant sur le libellé d'UNE écriture prise au hasard dans leur
+    // historique (texte libre, spécifique à une transaction), au lieu du
+    // NOM OFFICIEL du compte dans le plan comptable. Résolu ici, une seule
+    // fois pour l'union des deux listes, avant les deux appels IA.
+    const tousLesComptesConcernes = [
+      ...new Set([
+        ...comptesACategoriser.map((c) => c.compte),
+        ...comptesAutoliquidationBruts.map((c) => c.compte),
+      ]),
+    ];
+    const nomsComptes =
+      tousLesComptesConcernes.length > 0
+        ? await resolveLedgerAccounts(params.client, tousLesComptesConcernes)
+        : new Map();
+
     if (comptesACategoriser.length > 0) {
       try {
-        const suggestions = await suggererClassificationComptes(mistralClient, comptesACategoriser, [
-          { cle: 'comptes_vente_service', description: 'Ventes de prestations de service' },
-          { cle: 'comptes_charge_service', description: 'Achats de prestations de service (autoliquidés ou non)' },
-          { cle: 'comptes_equipement', description: 'Petit équipement à surveiller pour passage en immobilisation' },
-          { cle: 'comptes_carburant', description: 'Achats de carburant' },
-          { cle: 'comptes_cadeaux', description: 'Cadeaux offerts aux clients' },
-          { cle: 'comptes_immobilisation', description: 'Comptes d\'immobilisation confirmés (218X, 215X...)' },
-        ]);
+        const suggestions = await suggererClassificationComptes(
+          mistralClient,
+          comptesACategoriser.map((c) => ({ compte: c.compte, nomCompte: nomsComptes.get(c.compte)?.libelle ?? null })),
+          [
+            { cle: 'comptes_vente_service', description: 'Ventes de prestations de service' },
+            { cle: 'comptes_charge_service', description: 'Achats de prestations de service (autoliquidés ou non)' },
+            { cle: 'comptes_equipement', description: 'Petit équipement à surveiller pour passage en immobilisation' },
+            { cle: 'comptes_carburant', description: 'Achats de carburant' },
+            { cle: 'comptes_cadeaux', description: 'Cadeaux offerts aux clients' },
+            { cle: 'comptes_immobilisation', description: 'Comptes d\'immobilisation confirmés (218X, 215X...)' },
+          ]
+        );
         comptesACategoriserEnrichi = fusionnerSuggestions(comptesACategoriser, suggestions);
       } catch (err) {
         if (process.env.DEBUG_CYCLE) {
@@ -259,13 +280,20 @@ export async function executerCycleTva(
 
     if (comptesAutoliquidationBruts.length > 0) {
       try {
-        const suggestions = await suggererClassificationComptes(mistralClient, comptesAutoliquidationBruts, [
-          {
-            cle: 'comptes_charge_autoliquidation',
-            description:
-              "Compte de charge spécifiquement dédié aux achats de sous-traitance autoliquidée (le libellé du compte l'indique généralement, ex: mention explicite d'autoliquidation)",
-          },
-        ]);
+        const suggestions = await suggererClassificationComptes(
+          mistralClient,
+          comptesAutoliquidationBruts.map((c) => ({
+            compte: c.compte,
+            nomCompte: nomsComptes.get(c.compte)?.libelle ?? null,
+          })),
+          [
+            {
+              cle: 'comptes_charge_autoliquidation',
+              description:
+                "Compte de charge spécifiquement dédié aux achats de sous-traitance autoliquidée (le nom du compte l'indique généralement, ex: mention explicite d'autoliquidation)",
+            },
+          ]
+        );
         comptesAutoliquidationEnrichi = fusionnerSuggestions(comptesAutoliquidationBruts, suggestions);
       } catch (err) {
         if (process.env.DEBUG_CYCLE) {
