@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Lightbulb, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { ApiError, ajouterConvention, confirmerConvention } from '../api';
 import { useToast } from '../toast';
+import { SuggestionIABlock } from './SuggestionIABlock';
 import type { CompteACategoriser } from '../types';
 
 interface CategorisationPopupProps {
@@ -20,8 +21,6 @@ const CHOIX = [
   { cle: 'comptes_cadeaux', libelle: 'Cadeaux clients' },
   { cle: 'comptes_immobilisation', libelle: 'Immobilisation' },
 ] as const;
-
-const LIBELLE_CONFIANCE = { haute: 'Confiance haute', moyenne: 'Confiance moyenne', basse: 'Confiance basse' } as const;
 
 function CompteCard({
   compte,
@@ -66,17 +65,7 @@ function CompteCard({
     <li className="card">
       <p className="label">Compte {compte.compte}</p>
       {compte.exemplesLibelle.length > 0 && <p className="reference">{compte.exemplesLibelle.join(' · ')}</p>}
-      {compte.suggestionIA && (
-        <p className="suggestion-ia">
-          <Lightbulb size={14} aria-hidden="true" />
-          <span>
-            <span className={`badge confiance-${compte.suggestionIA.confiance}`}>
-              {LIBELLE_CONFIANCE[compte.suggestionIA.confiance]}
-            </span>{' '}
-            {compte.suggestionIA.justification}
-          </span>
-        </p>
-      )}
+      {compte.suggestionIA && <SuggestionIABlock suggestion={compte.suggestionIA} />}
       {error && <p className="error">{error}</p>}
       <div className="popup-choix">
         <select value={cle} disabled={enCours} onChange={(e) => setCle(e.target.value)}>

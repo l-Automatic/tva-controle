@@ -1250,3 +1250,11 @@ pre.details {
   background: var(--neutral-soft-bg);
   color: var(--neutral);
 }
+
+/* Suggestion 'plan_comptable' (brief v11) — correspondance déterministe,
+   pas une estimation : couleur accent (pas la palette confiance-*) pour
+   marquer visuellement la différence de nature. */
+.badge-plan-comptable {
+  background: var(--accent-soft-bg);
+  color: var(--accent-hover);
+}

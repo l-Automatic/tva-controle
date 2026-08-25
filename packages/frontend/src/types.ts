@@ -107,11 +107,18 @@ export interface ResultatCalculCycle {
 // contexte).
 export type ConfianceSuggestionIA = 'haute' | 'moyenne' | 'basse';
 
+// `source` (brief v11) : 'plan_comptable' = déduit d'un référentiel
+// déterministe (aucun appel réseau, aucune erreur possible sur ces cas) —
+// distinct d'une suggestion IA, ne doit pas porter de niveau de confiance.
+// Absente ou 'ia' = comportement historique (badge de confiance).
+export type SourceSuggestionIA = 'ia' | 'plan_comptable';
+
 export interface SuggestionIA {
   compte: string;
   categorieSuggeree: string | null;
   confiance: ConfianceSuggestionIA;
   justification: string;
+  source?: SourceSuggestionIA;
 }
 
 // Comptes produit/charge mouvementés sur la période mais absents des 6

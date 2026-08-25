@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Lightbulb } from 'lucide-react';
 import { ApiError, ajouterConvention, confirmerConvention } from '../api';
 import { useToast } from '../toast';
+import { SuggestionIABlock } from './SuggestionIABlock';
 import type { CompteACategoriser } from '../types';
 
 const CLE_CHARGE_AUTOLIQUIDATION = 'comptes_charge_autoliquidation';
-const LIBELLE_CONFIANCE = { haute: 'Confiance haute', moyenne: 'Confiance moyenne', basse: 'Confiance basse' } as const;
 
 interface SuggestionsAutoliquidationPanelProps {
   cabinetId: string;
@@ -53,17 +52,7 @@ function SuggestionRow({
     <li className="card">
       <p className="label">Compte {compte.compte}</p>
       {compte.exemplesLibelle.length > 0 && <p className="reference">{compte.exemplesLibelle.join(' · ')}</p>}
-      {compte.suggestionIA && (
-        <p className="suggestion-ia">
-          <Lightbulb size={14} aria-hidden="true" />
-          <span>
-            <span className={`badge confiance-${compte.suggestionIA.confiance}`}>
-              {LIBELLE_CONFIANCE[compte.suggestionIA.confiance]}
-            </span>{' '}
-            {compte.suggestionIA.justification}
-          </span>
-        </p>
-      )}
+      {compte.suggestionIA && <SuggestionIABlock suggestion={compte.suggestionIA} />}
       {error && <p className="error">{error}</p>}
       <div className="actions">
         <button disabled={enCours} onClick={() => void handleConfirmer()}>
