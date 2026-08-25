@@ -158,6 +158,28 @@ d'autoliquidation, un vrai manquement de conformité.
 **Action attendue** : vérifier et compléter l'écriture manquante dans
 Pennylane.
 
+### `tva_hotel_a_tort`
+**Déclencheur** : une ligne de TVA déductible (44566) existe sur une pièce
+dont le fournisseur est identifié comme un hôtel — par le **nom officiel du
+compte fournisseur** (ex: "401HOTEL", libellé "HOTELS"), jamais un libellé
+d'écriture.
+**Pourquoi bloquante** : la TVA sur les frais d'hébergement n'est jamais
+déductible — si elle apparaît quand même, c'est une erreur de saisie
+certaine, pas une nuance d'appréciation.
+**Action attendue** : corriger l'écriture dans Pennylane (retirer la TVA),
+puis relancer le cycle.
+
+### `tva_hotel_a_verifier`
+**Déclencheur** : extension du contrôle précédent, pour un fournisseur
+générique ("fournisseurs divers") dont le nom de compte ne mentionne pas
+"hôtel" — le LLM (Mistral) juge, à partir du seul libellé de l'écriture
+(ex : "IBIS PARIS 12/01"), s'il ressemble à une nuit d'hôtel.
+**Pourquoi signalée, pas bloquante** : contrairement au contrôle
+déterministe ci-dessus, un jugement IA sur un nom de marque peut se
+tromper (faux positif) — jamais utilisé pour bloquer un cycle seul.
+**Action attendue** : vérifier manuellement s'il s'agit bien d'un hôtel et,
+si oui, corriger l'écriture.
+
 ---
 
 ## Ce que "Résoudre" et "Justifier" veulent dire, dans l'interface
