@@ -10,6 +10,11 @@ export interface SuggestionClassificationCompte {
   categorieSuggeree: string | null;
   confiance: 'haute' | 'moyenne' | 'basse';
   justification: string;
+  // Absent ou 'ia' = vient d'un appel Mistral. 'plan_comptable' = déduit
+  // directement du référentiel déterministe (controles-module4), aucun
+  // appel réseau — présenté différemment côté interface (badge "déterminé
+  // par le plan comptable" plutôt qu'un niveau de confiance).
+  source?: 'ia' | 'plan_comptable';
 }
 
 // Premier vrai usage du LLM dans ce projet (10/08) — sert deux besoins en
@@ -123,6 +128,7 @@ function validerEtExtraireSuggestions(brut: unknown, comptesAttendus: string[]):
       categorieSuggeree: categorie,
       confiance,
       justification: typeof justification === 'string' ? justification : '',
+      source: 'ia',
     });
   }
 
