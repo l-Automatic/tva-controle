@@ -17,6 +17,7 @@ import {
   verifierCoherenceTauxAutoliquidation,
   verifierCoherenceCompteImmobilisation,
   verifierCoherenceTvaHotel,
+  identifierCandidatsJugementHotel,
   verifierExhaustiviteAutoliquidation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
@@ -36,6 +37,7 @@ import {
   MistralClient,
   suggererClassificationComptes,
   type SuggestionClassificationCompte,
+  jugerLibellesHotel,
 } from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
@@ -412,6 +414,36 @@ export async function executerCycleTva(
       : new Map<string, string>();
   const anomaliesHotel = verifierCoherenceTvaHotel(ecritures, nomsComptesFournisseur);
 
+  // Jugement LLM sur le libellé (10/08) — extension du contrôle hôtel
+  // déterministe ci-dessus, pour les fournisseurs génériques où seul le
+  // libellé de l'écriture porte le nom de l'hôtel. Contrairement au
+  // contrôle déterministe (bloquant, jamais faux par construction), ce
+  // jugement reste 'signale' — une IA ne doit jamais bloquer un cycle
+  // seule sur la reconnaissance d'un nom de marque, risque de faux positif
+  // réel contrairement à un nom de compte explicite.
+  const candidatsJugementHotel = identifierCandidatsJugementHotel(ecritures, nomsComptesFournisseur);
+  const anomaliesJugementHotel: Anomalie[] = [];
+  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0 && candidatsJugementHotel.length > 0) {
+    try {
+      const mistralClientHotel = new MistralClient({ apiKey: mistralApiKey });
+      const jugements = await jugerLibellesHotel(mistralClientHotel, candidatsJugementHotel);
+      for (const j of jugements.filter((j) => j.estHotel)) {
+        anomaliesJugementHotel.push({
+          type: 'tva_hotel_a_verifier',
+          gravite: 'signale',
+          ledgerEntryId: j.ledgerEntryId,
+          compte: '44566',
+          description: `Le libellé de cette écriture ressemble à une facture d'hôtel (${j.justification}) — si confirmé, la TVA n'est pas déductible. À vérifier manuellement.`,
+          details: { confiance: j.confiance, justification: j.justification },
+        });
+      }
+    } catch (err) {
+      if (process.env.DEBUG_CYCLE) {
+        console.error(`[DEBUG_CYCLE] échec jugement IA (hôtel) : ${String(err)}`);
+      }
+    }
+  }
+
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
   // par définition aucune ligne TVA associée (c'est justement le problème),
@@ -487,6 +519,7 @@ export async function executerCycleTva(
     ...anomaliesCoherenceCompteImmobilisation,
     ...anomaliesExhaustiviteAutoliquidation,
     ...anomaliesHotel,
+    ...anomaliesJugementHotel,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
