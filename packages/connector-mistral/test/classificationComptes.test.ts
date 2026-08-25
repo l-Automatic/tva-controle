@@ -57,6 +57,7 @@ describe('suggererClassificationComptes', () => {
         categorieSuggeree: 'comptes_charge_autoliquidation',
         confiance: 'haute',
         justification: 'Le libellé mentionne explicitement "autoliquidation"',
+        source: 'ia',
       },
     ]);
   });
