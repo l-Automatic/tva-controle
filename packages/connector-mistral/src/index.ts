@@ -4,3 +4,4 @@ export {
   type CategorieClassification,
   type SuggestionClassificationCompte,
 } from './classificationComptes.js';
+export { jugerLibellesHotel, type JugementHotel } from './jugementHotel.js';
