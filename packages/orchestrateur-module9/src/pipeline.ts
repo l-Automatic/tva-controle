@@ -22,6 +22,7 @@ import {
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
   identifierComptesACategoriser,
+  chercherDansReferentiel,
   type CompteACategoriser,
   identifierComptesServiceSansSousCategorieAutoliquidation,
   identifierComptesSansTauxAssigne,
@@ -232,7 +233,37 @@ export async function executerCycleTva(
   // si l'appel échoue pour n'importe quelle raison (réseau, quota, réponse
   // malformée), le cycle continue normalement SANS suggestion — jamais un
   // aléa d'un service tiers optionnel ne doit faire échouer un cycle TVA.
-  let comptesACategoriserEnrichi: CompteACategoriserAvecSuggestion[] = comptesACategoriser;
+
+  // Référentiel déterministe D'ABORD (10/08) : les comptes que Rami a
+  // qualifiés de "toujours X" (601, 604, 611...) n'ont pas besoin de
+  // solliciter le LLM du tout — court-circuite l'appel réseau pour ces
+  // comptes précis, économie de coût/latence et zéro risque d'erreur du
+  // modèle sur un cas qui n'a jamais été ambigu. Cf.
+  // referentielComptesCharge.ts pour le détail compte par compte.
+  const comptesACategoriserViaReferentiel: CompteACategoriserAvecSuggestion[] = [];
+  const comptesACategoriserRestants: CompteACategoriser[] = [];
+  for (const c of comptesACategoriser) {
+    const entree = chercherDansReferentiel(c.compte);
+    if (entree) {
+      comptesACategoriserViaReferentiel.push({
+        ...c,
+        suggestionIA: {
+          compte: c.compte,
+          categorieSuggeree: entree.categorie,
+          confiance: 'haute',
+          justification: entree.justification,
+          source: 'plan_comptable',
+        },
+      });
+    } else {
+      comptesACategoriserRestants.push(c);
+    }
+  }
+
+  let comptesACategoriserEnrichi: CompteACategoriserAvecSuggestion[] = [
+    ...comptesACategoriserViaReferentiel,
+    ...comptesACategoriserRestants,
+  ];
   let comptesAutoliquidationEnrichi: CompteACategoriserAvecSuggestion[] = comptesAutoliquidationBruts;
 
   const mistralApiKey = await avecContexteCabinet(pool, params.cabinetId, (client) =>
@@ -249,7 +280,7 @@ export async function executerCycleTva(
     // fois pour l'union des deux listes, avant les deux appels IA.
     const tousLesComptesConcernes = [
       ...new Set([
-        ...comptesACategoriser.map((c) => c.compte),
+        ...comptesACategoriserRestants.map((c) => c.compte),
         ...comptesAutoliquidationBruts.map((c) => c.compte),
       ]),
     ];
@@ -258,21 +289,22 @@ export async function executerCycleTva(
         ? await resolveLedgerAccounts(params.client, tousLesComptesConcernes)
         : new Map();
 
-    if (comptesACategoriser.length > 0) {
+    if (comptesACategoriserRestants.length > 0) {
       try {
         const suggestions = await suggererClassificationComptes(
           mistralClient,
-          comptesACategoriser.map((c) => ({ compte: c.compte, nomCompte: nomsComptes.get(c.compte)?.libelle ?? null })),
+          comptesACategoriserRestants.map((c) => ({ compte: c.compte, nomCompte: nomsComptes.get(c.compte)?.libelle ?? null })),
           [
             { cle: 'comptes_vente_service', description: 'Ventes de prestations de service' },
             { cle: 'comptes_charge_service', description: 'Achats de prestations de service (autoliquidés ou non)' },
             { cle: 'comptes_equipement', description: 'Petit équipement à surveiller pour passage en immobilisation' },
             { cle: 'comptes_carburant', description: 'Achats de carburant' },
             { cle: 'comptes_cadeaux', description: 'Cadeaux offerts aux clients' },
-            { cle: 'comptes_immobilisation', description: 'Comptes d\'immobilisation confirmés (218X, 215X...)' },
+            { cle: 'comptes_immobilisation', description: "Comptes d'immobilisation confirmés (218X, 215X...)" },
           ]
         );
-        comptesACategoriserEnrichi = fusionnerSuggestions(comptesACategoriser, suggestions);
+        const restantsEnrichis = fusionnerSuggestions(comptesACategoriserRestants, suggestions);
+        comptesACategoriserEnrichi = [...comptesACategoriserViaReferentiel, ...restantsEnrichis];
       } catch (err) {
         if (process.env.DEBUG_CYCLE) {
           console.error(`[DEBUG_CYCLE] échec présélection IA (popup catégorisation) : ${String(err)}`);
