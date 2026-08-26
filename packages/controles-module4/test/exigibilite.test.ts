@@ -143,6 +143,40 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.exigible).toBe(true); // lettrée quand même, juste à vérifier le montant exact
   });
 
+  it('applique le prorata calculé quand fourni (10/08) — remplace le signalement manuel par un calcul', () => {
+    const ecriture = ecritureRousseau({
+      lignesTiers: [
+        {
+          ...ecritureRousseau().lignesTiers[0]!,
+          lettrage: { estLettree: true, groupeIds: [1, 2, 3] },
+        },
+      ],
+    });
+    const prorataParEcriture = new Map([[ecriture.ligneTva.ledgerEntryId, 0.6]]);
+    const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle, prorataParEcriture);
+
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.type).toBe('paiement_partiel_calcule');
+    expect(anomalies[0]?.gravite).toBe('info'); // plus "à vérifier", c'est calculé
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.prorataExigible).toBe(0.6);
+  });
+
+  it('prorata calculé à 0 : exigible false, rien à inclure cette période', () => {
+    const ecriture = ecritureRousseau({
+      lignesTiers: [
+        {
+          ...ecritureRousseau().lignesTiers[0]!,
+          lettrage: { estLettree: true, groupeIds: [1, 2, 3] },
+        },
+      ],
+    });
+    const prorataParEcriture = new Map([[ecriture.ligneTva.ledgerEntryId, 0]]);
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle, prorataParEcriture);
+    expect(statuts[0]?.exigible).toBe(false);
+    expect(statuts[0]?.prorataExigible).toBe(0);
+  });
+
   it('ignore les comptes autoliquidation (4454/445664), hors scope de ce contrôle', () => {
     const ecriture = ecritureRousseau({
       ligneTva: { ...ecritureRousseau().ligneTva, compte: '4454' },
