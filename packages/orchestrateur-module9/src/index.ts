@@ -9,6 +9,11 @@ export {
 } from './db/dossierRepository.js';
 export { executerCycleTva, type ParametresCycleTva, type ResultatCycleTva } from './pipeline.js';
 export {
+  analyserMotifNumerotationFacture,
+  ClefMistralAbsenteError,
+  type ParametresAnalyseMotifNumerotation,
+} from './analyserMotifNumerotation.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
