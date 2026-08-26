@@ -6,17 +6,17 @@ export interface MotifNumerotationConfirme {
   nombreChiffres: number | null;
 }
 
-// Extrait le compteur séquentiel d'un libellé, en retirant le préfixe/
-// suffixe confirmés. Retourne null si le libellé ne correspond pas au
+// Extrait le compteur séquentiel d'un numéro de pièce, en retirant le
+// préfixe/suffixe confirmés. Retourne null si le numéro ne correspond pas au
 // motif (ignoré, jamais signalé à tort — cf. limite assumée dans
 // decouvrirMotifNumerotation.ts : un dossier avec plusieurs séries n'aura
 // qu'une série couverte par ce contrôle).
-export function extraireNumeroSequence(libelle: string, motif: MotifNumerotationConfirme): number | null {
-  if (!libelle.startsWith(motif.prefixe) || !libelle.endsWith(motif.suffixe)) return null;
+export function extraireNumeroSequence(numeroPiece: string, motif: MotifNumerotationConfirme): number | null {
+  if (!numeroPiece.startsWith(motif.prefixe) || !numeroPiece.endsWith(motif.suffixe)) return null;
 
   const finPrefixe = motif.prefixe.length;
-  const debutSuffixe = motif.suffixe.length > 0 ? libelle.length - motif.suffixe.length : libelle.length;
-  const partieNumerique = libelle.slice(finPrefixe, debutSuffixe);
+  const debutSuffixe = motif.suffixe.length > 0 ? numeroPiece.length - motif.suffixe.length : numeroPiece.length;
+  const partieNumerique = numeroPiece.slice(finPrefixe, debutSuffixe);
 
   if (!/^\d+$/.test(partieNumerique)) return null;
   if (motif.nombreChiffres !== null && partieNumerique.length !== motif.nombreChiffres) return null;
@@ -26,21 +26,22 @@ export function extraireNumeroSequence(libelle: string, motif: MotifNumerotation
 
 // Module 5 (numérotation) — applique un motif CONFIRMÉ (jamais découvert
 // ici, cf. decouvrirMotifNumerotation.ts pour la découverte LLM, distincte
-// et déclenchée manuellement). Détection purement déterministe, aucun
-// appel réseau.
+// et déclenchée manuellement). Détection purement déterministe elle-même —
+// mais l'appelant (pipeline.ts) doit fournir le vrai piece_number de
+// l'écriture, jamais un libellé de ligne (texte libre non structuré).
 //
 // Ne bloque JAMAIS le calcul — décision explicite reprise de la toute
 // première conversation du projet : un trou de numérotation informe le
 // travail de contrôle, il n'empêche pas de calculer la TVA.
 export function detecterTrousNumerotation(
-  factures: { ledgerEntryId: number; libelle: string | null }[],
+  factures: { ledgerEntryId: number; numeroPiece: string | null }[],
   motif: MotifNumerotationConfirme
 ): Anomalie[] {
   const numeros: { ledgerEntryId: number; numero: number }[] = [];
 
   for (const f of factures) {
-    if (!f.libelle) continue;
-    const numero = extraireNumeroSequence(f.libelle, motif);
+    if (!f.numeroPiece) continue;
+    const numero = extraireNumeroSequence(f.numeroPiece, motif);
     if (numero !== null) numeros.push({ ledgerEntryId: f.ledgerEntryId, numero });
   }
 
