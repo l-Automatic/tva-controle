@@ -73,9 +73,11 @@ describe('detecterTrousNumerotation', () => {
 
   it('fonctionne peu importe l’ordre d’arrivée des factures (trie avant de comparer)', () => {
     const factures = [
-      { ledgerEntryId: 3, libelle: 'FA-2025-003' },
+      { ledgerEntryId: 2, libelle: 'FA-2025-002' },
       { ledgerEntryId: 1, libelle: 'FA-2025-001' },
     ];
+    // 001 et 002 sont consécutifs (aucun trou réel) — vérifie que l'ordre
+    // d'arrivée en entrée (ici inversé) n'introduit pas un faux trou.
     expect(detecterTrousNumerotation(factures, motif)).toEqual([]);
   });
 
