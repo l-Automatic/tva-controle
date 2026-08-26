@@ -196,6 +196,25 @@ export function determinerExigibiliteTva(
         description: `Compte tiers ${ligneTiers.compte} : ce règlement est rapproché avec ${ligneTiers.lettrage.groupeIds.length} autres pièces à la fois (pas juste une facture et son paiement). Signe possible d'un paiement partiel dont le montant exigible n'est pas calculé automatiquement ici : à vérifier manuellement dans Pennylane.`,
         details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, libelle },
       });
+
+      // Prudence INVERSÉE entre ventes et achats (10/08, confirmé par
+      // Rami) : côté ventes, un groupe ambigu non résolu reste exigible
+      // par prudence (l'État a droit à la collecte). Côté achats, c'est
+      // l'inverse — jamais de déduction sans lien facture/paiement
+      // clairement établi. Sans prorata fourni (LLM n'a pas pu établir le
+      // lien, ou pas encore tenté), on exclut ici plutôt que de retomber
+      // sur le comportement générique de fin de fonction (qui suivrait
+      // aveuglément estLettree, potentiellement à tort pour un achat).
+      if (estDeductible) {
+        statuts.push({
+          ledgerEntryId,
+          compte,
+          natureOperation: 'service',
+          exigible: false,
+          motif: 'Achat : paiement partiel non résolu (groupe de lettrage ambigu) — pas de déduction sans lien clairement établi avec la facture.',
+        });
+        continue;
+      }
     }
 
     statuts.push({
