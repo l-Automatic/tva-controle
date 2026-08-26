@@ -53,16 +53,23 @@ défaut en attendant.
 
 ### `paiement_partiel_a_verifier`
 **Déclencheur** : sur une vente de service, la ligne client est lettrée,
-mais son groupe de lettrage contient plus de 2 lignes — signe possible
-qu'un paiement couvre plusieurs factures, qu'une facture est payée en
-plusieurs fois, ou qu'un acompte est mélangé avec autre chose.
-**Ce que ça ne veut PAS dire** : le calcul actuel inclut ou exclut la
-totalité du montant selon que la ligne est lettrée ou non — **pas de
-prorata aujourd'hui**, juste un signalement pour vérification manuelle.
-Le calcul du prorata réel est un chantier en cours, pas encore terminé
-(voir `REGLES_FISCALES_ET_TACHES.md`, point 4).
+mais son groupe de lettrage contient plus de 2 lignes, **et** les montants
+du groupe n'ont pas pu être récupérés ou interprétés (cas rare — sinon
+voir `paiement_partiel_calcule` ci-dessous, qui couvre maintenant la
+majorité des cas depuis le 10/08).
 **Action attendue** : vérifier manuellement le détail du groupe dans
 Pennylane.
+
+### `paiement_partiel_calcule`
+**Déclencheur** : même situation que ci-dessus (groupe de lettrage à plus
+de 2 lignes), mais le prorata a pu être calculé automatiquement à partir
+des montants réels du groupe — (total encaissé / total facturé), plafonné
+à 100%.
+**Pourquoi "info", pas "signalée"** : ce n'est plus une incertitude à
+vérifier, c'est un résultat calculé — informatif, pour que le
+collaborateur voie que ce cas a été traité automatiquement.
+**Action attendue** : aucune par défaut ; vérifier seulement si le prorata
+affiché semble incohérent avec ce que vous savez du dossier.
 
 ### `avoir_a_verifier`
 **Déclencheur** : un débit apparaît sur un compte de TVA collectée — un
