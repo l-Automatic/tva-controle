@@ -28,6 +28,13 @@ export interface StatutExigibilite {
   // impayée — d'où la séparation d'avec les anomalies).
   exigible: boolean;
   motif: string;
+  // Paiement partiel authentique (10/08) : fraction de la ligne réellement
+  // exigible cette période (0 à 1), quand un vrai prorata a pu être
+  // calculé à partir des montants complets du groupe de lettrage — fourni
+  // par l'appelant (pipeline.ts, réseau requis pour le récupérer), cette
+  // fonction reste pure. Absent = comportement binaire habituel
+  // (exigible=true -> montant complet, false -> exclu).
+  prorataExigible?: number;
 }
 
 const PREFIXE_COLLECTE = '44571';
@@ -39,7 +46,8 @@ function estCompteService(compte: string, comptesService: string[]): boolean {
 
 export function determinerExigibiliteTva(
   ecritures: EcritureTvaComplete[],
-  config: ConfigExigibiliteTva
+  config: ConfigExigibiliteTva,
+  prorataParEcriture: Map<number, number> = new Map()
 ): { statuts: StatutExigibilite[]; anomalies: Anomalie[] } {
   const statuts: StatutExigibilite[] = [];
   const anomalies: Anomalie[] = [];
@@ -154,11 +162,32 @@ export function determinerExigibiliteTva(
     const exigible = ligneTiers.lettrage.estLettree;
 
     // Plus de 2 id dans le groupe de lettrage = possible paiement partiel ou
-    // rapprochement multi-factures. On ne calcule PAS le prorata ici : ça
-    // demanderait les montants des autres lignes du groupe (pas encore
-    // récupérés par le connecteur) — signalé pour calcul extracomptable
-    // manuel, comme convenu.
+    // rapprochement multi-factures. Si l'appelant a fourni un prorata
+    // calculé pour cette écriture (montants du groupe déjà récupérés), on
+    // l'applique — sinon on retombe sur le comportement précédent (signalé,
+    // exigible en totalité par prudence, à vérifier manuellement).
     if (ligneTiers.lettrage.groupeIds.length > 2) {
+      const prorata = prorataParEcriture.get(ledgerEntryId);
+      if (prorata !== undefined) {
+        anomalies.push({
+          type: 'paiement_partiel_calcule',
+          gravite: 'info',
+          ledgerEntryId,
+          compte,
+          description: `Compte tiers ${ligneTiers.compte} : paiement partiel détecté sur un groupe de ${ligneTiers.lettrage.groupeIds.length} pièces — prorata de ${(prorata * 100).toFixed(0)}% appliqué automatiquement à partir des montants réels du groupe.`,
+          details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, prorata },
+        });
+        statuts.push({
+          ledgerEntryId,
+          compte,
+          natureOperation: 'service',
+          exigible: prorata > 0,
+          prorataExigible: prorata,
+          motif: `Service : paiement partiel, ${(prorata * 100).toFixed(0)}% exigible cette période (calculé sur les montants du groupe de lettrage).`,
+        });
+        continue;
+      }
+
       anomalies.push({
         type: 'paiement_partiel_a_verifier',
         gravite: 'signale',
