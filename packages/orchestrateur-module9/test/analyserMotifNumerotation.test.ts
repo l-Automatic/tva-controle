@@ -14,6 +14,7 @@ const PROVISIONING_CONNECTION_STRING =
 
 let CABINET_ID = '';
 let DOSSIER_ID = '';
+let UTILISATEUR_ID = '';
 
 const pool = creerPool(CONNECTION_STRING);
 
@@ -35,6 +36,16 @@ beforeAll(async () => {
       [CABINET_ID]
     );
     DOSSIER_ID = dossierRes.rows[0]!.id;
+
+    // Vrai utilisateur, pas un placeholder texte — utilisateurId finit dans
+    // une colonne UUID (audit_log.acteur_utilisateur_id via
+    // enregistrerEvenementAudit, appelé par definirParametreCabinet).
+    const userRes = await client.query<{ id: string }>(
+      `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U test motif', $2, 'collaborateur') RETURNING id`,
+      [CABINET_ID, `u-motif-num-${Date.now()}@test.fr`]
+    );
+    UTILISATEUR_ID = userRes.rows[0]!.id;
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -70,14 +81,14 @@ describe('analyserMotifNumerotationFacture', () => {
         client,
         periodeDebut: '2025-01-01',
         periodeFin: '2025-12-31',
-        utilisateurId: 'peu-importe',
+        utilisateurId: UTILISATEUR_ID,
       })
     ).rejects.toThrow(ClefMistralAbsenteError);
   });
 
   it('retourne motifPropose: null si aucun compte de collecte n’est découvert', async () => {
     await avecContexteCabinet(pool, CABINET_ID, async (dbClient) => {
-      await definirParametreCabinet(dbClient, CABINET_ID, 'mistral_api_key', 'une-cle-de-test', 'peu-importe');
+      await definirParametreCabinet(dbClient, CABINET_ID, 'mistral_api_key', 'une-cle-de-test', UTILISATEUR_ID);
     });
 
     const client = new PennylaneClient({ token: 'x', fetchImpl: fakeFetchRouteur() });
@@ -87,7 +98,7 @@ describe('analyserMotifNumerotationFacture', () => {
       client,
       periodeDebut: '2025-01-01',
       periodeFin: '2025-12-31',
-      utilisateurId: 'peu-importe',
+      utilisateurId: UTILISATEUR_ID,
     });
 
     expect(resultat).toEqual({ motifPropose: null });
