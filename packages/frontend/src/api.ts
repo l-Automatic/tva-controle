@@ -4,6 +4,7 @@ import type {
   Calcul,
   Dossier,
   ElementATraiter,
+  MotifNumerotation,
   NiveauConfianceTiers,
   Parametre,
   Proposition,
@@ -310,6 +311,21 @@ export function lancerCycle(
   parametres: ParametresCycle
 ): Promise<ResultatCycle> {
   return request<ResultatCycle>(`/dossiers/${dossierId}/cycles`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(parametres),
+  });
+}
+
+// Déclenchement manuel uniquement (bouton dédié) — jamais appelé
+// automatiquement à chaque cycle. Le motif proposé, s'il existe, est déjà
+// enregistré côté backend comme convention candidate au retour de cet
+// appel (rien à faire ici pour le persister).
+export function analyserMotifNumerotation(
+  cabinetId: string,
+  dossierId: string,
+  parametres: { pennylaneToken: string; periodeDebut: string; periodeFin: string; utilisateurId: string }
+): Promise<{ motifPropose: MotifNumerotation | null }> {
+  return request<{ motifPropose: MotifNumerotation | null }>(`/dossiers/${dossierId}/motif-numerotation/analyser`, cabinetId, {
     method: 'POST',
     body: JSON.stringify(parametres),
   });

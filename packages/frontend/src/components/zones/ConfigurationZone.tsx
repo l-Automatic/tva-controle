@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AnalyseMotifNumerotationPanel, formatMotifNumerotation } from '../AnalyseMotifNumerotationPanel';
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
 import { SuggestionsAutoliquidationPanel } from '../SuggestionsAutoliquidationPanel';
@@ -6,11 +8,13 @@ import { VehiculesPanel } from '../VehiculesPanel';
 import { TauxAssigneZone } from './TauxAssigneZone';
 import { ajouterConvention, confirmerConvention, fetchConventions, rejeterConvention } from '../../api';
 import {
+  CLE_MOTIF_NUMEROTATION,
   CLES_CONVENTIONS_COMPTES,
   type CleConventionCompte,
   type CompteACategoriser,
   type CompteClientSansTauxAssigne,
   type CompteSansTauxAssigne,
+  type MotifNumerotation,
   type Proposition,
 } from '../../types';
 
@@ -63,7 +67,12 @@ const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: stri
   },
 ];
 
+// Affichage lisible pour motif_numerotation_facture (brief v12) plutôt que
+// le JSON brut — repli générique inchangé pour toute autre clé.
 function libelleConvention(proposition: Proposition): string {
+  if (proposition.cle === CLE_MOTIF_NUMEROTATION && proposition.valeur && typeof proposition.valeur === 'object') {
+    return `Motif de numérotation facture : ${formatMotifNumerotation(proposition.valeur as MotifNumerotation)}`;
+  }
   return `${proposition.cle ?? '—'} : ${JSON.stringify(proposition.valeur)}`;
 }
 
@@ -91,6 +100,7 @@ export function ConfigurationZone({
   onSuggestionAutoliquidationConsommee,
 }: ConfigurationZoneProps) {
   const ongletActif = ONGLETS.find((o) => o.id === sousOnglet);
+  const [motifRefreshKey, setMotifRefreshKey] = useState(0);
 
   return (
     <div>
@@ -113,6 +123,12 @@ export function ConfigurationZone({
       )}
       {sousOnglet === 'generiques' && (
         <>
+          <AnalyseMotifNumerotationPanel
+            cabinetId={cabinetId}
+            dossierId={dossierId}
+            utilisateurId={utilisateurId}
+            onAnalyseTerminee={() => setMotifRefreshKey((k) => k + 1)}
+          />
           <SuggestionsAutoliquidationPanel
             cabinetId={cabinetId}
             dossierId={dossierId}
@@ -130,6 +146,7 @@ export function ConfigurationZone({
             rejeter={rejeterConvention}
             renderLabel={libelleConvention}
             ajouter={ajouterConvention}
+            refreshKey={motifRefreshKey}
           />
         </>
       )}

@@ -334,3 +334,17 @@ export const LIBELLE_REGIME_TVA_ENCAISSEMENT: Record<RegimeTvaEncaissement, stri
   bien: 'Vente de biens ou encaissement comptant (TVA à la facturation)',
   mixte: 'Mixte (par défaut prudent)',
 };
+
+// --- Motif de numérotation de facture (brief v12) — déclenchement manuel
+// uniquement (jamais à chaque cycle), le motif proposé est automatiquement
+// enregistré côté backend comme convention candidate 'motif_numerotation_facture'
+// (visible dans Conventions génériques, cf. analyserMotifNumerotation.ts). ---
+
+export const CLE_MOTIF_NUMEROTATION = 'motif_numerotation_facture';
+
+export interface MotifNumerotation {
+  prefixe: string;
+  suffixe: string;
+  nombreChiffres: number | null;
+  description: string;
+}

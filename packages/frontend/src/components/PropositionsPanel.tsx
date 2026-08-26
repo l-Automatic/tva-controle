@@ -20,6 +20,11 @@ interface PropositionsPanelProps {
   // laquelle il n'existait aucun moyen de re-créer une convention perdue
   // (cf. brief v4, section 3).
   ajouter?: (cabinetId: string, dossierId: string, utilisateurId: string, cle: string, valeur: string) => Promise<{ id: string }>;
+  // Optionnel : incrémenté par un parent pour forcer un rechargement externe
+  // (ex : après qu'une action hors de ce panneau — analyse du motif de
+  // numérotation, brief v12 — a créé une nouvelle convention candidate),
+  // même pattern que ATraiterPanel/ProgressionPanel.
+  refreshKey?: number;
 }
 
 const LIBELLE_STATUT: Record<StatutProposition, string> = {
@@ -176,6 +181,7 @@ export function PropositionsPanel({
   rejeter,
   renderLabel,
   ajouter,
+  refreshKey,
 }: PropositionsPanelProps) {
   const [propositions, setPropositions] = useState<Proposition[]>([]);
   const [loading, setLoading] = useState(false);
@@ -198,7 +204,7 @@ export function PropositionsPanel({
   useEffect(() => {
     if (cabinetId && dossierId) void charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cabinetId, dossierId]);
+  }, [cabinetId, dossierId, refreshKey]);
 
   const visibles = afficherTraitees ? propositions : propositions.filter((p) => p.statut === 'candidate');
   const nbEnAttente = propositions.filter((p) => p.statut === 'candidate').length;

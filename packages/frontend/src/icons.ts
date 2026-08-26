@@ -11,8 +11,10 @@ import {
   Clock,
   Fuel,
   HandCoins,
+  Hash,
   HelpCircle,
   History,
+  Hotel,
   Layers,
   MessageSquareText,
   Percent,
@@ -47,7 +49,7 @@ export const ICONE_ACTION = {
   parametres: SlidersHorizontal,
 } as const satisfies Record<string, LucideIcon>;
 
-// Une icône distincte par type d'anomalie (12 types, cf. CATALOGUE_ANOMALIES.md)
+// Une icône distincte par type d'anomalie (16 types, cf. CATALOGUE_ANOMALIES.md)
 // pour les repérer d'un coup d'œil — repli générique pour un type inconnu.
 export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   compte_tva_non_reconnu: HelpCircle,
@@ -62,6 +64,10 @@ export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   immobilisation_potentielle_non_passee: Building2,
   nouveau_tiers_a_verifier: UserPlus,
   encaissement_client_taux_applique: Percent,
+  tva_hotel_a_verifier: Hotel,
+  tva_hotel_a_tort: Hotel,
+  trou_numerotation_facture: Hash,
+  paiement_partiel_calcule: Layers,
 };
 export const ICONE_TYPE_ANOMALIE_DEFAUT: LucideIcon = CircleAlert;
 

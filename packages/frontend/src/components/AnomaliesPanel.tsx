@@ -13,7 +13,11 @@ import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
 import { BadgeStatut } from './BadgeStatut';
 
-// Les 12 types possibles, libellés lisibles — cf. CATALOGUE_ANOMALIES.md.
+// 16 des 20 types du catalogue ont un libellé dédié ici — cf.
+// CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
+// incoherence_taux_autoliquidation, immobilisation_sur_compte_tva_incorrect,
+// autoliquidation_incomplete) retombent sur le type brut en repli, hors
+// périmètre de ce brief (v12 ne demandait que les 4 ci-dessous).
 const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   compte_tva_non_reconnu: 'Compte de TVA non reconnu',
   encaissement_non_affecte: 'Encaissement non affecté',
@@ -27,6 +31,10 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
   nouveau_tiers_a_verifier: 'Nouveau tiers à vérifier',
   encaissement_client_taux_applique: 'Encaissement client — taux appliqué',
+  tva_hotel_a_verifier: 'TVA hôtel à vérifier',
+  tva_hotel_a_tort: 'TVA hôtel déduite à tort',
+  trou_numerotation_facture: 'Trou dans la numérotation des factures',
+  paiement_partiel_calcule: 'Paiement partiel — prorata calculé',
 };
 
 interface AnomaliesPanelProps {
