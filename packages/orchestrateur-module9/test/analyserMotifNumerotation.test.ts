@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pg from 'pg';
 import { PennylaneClient } from '@tva-controle/connector-pennylane';
 import { creerPool } from '../src/db/pool.js';
+import { avecContexteCabinet } from '../src/db/pool.js';
 import { definirParametreCabinet } from '../src/db/writeRepository.js';
 import { analyserMotifNumerotationFacture, ClefMistralAbsenteError } from '../src/analyserMotifNumerotation.js';
 
@@ -75,7 +76,7 @@ describe('analyserMotifNumerotationFacture', () => {
   });
 
   it('retourne motifPropose: null si aucun compte de collecte n’est découvert', async () => {
-    await avecContexteCabinetTest(async (dbClient) => {
+    await avecContexteCabinet(pool, CABINET_ID, async (dbClient) => {
       await definirParametreCabinet(dbClient, CABINET_ID, 'mistral_api_key', 'une-cle-de-test', 'peu-importe');
     });
 
@@ -92,13 +93,3 @@ describe('analyserMotifNumerotationFacture', () => {
     expect(resultat).toEqual({ motifPropose: null });
   });
 });
-
-async function avecContexteCabinetTest(fn: (client: pg.PoolClient) => Promise<void>): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
-    await fn(client);
-  } finally {
-    client.release();
-  }
-}
