@@ -170,13 +170,20 @@ export function calculerTva(
       continue;
     }
 
-    const montantSigne = estCollecte ? netSensCredit : netSensDebit;
+    let montantSigne = estCollecte ? netSensCredit : netSensDebit;
 
     // --- Exigibilité (bien/service, TVA sur encaissement) ---
     const statutExig = exigibiliteParPiece.get(cle);
     if (statutExig && !statutExig.exigible) {
       exclues.push({ ledgerEntryId, compte, motif: statutExig.motif, compteTiers, date });
       continue;
+    }
+    // Paiement partiel authentique (10/08) : le montant réellement exigible
+    // cette période n'est qu'une fraction du montant de la ligne — ajuste
+    // AVANT toute catégorisation par taux, le reste de la logique
+    // s'applique ensuite normalement sur le montant réduit.
+    if (statutExig?.prorataExigible !== undefined) {
+      montantSigne = montantSigne * statutExig.prorataExigible;
     }
     // Absence de statut = pas concerné par le contrôle d'exigibilité pour cette
     // ligne (ex: compte hors config comptesVenteService/comptesChargeService) ->
