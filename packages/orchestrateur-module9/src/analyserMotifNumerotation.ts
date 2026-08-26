@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import type { PennylaneClient } from '@tva-controle/connector-pennylane';
-import { decouvrirComptesParPrefixe, fetchLignesParCompte } from '@tva-controle/connector-pennylane';
+import { decouvrirComptesParPrefixe, fetchLignesParCompte, fetchPieceNumbers } from '@tva-controle/connector-pennylane';
 import { MistralClient, decouvrirMotifNumerotation, type MotifNumerotation } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
 import { parametreCabinetValeur } from './db/readRepository.js';
@@ -54,13 +54,18 @@ export async function analyserMotifNumerotationFacture(
     periodeFin: params.periodeFin,
   });
 
-  const libelles = [...new Set(lignes.map((l) => l.libelle).filter((l): l is string => l !== null))];
-  if (libelles.length === 0) {
+  // Le vrai numéro de facture vit sur l'écriture (piece_number), jamais sur
+  // le libellé d'une ligne — confirmé par Rami (10/08) pour les ventes
+  // spécifiquement, systématiquement saisi avec le vrai numéro.
+  const ledgerEntryIds = [...new Set(lignes.map((l) => l.ledgerEntryId))];
+  const pieceNumbers = await fetchPieceNumbers(pennylaneClient, ledgerEntryIds);
+  const numerosExemples = [...new Set([...pieceNumbers.values()].filter((n): n is string => n !== null))];
+  if (numerosExemples.length === 0) {
     return { motifPropose: null };
   }
 
   const mistralClient = new MistralClient({ apiKey: mistralApiKey });
-  const motifPropose = await decouvrirMotifNumerotation(mistralClient, libelles);
+  const motifPropose = await decouvrirMotifNumerotation(mistralClient, numerosExemples);
 
   if (motifPropose) {
     await avecContexteCabinet(pool, params.cabinetId, (client) =>
