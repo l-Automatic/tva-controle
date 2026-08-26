@@ -462,7 +462,7 @@ export async function executerCycleTva(
     ];
     const pieceNumbersVente = await fetchPieceNumbers(params.client, ledgerEntryIdsVente);
     anomaliesNumerotation = detecterTrousNumerotation(
-      ledgerEntryIdsVente.map((id) => ({ ledgerEntryId: id, libelle: pieceNumbersVente.get(id) ?? null })),
+      ledgerEntryIdsVente.map((id) => ({ ledgerEntryId: id, numeroPiece: pieceNumbersVente.get(id) ?? null })),
       motifNumerotationBrut as { prefixe: string; suffixe: string; nombreChiffres: number | null }
     );
   }
