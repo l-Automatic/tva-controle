@@ -42,6 +42,7 @@ import {
   suggererClassificationComptes,
   type SuggestionClassificationCompte,
   jugerLibellesHotel,
+  jugerPaiementPartielAchat,
 } from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
@@ -372,16 +373,60 @@ export async function executerCycleTva(
   // récupère les montants complets des groupes de lettrage à plus de 2
   // lignes AVANT d'appeler determinerExigibiliteTva (fonction pure, ne fait
   // jamais d'appel réseau elle-même), puis on lui passe le prorata déjà
-  // calculé.
-  const candidatsProrata = ecritures
+  // calculé. Distinct du volet achats juste après : côté ventes, le calcul
+  // pur sur la totalité du groupe est fiable (prudence = collecter) ; côté
+  // achats, un calcul aveugle sur le groupe entier serait dangereux si
+  // plusieurs factures s'y mélangent — d'où le passage par un jugement LLM
+  // d'abord, cf. ci-dessous.
+  const candidatsProrataVente = ecritures
+    .filter((e) => e.ligneTva.compte.startsWith('44571'))
     .map((e) => ({ ledgerEntryId: e.ligneTva.ledgerEntryId, ligneTiers: e.lignesTiers[0] }))
     .filter((c): c is { ledgerEntryId: number; ligneTiers: NonNullable<typeof c.ligneTiers> } =>
       c.ligneTiers !== undefined && c.ligneTiers.lettrage.groupeIds.length > 2
     );
   const prorataParEcriture = new Map<number, number>();
-  for (const candidat of candidatsProrata) {
+  for (const candidat of candidatsProrataVente) {
     const lignesGroupe = await fetchLignesGroupeLettrage(params.client, candidat.ligneTiers.lettrage.groupeIds);
     prorataParEcriture.set(candidat.ledgerEntryId, calculerProrataEncaissement(lignesGroupe));
+  }
+
+  // Paiement partiel, volet achats (10/08) — jamais de calcul arithmétique
+  // aveugle sur le groupe entier : d'abord établir, par jugement LLM, s'il
+  // s'agit vraiment d'un acompte rattaché à UNE facture identifiable (pas
+  // un mélange de plusieurs factures). Prudence par défaut si pas de clé
+  // Mistral configurée, ou si le lien n'est pas établi avec une confiance
+  // suffisante — aucun prorata n'est alors ajouté à la map, et
+  // exigibilite.ts exclut par défaut (cf. correctif du même jour).
+  const candidatsProrataAchat = ecritures
+    .filter((e) => e.ligneTva.compte.startsWith('44566') || e.ligneTva.compte.startsWith('44562'))
+    .map((e) => ({ ledgerEntryId: e.ligneTva.ledgerEntryId, ligneTiers: e.lignesTiers[0] }))
+    .filter((c): c is { ledgerEntryId: number; ligneTiers: NonNullable<typeof c.ligneTiers> } =>
+      c.ligneTiers !== undefined && c.ligneTiers.lettrage.groupeIds.length > 2
+    );
+
+  if (
+    candidatsProrataAchat.length > 0 &&
+    typeof mistralApiKey === 'string' &&
+    mistralApiKey.length > 0
+  ) {
+    const mistralClientAchat = new MistralClient({ apiKey: mistralApiKey });
+    for (const candidat of candidatsProrataAchat) {
+      try {
+        const lignesGroupe = await fetchLignesGroupeLettrage(params.client, candidat.ligneTiers.lettrage.groupeIds);
+        const jugement = await jugerPaiementPartielAchat(
+          mistralClientAchat,
+          lignesGroupe.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date }))
+        );
+        if (jugement.lienEtabli && jugement.confiance !== 'basse' && jugement.montantFacture && jugement.montantPayeRattache !== null) {
+          const prorata = Math.min(jugement.montantPayeRattache / jugement.montantFacture, 1);
+          prorataParEcriture.set(candidat.ledgerEntryId, prorata);
+        }
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec jugement IA (paiement partiel achat) : ${String(err)}`);
+        }
+      }
+    }
   }
 
   const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
