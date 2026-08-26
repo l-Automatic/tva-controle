@@ -18,6 +18,7 @@ import {
   verifierCoherenceCompteImmobilisation,
   verifierCoherenceTvaHotel,
   identifierCandidatsJugementHotel,
+  detecterTrousNumerotation,
   verifierExhaustiviteAutoliquidation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
@@ -444,6 +445,21 @@ export async function executerCycleTva(
     }
   }
 
+  // Trous de numérotation de facture (10/08) — purement déterministe,
+  // aucun appel réseau : n'applique que si un motif a déjà été confirmé
+  // (via l'endpoint dédié POST /dossiers/:id/motif-numerotation/analyser,
+  // déclenché manuellement, jamais automatiquement à chaque cycle).
+  const motifNumerotationBrut = conventionValeur(contexteDossier, 'motif_numerotation_facture');
+  const anomaliesNumerotation =
+    motifNumerotationBrut && typeof motifNumerotationBrut === 'object'
+      ? detecterTrousNumerotation(
+          ecritures
+            .filter((e) => e.ligneTva.compte.startsWith('44571'))
+            .map((e) => ({ ledgerEntryId: e.ligneTva.ledgerEntryId, libelle: e.ligneTva.libelle })),
+          motifNumerotationBrut as { prefixe: string; suffixe: string; nombreChiffres: number | null }
+        )
+      : [];
+
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
   // par définition aucune ligne TVA associée (c'est justement le problème),
@@ -520,6 +536,7 @@ export async function executerCycleTva(
     ...anomaliesExhaustiviteAutoliquidation,
     ...anomaliesHotel,
     ...anomaliesJugementHotel,
+    ...anomaliesNumerotation,
     ...anomaliesEncaissements,
     ...anomaliesClient,
     ...anomaliesTiers,
