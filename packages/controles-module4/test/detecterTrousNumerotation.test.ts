@@ -34,17 +34,17 @@ describe('extraireNumeroSequence', () => {
 describe('detecterTrousNumerotation', () => {
   it('ne signale rien pour une séquence continue', () => {
     const factures = [
-      { ledgerEntryId: 1, libelle: 'FA-2025-001' },
-      { ledgerEntryId: 2, libelle: 'FA-2025-002' },
-      { ledgerEntryId: 3, libelle: 'FA-2025-003' },
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
+      { ledgerEntryId: 2, numeroPiece: 'FA-2025-002' },
+      { ledgerEntryId: 3, numeroPiece: 'FA-2025-003' },
     ];
     expect(detecterTrousNumerotation(factures, motif)).toEqual([]);
   });
 
   it('signale un trou d’un seul numéro manquant', () => {
     const factures = [
-      { ledgerEntryId: 1, libelle: 'FA-2025-001' },
-      { ledgerEntryId: 3, libelle: 'FA-2025-003' },
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
+      { ledgerEntryId: 3, numeroPiece: 'FA-2025-003' },
     ];
     const anomalies = detecterTrousNumerotation(factures, motif);
     expect(anomalies).toHaveLength(1);
@@ -55,8 +55,8 @@ describe('detecterTrousNumerotation', () => {
 
   it('signale un trou de plusieurs numéros manquants d’un coup', () => {
     const factures = [
-      { ledgerEntryId: 1, libelle: 'FA-2025-001' },
-      { ledgerEntryId: 5, libelle: 'FA-2025-005' },
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
+      { ledgerEntryId: 5, numeroPiece: 'FA-2025-005' },
     ];
     const anomalies = detecterTrousNumerotation(factures, motif);
     expect(anomalies[0]?.details).toMatchObject({ manquants: 3 });
@@ -64,17 +64,17 @@ describe('detecterTrousNumerotation', () => {
 
   it('ignore les libellés qui ne correspondent pas au motif, sans planter', () => {
     const factures = [
-      { ledgerEntryId: 1, libelle: 'FA-2025-001' },
-      { ledgerEntryId: 2, libelle: 'AUTRE SERIE X' },
-      { ledgerEntryId: 3, libelle: 'FA-2025-002' },
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
+      { ledgerEntryId: 2, numeroPiece: 'AUTRE SERIE X' },
+      { ledgerEntryId: 3, numeroPiece: 'FA-2025-002' },
     ];
     expect(detecterTrousNumerotation(factures, motif)).toEqual([]);
   });
 
   it('fonctionne peu importe l’ordre d’arrivée des factures (trie avant de comparer)', () => {
     const factures = [
-      { ledgerEntryId: 2, libelle: 'FA-2025-002' },
-      { ledgerEntryId: 1, libelle: 'FA-2025-001' },
+      { ledgerEntryId: 2, numeroPiece: 'FA-2025-002' },
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
     ];
     // 001 et 002 sont consécutifs (aucun trou réel) — vérifie que l'ordre
     // d'arrivée en entrée (ici inversé) n'introduit pas un faux trou.
@@ -82,6 +82,6 @@ describe('detecterTrousNumerotation', () => {
   });
 
   it('moins de 2 factures reconnues : rien à comparer, aucune anomalie', () => {
-    expect(detecterTrousNumerotation([{ ledgerEntryId: 1, libelle: 'FA-2025-001' }], motif)).toEqual([]);
+    expect(detecterTrousNumerotation([{ ledgerEntryId: 1, numeroPiece: 'FA-2025-001' }], motif)).toEqual([]);
   });
 });
