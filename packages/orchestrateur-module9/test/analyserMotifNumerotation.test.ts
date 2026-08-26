@@ -19,21 +19,29 @@ const pool = creerPool(CONNECTION_STRING);
 beforeAll(async () => {
   const provisioningPool = new pg.Pool({ connectionString: PROVISIONING_CONNECTION_STRING });
   const client = await provisioningPool.connect();
-  const cabinetRes = await client.query<{ id: string }>(`SELECT provisioning_create_cabinet($1) AS id`, [
-    `Cabinet test motif numerotation ${Date.now()}`,
-  ]);
-  CABINET_ID = cabinetRes.rows[0]!.id;
+  try {
+    await client.query('BEGIN');
+    const cabinetRes = await client.query<{ id: string }>(`SELECT provisioning_create_cabinet($1) AS id`, [
+      `Cabinet test motif numerotation ${Date.now()}`,
+    ]);
+    CABINET_ID = cabinetRes.rows[0]!.id;
+    await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
 
-  await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
-  const dossierRes = await client.query<{ id: string }>(
-    `INSERT INTO dossiers (cabinet_id, nom, regime_tva, logiciel_source, external_company_id, tva_encaissement)
-     VALUES ($1, 'Dossier test motif numerotation', 'reel_normal', 'pennylane', 'sandbox-motif-num', true)
-     RETURNING id`,
-    [CABINET_ID]
-  );
-  DOSSIER_ID = dossierRes.rows[0]!.id;
-  client.release();
-  await provisioningPool.end();
+    const dossierRes = await client.query<{ id: string }>(
+      `INSERT INTO dossiers (cabinet_id, nom, regime_tva, logiciel_source, external_company_id, tva_encaissement)
+       VALUES ($1, 'Dossier test motif numerotation', 'reel_normal', 'pennylane', 'sandbox-motif-num', true)
+       RETURNING id`,
+      [CABINET_ID]
+    );
+    DOSSIER_ID = dossierRes.rows[0]!.id;
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+    await provisioningPool.end();
+  }
 });
 
 afterAll(async () => {
