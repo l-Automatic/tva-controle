@@ -5,3 +5,4 @@ export {
   type SuggestionClassificationCompte,
 } from './classificationComptes.js';
 export { jugerLibellesHotel, type JugementHotel } from './jugementHotel.js';
+export { decouvrirMotifNumerotation, type MotifNumerotation } from './decouvrirMotifNumerotation.js';
