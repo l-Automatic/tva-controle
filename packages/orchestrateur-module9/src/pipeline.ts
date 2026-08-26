@@ -7,6 +7,7 @@ import {
   fetchLignesParCompte,
   decouvrirComptesParPrefixe,
   resolveLedgerAccounts,
+  fetchPieceNumbers,
 } from '@tva-controle/connector-pennylane';
 import {
   executerPreControles,
@@ -445,20 +446,26 @@ export async function executerCycleTva(
     }
   }
 
-  // Trous de numérotation de facture (10/08) — purement déterministe,
-  // aucun appel réseau : n'applique que si un motif a déjà été confirmé
-  // (via l'endpoint dédié POST /dossiers/:id/motif-numerotation/analyser,
-  // déclenché manuellement, jamais automatiquement à chaque cycle).
+  // Trous de numérotation de facture (10/08) — n'applique que si un motif
+  // a déjà été confirmé (via l'endpoint dédié
+  // POST /dossiers/:id/motif-numerotation/analyser, déclenché
+  // manuellement, jamais automatiquement à chaque cycle). Utilise le vrai
+  // piece_number (au niveau de l'écriture), jamais le libellé de ligne —
+  // même correction que pour la découverte, cf. analyserMotifNumerotation.ts.
   const motifNumerotationBrut = conventionValeur(contexteDossier, 'motif_numerotation_facture');
-  const anomaliesNumerotation =
-    motifNumerotationBrut && typeof motifNumerotationBrut === 'object'
-      ? detecterTrousNumerotation(
-          ecritures
-            .filter((e) => e.ligneTva.compte.startsWith('44571'))
-            .map((e) => ({ ledgerEntryId: e.ligneTva.ledgerEntryId, libelle: e.ligneTva.libelle })),
-          motifNumerotationBrut as { prefixe: string; suffixe: string; nombreChiffres: number | null }
-        )
-      : [];
+  let anomaliesNumerotation: Anomalie[] = [];
+  if (motifNumerotationBrut && typeof motifNumerotationBrut === 'object') {
+    const ledgerEntryIdsVente = [
+      ...new Set(
+        ecritures.filter((e) => e.ligneTva.compte.startsWith('44571')).map((e) => e.ligneTva.ledgerEntryId)
+      ),
+    ];
+    const pieceNumbersVente = await fetchPieceNumbers(params.client, ledgerEntryIdsVente);
+    anomaliesNumerotation = detecterTrousNumerotation(
+      ledgerEntryIdsVente.map((id) => ({ ledgerEntryId: id, libelle: pieceNumbersVente.get(id) ?? null })),
+      motifNumerotationBrut as { prefixe: string; suffixe: string; nombreChiffres: number | null }
+    );
+  }
 
   // Encaissements en compte(s) d'attente non identifiés (cf. compte 471) —
   // fetch séparé de fetchEcrituresTvaCompletes ci-dessus : ces lignes n'ont
