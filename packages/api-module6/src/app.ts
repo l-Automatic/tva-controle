@@ -4,6 +4,8 @@ import { PennylaneClient } from '@tva-controle/connector-pennylane';
 import {
   avecContexteCabinet,
   executerCycleTva,
+  analyserMotifNumerotationFacture,
+  ClefMistralAbsenteError,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   justifierAnomalie,
@@ -545,6 +547,39 @@ export function buildApp(pool: Pool): FastifyInstance {
     } catch (err) {
       if (err instanceof CalculDejaValideError) {
         return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // --- Analyse manuelle du motif de numérotation de facture (Module 5) ---
+  // Déclenchée par un bouton dédié côté interface, jamais automatiquement à
+  // chaque cycle — cf. analyserMotifNumerotation.ts pour le raisonnement.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { pennylaneToken: string; periodeDebut: string; periodeFin: string; utilisateurId: string };
+  }>('/dossiers/:dossierId/motif-numerotation/analyser', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { pennylaneToken, periodeDebut, periodeFin, utilisateurId } = request.body;
+
+    if (!pennylaneToken || !periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'pennylaneToken, periodeDebut et periodeFin sont requis' });
+    }
+
+    const pennylaneClient = new PennylaneClient({ token: pennylaneToken });
+
+    try {
+      return await analyserMotifNumerotationFacture(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        client: pennylaneClient,
+        periodeDebut,
+        periodeFin,
+        utilisateurId,
+      });
+    } catch (err) {
+      if (err instanceof ClefMistralAbsenteError) {
+        return reply.code(400).send({ erreur: err.message });
       }
       throw err;
     }
