@@ -180,6 +180,20 @@ tromper (faux positif) — jamais utilisé pour bloquer un cycle seul.
 **Action attendue** : vérifier manuellement s'il s'agit bien d'un hôtel et,
 si oui, corriger l'écriture.
 
+### `trou_numerotation_facture`
+**Déclencheur** : au moins un numéro de facture semble manquer dans la
+séquence des ventes, selon un motif de numérotation préalablement confirmé
+(ex : "FA-2025-001" suivi de "FA-2025-003" sans "FA-2025-002").
+**Pourquoi jamais bloquante** : un trou informe le travail de contrôle, il
+n'empêche jamais le calcul de TVA — décision explicite reprise depuis la
+toute première conversation du projet.
+**Prérequis** : un motif doit avoir été confirmé au préalable (déclenché
+manuellement via un bouton dédié, jamais automatique à chaque cycle) — sans
+motif confirmé, ce contrôle ne fait rien du tout.
+**Action attendue** : vérifier si une facture a été omise de la
+comptabilité, ou si le numéro a été sauté volontairement (annulation,
+avoir...).
+
 ---
 
 ## Ce que "Résoudre" et "Justifier" veulent dire, dans l'interface
