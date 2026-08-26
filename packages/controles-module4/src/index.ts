@@ -64,6 +64,7 @@ export {
   detecterTrousNumerotation,
   type MotifNumerotationConfirme,
 } from './detecterTrousNumerotation.js';
+export { calculerProrataEncaissement } from './calculerProrataEncaissement.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
