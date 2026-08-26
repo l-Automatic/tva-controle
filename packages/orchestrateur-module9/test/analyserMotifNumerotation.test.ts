@@ -18,12 +18,12 @@ const pool = creerPool(CONNECTION_STRING);
 
 beforeAll(async () => {
   const provisioningPool = new pg.Pool({ connectionString: PROVISIONING_CONNECTION_STRING });
-  const cabinetRes = await provisioningPool.query<{ id: string }>(
-    `INSERT INTO cabinets (nom) VALUES ('Cabinet test motif numerotation') RETURNING id`
-  );
+  const client = await provisioningPool.connect();
+  const cabinetRes = await client.query<{ id: string }>(`SELECT provisioning_create_cabinet($1) AS id`, [
+    `Cabinet test motif numerotation ${Date.now()}`,
+  ]);
   CABINET_ID = cabinetRes.rows[0]!.id;
 
-  const client = await provisioningPool.connect();
   await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [CABINET_ID]);
   const dossierRes = await client.query<{ id: string }>(
     `INSERT INTO dossiers (cabinet_id, nom, regime_tva, logiciel_source, external_company_id, tva_encaissement)
