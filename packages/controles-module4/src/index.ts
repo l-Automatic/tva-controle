@@ -59,6 +59,11 @@ export {
   type EntreeReferentielCompte,
 } from './referentielComptesCharge.js';
 export { identifierCandidatsJugementHotel, type CandidatJugementHotel } from './candidatsHotel.js';
+export {
+  extraireNumeroSequence,
+  detecterTrousNumerotation,
+  type MotifNumerotationConfirme,
+} from './detecterTrousNumerotation.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
