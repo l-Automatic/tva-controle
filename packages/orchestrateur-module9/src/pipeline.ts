@@ -8,6 +8,7 @@ import {
   decouvrirComptesParPrefixe,
   resolveLedgerAccounts,
   fetchPieceNumbers,
+  fetchLignesGroupeLettrage,
 } from '@tva-controle/connector-pennylane';
 import {
   executerPreControles,
@@ -20,6 +21,7 @@ import {
   verifierCoherenceTvaHotel,
   identifierCandidatsJugementHotel,
   detecterTrousNumerotation,
+  calculerProrataEncaissement,
   verifierExhaustiviteAutoliquidation,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
@@ -366,9 +368,26 @@ export async function executerCycleTva(
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
   });
 
+  // Paiement partiel, volet ventes (10/08) — purement déterministe : on
+  // récupère les montants complets des groupes de lettrage à plus de 2
+  // lignes AVANT d'appeler determinerExigibiliteTva (fonction pure, ne fait
+  // jamais d'appel réseau elle-même), puis on lui passe le prorata déjà
+  // calculé.
+  const candidatsProrata = ecritures
+    .map((e) => ({ ledgerEntryId: e.ligneTva.ledgerEntryId, ligneTiers: e.lignesTiers[0] }))
+    .filter((c): c is { ledgerEntryId: number; ligneTiers: NonNullable<typeof c.ligneTiers> } =>
+      c.ligneTiers !== undefined && c.ligneTiers.lettrage.groupeIds.length > 2
+    );
+  const prorataParEcriture = new Map<number, number>();
+  for (const candidat of candidatsProrata) {
+    const lignesGroupe = await fetchLignesGroupeLettrage(params.client, candidat.ligneTiers.lettrage.groupeIds);
+    prorataParEcriture.set(candidat.ledgerEntryId, calculerProrataEncaissement(lignesGroupe));
+  }
+
   const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
     ecritures,
-    { comptesVenteService, comptesChargeService, comptesPaiementComptant }
+    { comptesVenteService, comptesChargeService, comptesPaiementComptant },
+    prorataParEcriture
   );
 
   const { statuts: statutsCarburant, anomalies: anomaliesCarburant } = determinerDeductibiliteCarburant(
