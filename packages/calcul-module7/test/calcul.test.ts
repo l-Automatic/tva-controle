@@ -310,3 +310,33 @@ describe('calculerTva — cadeaux clients, seuil 73€ TTC (10/08, corrigé : c�
     expect(resultat.lignes.find((l) => l.categorie === 'collectee_20')?.montant).toBe(200);
   });
 });
+
+describe('calculerTva — prorata paiement partiel (10/08)', () => {
+  it('applique le prorata au montant avant catégorisation par taux', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 200, ledgerEntryId: 1 }) });
+    const statutsExigibilite: StatutExigibilite[] = [
+      {
+        ledgerEntryId: 1,
+        compte: '445711',
+        natureOperation: 'service',
+        exigible: true,
+        prorataExigible: 0.6,
+        motif: 'Service : paiement partiel, 60% exigible cette période.',
+      },
+    ];
+
+    const resultat = calculerTva([e], [], statutsExigibilite, [], {});
+    // 200 * 0.6 = 120, pas 200
+    expect(resultat.lignes.find((l) => l.categorie === 'collectee_20')?.montant).toBeCloseTo(120);
+  });
+
+  it('sans prorataExigible, le montant complet est utilisé comme avant (rétrocompatible)', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '445711', credit: 200, ledgerEntryId: 1 }) });
+    const statutsExigibilite: StatutExigibilite[] = [
+      { ledgerEntryId: 1, compte: '445711', natureOperation: 'service', exigible: true, motif: 'x' },
+    ];
+
+    const resultat = calculerTva([e], [], statutsExigibilite, [], {});
+    expect(resultat.lignes.find((l) => l.categorie === 'collectee_20')?.montant).toBe(200);
+  });
+});
