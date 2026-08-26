@@ -61,10 +61,15 @@ majorité des cas depuis le 10/08).
 Pennylane.
 
 ### `paiement_partiel_calcule`
-**Déclencheur** : même situation que ci-dessus (groupe de lettrage à plus
-de 2 lignes), mais le prorata a pu être calculé automatiquement à partir
-des montants réels du groupe — (total encaissé / total facturé), plafonné
-à 100%.
+**Déclencheur** : groupe de lettrage à plus de 2 lignes, mais le prorata a
+pu être établi — **ventes** : calcul purement arithmétique sur les
+montants du groupe (total encaissé / total facturé), toujours tenté.
+**Achats** : uniquement si un LLM (Mistral) a d'abord établi, avec une
+confiance suffisante, qu'il s'agit bien d'un acompte rattaché à une
+facture précise et identifiable — sans clé Mistral configurée, ou sans
+lien établi avec confiance, ce type n'apparaît jamais côté achats et
+l'écriture reste exclue par prudence (cf. `paiement_partiel_a_verifier`
+ou l'exclusion silencieuse selon le cas).
 **Pourquoi "info", pas "signalée"** : ce n'est plus une incertitude à
 vérifier, c'est un résultat calculé — informatif, pour que le
 collaborateur voie que ce cas a été traité automatiquement.
