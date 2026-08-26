@@ -249,3 +249,56 @@ describe('determinerExigibiliteTva — comptes toujours payés au comptant (10/0
     expect(anomalies.some((a) => a.type === 'ligne_tiers_introuvable')).toBe(true);
   });
 });
+
+describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur groupe ambigu (10/08)', () => {
+  function ecritureAchatGroupeAmbigu(): EcritureTvaComplete {
+    return {
+      ledgerEntryId: 1,
+      ligneTva: {
+        id: 1,
+        compte: '44566',
+        compteId: 1,
+        libelle: null,
+        debit: 100,
+        credit: 0,
+        date: '2025-01-15',
+        ledgerEntryId: 1,
+        lettrage: { estLettree: false, groupeIds: [] },
+      },
+      autresLignes: [{ id: 1, compte: '611', compteId: 1, libelle: null, debit: 500, credit: 0 }],
+      lignesTiers: [
+        {
+          compte: '401DUPONT',
+          compteId: 1,
+          libelleCompte: 'FOURNISSEUR DUPONT',
+          debit: 0,
+          credit: 600,
+          lettrage: { estLettree: true, groupeIds: [1, 2, 3] }, // lettré, mais groupe ambigu
+        },
+      ],
+    };
+  }
+
+  it('achat : sans prorata calculé, exclut par prudence même si le groupe est "lettré"', () => {
+    const { statuts, anomalies } = determinerExigibiliteTva([ecritureAchatGroupeAmbigu()], configReelle);
+    expect(statuts[0]?.exigible).toBe(false);
+    expect(statuts[0]?.motif).toContain('Achat');
+    expect(statuts[0]?.motif).toContain('pas de déduction');
+    expect(anomalies.some((a) => a.type === 'paiement_partiel_a_verifier')).toBe(true);
+  });
+
+  it('achat : avec un prorata calculé (LLM ayant établi le lien), applique le prorata normalement', () => {
+    const prorataParEcriture = new Map([[1, 0.4]]);
+    const { statuts } = determinerExigibiliteTva([ecritureAchatGroupeAmbigu()], configReelle, prorataParEcriture);
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.prorataExigible).toBe(0.4);
+  });
+
+  it('vente : sans prorata calculé sur un groupe ambigu, reste exigible par prudence (comportement historique inchangé)', () => {
+    const e = ecritureRousseau({
+      lignesTiers: [{ ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: true, groupeIds: [1, 2, 3] } }],
+    });
+    const { statuts } = determinerExigibiliteTva([e], configReelle);
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+});
