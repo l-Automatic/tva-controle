@@ -65,6 +65,10 @@ export {
   type MotifNumerotationConfirme,
 } from './detecterTrousNumerotation.js';
 export { calculerProrataEncaissement } from './calculerProrataEncaissement.js';
+export {
+  identifierFacturesCandidatesAcompte,
+  type FactureCandidateAcompte,
+} from './facturesCandidatesAcompte.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
