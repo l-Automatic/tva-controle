@@ -20,6 +20,7 @@ import {
   verifierCoherenceCompteImmobilisation,
   verifierCoherenceTvaHotel,
   identifierCandidatsJugementHotel,
+  identifierFacturesCandidatesAcompte,
   detecterTrousNumerotation,
   calculerProrataEncaissement,
   verifierExhaustiviteAutoliquidation,
@@ -424,6 +425,66 @@ export async function executerCycleTva(
       } catch (err) {
         if (process.env.DEBUG_CYCLE) {
           console.error(`[DEBUG_CYCLE] échec jugement IA (paiement partiel achat) : ${String(err)}`);
+        }
+      }
+    }
+  }
+
+  // Paiement partiel achats, volet SANS lettrage (10/08) — confirmé par
+  // Rami : il n'existe pas de lettrage partiel/en attente en pratique, donc
+  // un vrai acompte se traduit par une facture ET un paiement TOUS LES DEUX
+  // non lettrés, sans aucun lien structurel. Recherche active parmi les
+  // mouvements du même compte fournisseur sur une fenêtre de temps, plutôt
+  // que de dépendre d'un lettrage qui n'existera jamais dans ce cas.
+  const facturesCandidatesAcompte = identifierFacturesCandidatesAcompte(ecritures, comptesChargeService);
+
+  if (
+    facturesCandidatesAcompte.length > 0 &&
+    typeof mistralApiKey === 'string' &&
+    mistralApiKey.length > 0
+  ) {
+    const mistralClientAcompte = new MistralClient({ apiKey: mistralApiKey });
+    const FENETRE_JOURS = 60;
+
+    for (const facture of facturesCandidatesAcompte) {
+      try {
+        const dateFacture = new Date(facture.date);
+        const periodeDebut = new Date(dateFacture);
+        periodeDebut.setDate(periodeDebut.getDate() - FENETRE_JOURS);
+        const periodeFin = new Date(dateFacture);
+        periodeFin.setDate(periodeFin.getDate() + FENETRE_JOURS);
+
+        const mouvementsCompte = await fetchLignesParCompte(params.client, {
+          compteIds: [facture.compteTiersId],
+          periodeDebut: periodeDebut.toISOString().slice(0, 10),
+          periodeFin: periodeFin.toISOString().slice(0, 10),
+        });
+
+        // Exclut la ligne de la facture elle-même (déjà représentée
+        // séparément ci-dessous) et toute ligne déjà lettrée (un paiement
+        // déjà rattaché ailleurs n'est pas un candidat).
+        const paiementsCandidats = mouvementsCompte.filter(
+          (l) => l.ledgerEntryId !== facture.ledgerEntryId && !l.lettrage.estLettree
+        );
+        if (paiementsCandidats.length === 0) continue;
+
+        const jugement = await jugerPaiementPartielAchat(mistralClientAcompte, [
+          { libelle: facture.libelle, debit: 0, credit: facture.montantFactureTotal, date: facture.date },
+          ...paiementsCandidats.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date })),
+        ]);
+
+        if (
+          jugement.lienEtabli &&
+          jugement.confiance !== 'basse' &&
+          jugement.montantFacture &&
+          jugement.montantPayeRattache !== null
+        ) {
+          const prorata = Math.min(jugement.montantPayeRattache / jugement.montantFacture, 1);
+          prorataParEcriture.set(facture.ledgerEntryId, prorata);
+        }
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec recherche acompte sans lettrage : ${String(err)}`);
         }
       }
     }
