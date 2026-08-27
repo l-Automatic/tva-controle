@@ -8,6 +8,7 @@ export interface FactureCandidateAcompte {
   date: string;
   libelle: string | null;
   montantTva: number;
+  montantFactureTotal: number; // montant TTC dû au fournisseur (ligneTiers.credit)
 }
 
 // Chantier paiement partiel achats, volet "sans lettrage" (10/08) — confirmé
@@ -52,6 +53,7 @@ export function identifierFacturesCandidatesAcompte(
       date: ecriture.ligneTva.date,
       libelle: ecriture.ligneTva.libelle,
       montantTva,
+      montantFactureTotal: Math.abs(ligneTiers.debit - ligneTiers.credit),
     });
   }
 
