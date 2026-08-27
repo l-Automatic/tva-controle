@@ -151,6 +151,21 @@ export function conventionValeur(contexte: ContexteDossier, cle: string): string
   return typeof trouve?.valeur === 'string' ? trouve.valeur : undefined;
 }
 
+// Symétrique de conventionValeur, pour les conventions dont la valeur est un
+// objet structuré (ex: motif de numérotation {prefixe, suffixe,
+// nombreChiffres}) plutôt qu'une chaîne unique ou une liste. Bug réel
+// trouvé le 10/08 : le motif de numérotation utilisait conventionValeur par
+// erreur, qui ne retourne jamais rien pour une valeur objet — le contrôle
+// de trou de numérotation ne s'est donc jamais exécuté, quel que soit
+// l'état de la convention en base.
+export function conventionObjet(contexte: ContexteDossier, cle: string): Record<string, unknown> | undefined {
+  const trouve = contexte.conventions.find((c) => c.cle === cle);
+  if (typeof trouve?.valeur !== 'object' || trouve.valeur === null || Array.isArray(trouve.valeur)) {
+    return undefined;
+  }
+  return trouve.valeur as Record<string, unknown>;
+}
+
 // Symétrique de conventionValeur, pour les conventions dont la valeur est une
 // liste de comptes (ex: comptes_vente_service) plutôt qu'une chaîne unique.
 export function conventionListe(contexte: ContexteDossier, cle: string): string[] | undefined {
