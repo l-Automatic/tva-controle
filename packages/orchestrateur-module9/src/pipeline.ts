@@ -525,6 +525,14 @@ export async function executerCycleTva(
       ),
     ];
     const pieceNumbersVente = await fetchPieceNumbers(params.client, ledgerEntryIdsVente);
+    if (process.env.DEBUG_CYCLE) {
+      console.error(
+        `[DEBUG_CYCLE] motif confirmé : ${JSON.stringify(motifNumerotationBrut)}`
+      );
+      console.error(
+        `[DEBUG_CYCLE] ${ledgerEntryIdsVente.length} écriture(s) de vente, piece_numbers reçus : ${JSON.stringify([...pieceNumbersVente.entries()])}`
+      );
+    }
     anomaliesNumerotation = detecterTrousNumerotation(
       ledgerEntryIdsVente.map((id) => ({ ledgerEntryId: id, numeroPiece: pieceNumbersVente.get(id) ?? null })),
       motifNumerotationBrut as { prefixe: string; suffixe: string; nombreChiffres: number | null }
