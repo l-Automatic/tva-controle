@@ -35,6 +35,7 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   tva_hotel_a_tort: 'TVA hôtel déduite à tort',
   trou_numerotation_facture: 'Trou dans la numérotation des factures',
   paiement_partiel_calcule: 'Paiement partiel — prorata calculé',
+  doublon_numerotation_facture: 'Doublon de numérotation de facture',
 };
 
 interface AnomaliesPanelProps {
@@ -46,6 +47,13 @@ interface AnomaliesPanelProps {
   // filtrables par type et statut — cf. brief refonte, zones Cycle/Historique.
   variant?: 'cycle' | 'historique';
   periode?: string | null;
+  // Optionnel : incrémenté par le parent pour forcer un rechargement après
+  // un nouveau cycle (brief v14) — sans lui, relancer un cycle sur EXACTEMENT
+  // la même période ne change pas la valeur de `periode` (une simple
+  // chaîne), donc l'effet ci-dessous ne se redéclenche pas et les nouvelles
+  // anomalies persistées entre les deux cycles restent invisibles jusqu'à
+  // un clic manuel sur "Rafraîchir". Même pattern que PropositionsPanel.
+  refreshKey?: number;
 }
 
 const LIBELLE_STATUT: Record<StatutAnomalie, string> = {
@@ -453,6 +461,7 @@ export function AnomaliesPanel({
   utilisateurId,
   variant = 'historique',
   periode = null,
+  refreshKey,
 }: AnomaliesPanelProps) {
   const [anomalies, setAnomalies] = useState<Anomalie[]>([]);
   const [loading, setLoading] = useState(false);
@@ -477,7 +486,7 @@ export function AnomaliesPanel({
   useEffect(() => {
     if (cabinetId && dossierId) void charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cabinetId, dossierId, periode]);
+  }, [cabinetId, dossierId, periode, refreshKey]);
 
   const visibles = (
     variant === 'cycle'

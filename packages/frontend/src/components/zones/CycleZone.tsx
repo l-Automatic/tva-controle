@@ -22,11 +22,17 @@ function CalculsDuCycle({
   dossierId,
   utilisateurId,
   periode,
+  refreshKey,
 }: {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
   periode: { debut: string; fin: string };
+  // cf. brief v14 : relancer un cycle sur la même période met à jour le
+  // calcul EN PLACE côté backend (même id, cf. enregistrerCalcul) — sans ce
+  // compteur, periode.debut/fin restent identiques et cet effet ne se
+  // redéclenche pas, laissant le montant affiché périmé.
+  refreshKey: number;
 }) {
   const [calculs, setCalculs] = useState<Calcul[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,7 +54,7 @@ function CalculsDuCycle({
   useEffect(() => {
     void charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cabinetId, dossierId, periode.debut, periode.fin]);
+  }, [cabinetId, dossierId, periode.debut, periode.fin, refreshKey]);
 
   return (
     <div className="panel-section">
@@ -85,6 +91,13 @@ export function CycleZone({
   onSuggestionsAutoliquidation,
 }: CycleZoneProps) {
   const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
+  // Bug réel (brief v14) : relancer un cycle sur EXACTEMENT la même période
+  // ne change pas la valeur de `periode.debut` passée à AnomaliesPanel — son
+  // effet ne se redéclenchait donc pas, laissant les nouvelles anomalies
+  // (ex: trou/doublon de numérotation détectés après confirmation d'un
+  // motif entre deux cycles) invisibles jusqu'à un clic manuel sur
+  // "Rafraîchir". Incrémenté à chaque cycle, indépendamment de la période.
+  const [cycleRefreshKey, setCycleRefreshKey] = useState(0);
 
   useEffect(() => {
     if (periode) return;
@@ -109,6 +122,7 @@ export function CycleZone({
         dossierId={dossierId}
         onCycleLance={(debut, fin, resultat) => {
           onPeriodeChange({ debut, fin });
+          setCycleRefreshKey((k) => k + 1);
           if (resultat.comptesACategoriser.length > 0) setComptesACategoriser(resultat.comptesACategoriser);
           onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
           onSuggestionsAutoliquidation(resultat.comptesAutoliquidationSuggeres);
@@ -123,9 +137,16 @@ export function CycleZone({
             utilisateurId={utilisateurId}
             variant="cycle"
             periode={periode.debut}
+            refreshKey={cycleRefreshKey}
           />
           <div className="panel-separateur" />
-          <CalculsDuCycle cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} periode={periode} />
+          <CalculsDuCycle
+            cabinetId={cabinetId}
+            dossierId={dossierId}
+            utilisateurId={utilisateurId}
+            periode={periode}
+            refreshKey={cycleRefreshKey}
+          />
         </>
       )}
       {comptesACategoriser.length > 0 && (

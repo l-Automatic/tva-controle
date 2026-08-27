@@ -9,6 +9,7 @@ import {
   CircleCheck,
   CircleX,
   Clock,
+  Copy,
   Fuel,
   HandCoins,
   Hash,
@@ -68,6 +69,7 @@ export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   tva_hotel_a_tort: Hotel,
   trou_numerotation_facture: Hash,
   paiement_partiel_calcule: Layers,
+  doublon_numerotation_facture: Copy,
 };
 export const ICONE_TYPE_ANOMALIE_DEFAUT: LucideIcon = CircleAlert;
 
