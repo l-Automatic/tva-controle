@@ -43,6 +43,7 @@ describe('identifierFacturesCandidatesAcompte', () => {
     const resultat = identifierFacturesCandidatesAcompte([e], comptesChargeService);
     expect(resultat).toHaveLength(1);
     expect(resultat[0]?.compteTiersId).toBe(42);
+    expect(resultat[0]?.montantFactureTotal).toBe(600); // ligneTiers.credit
   });
 
   it('exclut une facture de bien, même non lettrée', () => {
