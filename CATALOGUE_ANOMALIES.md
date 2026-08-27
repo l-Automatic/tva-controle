@@ -206,6 +206,16 @@ motif confirmé, ce contrôle ne fait rien du tout.
 comptabilité, ou si le numéro a été sauté volontairement (annulation,
 avoir...).
 
+### `doublon_numerotation_facture`
+**Déclencheur** : le même numéro de facture (selon le motif confirmé)
+apparaît sur plusieurs pièces distinctes.
+**Pourquoi jamais bloquante** : même principe que le trou — informe le
+travail de contrôle, n'empêche jamais le calcul.
+**Prérequis** : identique au trou — nécessite un motif confirmé au
+préalable.
+**Action attendue** : vérifier s'il s'agit d'une vraie facture dupliquée
+par erreur, ou d'une réutilisation de numéro à corriger.
+
 ---
 
 ## Ce que "Résoudre" et "Justifier" veulent dire, dans l'interface
