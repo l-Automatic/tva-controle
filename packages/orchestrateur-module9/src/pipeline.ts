@@ -46,7 +46,7 @@ import {
 } from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
-import { chargerContexteDossier, conventionValeur, conventionListe } from './db/dossierRepository.js';
+import { chargerContexteDossier, conventionValeur, conventionListe, conventionObjet } from './db/dossierRepository.js';
 import {
   enregistrerAnomalies,
   enregistrerCalcul,
@@ -516,7 +516,7 @@ export async function executerCycleTva(
   // manuellement, jamais automatiquement à chaque cycle). Utilise le vrai
   // piece_number (au niveau de l'écriture), jamais le libellé de ligne —
   // même correction que pour la découverte, cf. analyserMotifNumerotation.ts.
-  const motifNumerotationBrut = conventionValeur(contexteDossier, 'motif_numerotation_facture');
+  const motifNumerotationBrut = conventionObjet(contexteDossier, 'motif_numerotation_facture');
   let anomaliesNumerotation: Anomalie[] = [];
   if (motifNumerotationBrut && typeof motifNumerotationBrut === 'object') {
     const ledgerEntryIdsVente = [
