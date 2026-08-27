@@ -43,24 +43,31 @@ export async function jugerPaiementPartielAchat(
   if (lignesGroupe.length === 0) return parDefautNonEtabli;
 
   const systemPrompt =
-    `Tu es un assistant qui aide à analyser un groupe de lignes comptables ` +
-    `françaises rapprochées ensemble (lettrage), sur un compte fournisseur, ` +
+    `Tu es un assistant qui aide à analyser un ensemble de lignes comptables ` +
+    `françaises sur un compte fournisseur (une facture, et un ou plusieurs ` +
+    `mouvements de règlement potentiellement liés — soit parce qu'ils sont ` +
+    `rapprochés ensemble dans Pennylane, soit parce qu'ils ont été trouvés à ` +
+    `proximité dans le temps sur le même compte, sans lien structurel établi), ` +
     `pour déterminer s'il s'agit d'un acompte payé sur UNE facture de service ` +
-    `précise et identifiable. Base-toi sur les libellés (souvent explicites : ` +
-    `mentions de modalités de paiement comme "50/50", des dates d'échéance, ` +
-    `des références de facture) et sur les montants (le total facturé doit ` +
-    `être identifiable, distinct du ou des montants réellement payés).\n\n` +
+    `précise et identifiable.\n\n` +
+    `L'indice d'un acompte peut se trouver dans le libellé de LA FACTURE ` +
+    `elle-même (modalités de paiement du type "50/50", échéancier, référence) ` +
+    `OU dans le libellé du RÈGLEMENT lui-même (une écriture de banque avec une ` +
+    `mention abrégée ou explicite : "acpt", "acompte", "1er versement", et ` +
+    `bien d'autres formulations possibles — ne te limite pas à une liste ` +
+    `fixe, comprends l'intention du libellé). Base-toi aussi sur les montants ` +
+    `(le total facturé doit être identifiable, distinct du ou des montants ` +
+    `réellement payés) et sur la proximité des dates.\n\n` +
     `Ne conclus lienEtabli: true QUE si tu peux identifier avec un niveau de ` +
-    `confiance raisonnable : (1) laquelle ou lesquelles des lignes ` +
-    `constituent LA facture concernée, (2) quel montant a été RÉELLEMENT payé ` +
-    `pour CETTE facture précise (pas le total du groupe si plusieurs factures ` +
-    `différentes s'y mélangent). Si le groupe mélange plusieurs factures sans ` +
-    `que l'attribution soit claire, ou si tu hésites, réponds lienEtabli: ` +
-    `false — ne jamais deviner un lien qui n'est pas clairement établi, une ` +
-    `fausse déduction de TVA est plus grave qu'une absence de déduction. Tu ne ` +
-    `calcules AUCUN prorata toi-même — donne uniquement les deux montants ` +
-    `bruts, le calcul est fait ailleurs. Réponds uniquement en JSON, sans ` +
-    `texte hors du JSON.`;
+    `confiance raisonnable : (1) laquelle des lignes constitue LA facture ` +
+    `concernée, (2) quel montant a été RÉELLEMENT payé pour CETTE facture ` +
+    `précise (pas un montant qui semble concerner autre chose). Si l'ensemble ` +
+    `mélange plusieurs factures sans que l'attribution soit claire, ou si tu ` +
+    `hésites, réponds lienEtabli: false — ne jamais deviner un lien qui n'est ` +
+    `pas clairement établi, une fausse déduction de TVA est plus grave qu'une ` +
+    `absence de déduction. Tu ne calcules AUCUN prorata toi-même — donne ` +
+    `uniquement les deux montants bruts, le calcul est fait ailleurs. Réponds ` +
+    `uniquement en JSON, sans texte hors du JSON.`;
 
   const lignesTexte = lignesGroupe
     .map(
