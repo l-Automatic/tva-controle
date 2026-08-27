@@ -39,13 +39,25 @@ export async function decouvrirMotifNumerotation(
     `une année comme "2025" dans "FA-2025-042" ne bouge pas d'une facture à ` +
     `l'autre — seul "042" est le compteur ; le préfixe est donc "FA-2025-", ` +
     `pas juste "FA-").\n\n` +
-    `Si les exemples ne montrent aucun motif cohérent et récurrent (numéros ` +
-    `complètement hétérogènes, factures saisies à la main sans système), ` +
-    `réponds motif: null plutôt que d'inventer un motif qui n'existe pas — ` +
-    `une fausse détection créerait de fausses alertes de trou de séquence par ` +
-    `la suite. Tu ne prends aucune décision définitive : un comptable ` +
-    `confirmera ou rejettera ta proposition avant qu'elle serve à quoi que ce ` +
-    `soit. Réponds uniquement en JSON, sans texte hors du JSON.`;
+    `IMPORTANT — séries minoritaires : les exemples peuvent mélanger PLUSIEURS ` +
+    `séries de numérotation distinctes qui coexistent dans une même ` +
+    `comptabilité — la série principale des factures de vente, mais aussi ` +
+    `parfois des avoirs, ou des factures d'acompte, chacune avec potentiellement ` +
+    `son propre préfixe ou format. Ton travail est d'identifier la série ` +
+    `DOMINANTE (celle qui revient le plus souvent, la plus régulière) et de ` +
+    `l'exprimer comme motif — IGNORE complètement les numéros qui n'en font ` +
+    `pas partie plutôt que d'essayer de les faire entrer de force dans un ` +
+    `motif unique qui les couvrirait tous. Un motif qui essaie de couvrir ` +
+    `plusieurs séries à la fois n'est jamais correct — mieux vaut un motif ` +
+    `propre sur la série dominante seule qu'un motif confus qui les mélange.\n\n` +
+    `Si les exemples ne montrent aucune série dominante claire même après avoir ` +
+    `écarté les séries minoritaires (numéros complètement hétérogènes, ` +
+    `factures saisies à la main sans système), réponds motif: null plutôt que ` +
+    `d'inventer un motif qui n'existe pas — une fausse détection créerait de ` +
+    `fausses alertes de trou de séquence par la suite. Tu ne prends aucune ` +
+    `décision définitive : un comptable confirmera ou rejettera ta proposition ` +
+    `avant qu'elle serve à quoi que ce soit. Réponds uniquement en JSON, sans ` +
+    `texte hors du JSON.`;
 
   const exemplesTexte = libellesExemples.map((l) => `- "${l}"`).join('\n');
 
