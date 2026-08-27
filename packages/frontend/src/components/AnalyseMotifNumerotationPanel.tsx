@@ -108,6 +108,12 @@ export function AnalyseMotifNumerotationPanel({
           {submitting ? 'Analyse en cours…' : 'Analyser le motif de numérotation'}
         </button>
       </div>
+      <p className="reference cycle-form-warning">
+        Pour une première analyse, choisissez une période large (plusieurs mois) pour que le motif dominant se
+        dégage clairement. Si le format a changé en cours d'exercice, limitez la période à la partie où le nouveau
+        format s'applique uniquement — mélanger l'ancien et le nouveau format dans la même analyse produira un
+        résultat confus.
+      </p>
       {error && <p className="error">{error}</p>}
       {motifPropose !== undefined &&
         (motifPropose ? (
