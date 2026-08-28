@@ -24,6 +24,7 @@ import {
   detecterTrousNumerotation,
   calculerProrataEncaissement,
   verifierExhaustiviteAutoliquidation,
+  verifierAbsenceTvaLivraisonIntracom,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -192,6 +193,17 @@ export async function executerCycleTva(
     'compte_tva_deductible_autoliquidee'
   );
   const comptesChargeAutoliquidation = conventionListe(contexteDossier, 'comptes_charge_autoliquidation') ?? [];
+
+  // TVA intracom (10/08) — deuxième paire d'autoliquidation, confirmée
+  // séparément du BTP (comptes différents), structurellement parallèle.
+  const compteAutoliquidationDueIntracom = conventionValeur(contexteDossier, 'compte_tva_due_autoliquidee_intracom');
+  const compteAutoliquidationDeductibleIntracom = conventionValeur(
+    contexteDossier,
+    'compte_tva_deductible_autoliquidee_intracom'
+  );
+  const comptesChargeAutoliquidationIntracom =
+    conventionListe(contexteDossier, 'comptes_charge_autoliquidation_intracom') ?? [];
+  const comptesVenteIntracomExoneree = conventionListe(contexteDossier, 'comptes_vente_intracom_exoneree') ?? [];
 
   // Dérivés de la mémoire de dossier — [] si le dossier n'a encore aucune
   // convention confirmée pour ce point (ex: pas encore onboardé). Un tableau
@@ -368,6 +380,8 @@ export async function executerCycleTva(
     contexteDossier,
     ...(compteAutoliquidationDue !== undefined ? { compteAutoliquidationDue } : {}),
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
+    ...(compteAutoliquidationDueIntracom !== undefined ? { compteAutoliquidationDueIntracom } : {}),
+    ...(compteAutoliquidationDeductibleIntracom !== undefined ? { compteAutoliquidationDeductibleIntracom } : {}),
   });
 
   // Paiement partiel, volet ventes (10/08) — purement déterministe : on
@@ -609,6 +623,23 @@ export async function executerCycleTva(
         })
       : [];
 
+  // TVA intracom (10/08) — mêmes contrôles que le BTP, comptes distincts.
+  const anomaliesCoherenceAutoliquidationIntracom =
+    compteAutoliquidationDeductibleIntracom !== undefined
+      ? verifierCoherenceTauxAutoliquidation(ecritures, {
+          compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductibleIntracom,
+        })
+      : [];
+  const anomaliesExhaustiviteAutoliquidationIntracom =
+    compteAutoliquidationDueIntracom !== undefined && compteAutoliquidationDeductibleIntracom !== undefined
+      ? verifierExhaustiviteAutoliquidation(ecritures, {
+          comptesChargeAutoliquidation: comptesChargeAutoliquidationIntracom,
+          compteTvaDueAutoliquidee: compteAutoliquidationDueIntracom,
+          compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductibleIntracom,
+        })
+      : [];
+  const anomaliesLivraisonIntracom = verifierAbsenceTvaLivraisonIntracom(ecritures, comptesVenteIntracomExoneree);
+
 
   // Trous de numérotation de facture (10/08) — n'applique que si un motif
   // a déjà été confirmé (via l'endpoint dédié
@@ -713,6 +744,9 @@ export async function executerCycleTva(
     ...anomaliesCoherenceAutoliquidation,
     ...anomaliesCoherenceCompteImmobilisation,
     ...anomaliesExhaustiviteAutoliquidation,
+    ...anomaliesCoherenceAutoliquidationIntracom,
+    ...anomaliesExhaustiviteAutoliquidationIntracom,
+    ...anomaliesLivraisonIntracom,
     ...anomaliesHotel,
     ...anomaliesJugementHotel,
     ...anomaliesNumerotation,
@@ -832,6 +866,8 @@ export async function executerCycleTva(
     comptesCadeaux,
     ...(compteAutoliquidationDue !== undefined ? { compteAutoliquidationDue } : {}),
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
+    ...(compteAutoliquidationDueIntracom !== undefined ? { compteAutoliquidationDueIntracom } : {}),
+    ...(compteAutoliquidationDeductibleIntracom !== undefined ? { compteAutoliquidationDeductibleIntracom } : {}),
   });
 
   // Encaissements en compte d'attente déjà qualifiés 'vente' par un humain
