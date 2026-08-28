@@ -75,6 +75,10 @@ export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
   compteAutoliquidationDue?: string;
   compteAutoliquidationDeductible?: string;
+  // TVA intracom (10/08) — deuxième paire d'autoliquidation, vérifiée en
+  // plus de celle du BTP, jamais à sa place.
+  compteAutoliquidationDueIntracom?: string;
+  compteAutoliquidationDeductibleIntracom?: string;
   // Mémoire de dossier (taux_historique, conventions...) — quand fournie,
   // prend le pas sur tauxNominalParCompte pour le contrôle de cohérence des
   // taux. Optionnel : un dossier tout juste onboardé n'en a pas encore.
@@ -102,6 +106,17 @@ export function executerPreControles(
       config.compteAutoliquidationDue,
       config.compteAutoliquidationDeductible
     ),
+    // TVA intracom : vérification séparée, seulement si les deux comptes
+    // sont confirmés (pas de valeur par défaut sensée ici, contrairement
+    // au BTP — passer undefined ferait tourner verifierAutoliquidationEquilibree
+    // sur les valeurs par défaut BTP par erreur).
+    ...(config.compteAutoliquidationDueIntracom && config.compteAutoliquidationDeductibleIntracom
+      ? verifierAutoliquidationEquilibree(
+          ecritures,
+          config.compteAutoliquidationDueIntracom,
+          config.compteAutoliquidationDeductibleIntracom
+        )
+      : []),
     ...verifierAvoirsCollecte(ecritures),
     ...detecterComptesTvaNonReconnus(ecritures, {
       ...(config.compteAutoliquidationDue !== undefined
@@ -109,6 +124,12 @@ export function executerPreControles(
         : {}),
       ...(config.compteAutoliquidationDeductible !== undefined
         ? { compteAutoliquidationDeductible: config.compteAutoliquidationDeductible }
+        : {}),
+      ...(config.compteAutoliquidationDueIntracom !== undefined
+        ? { compteAutoliquidationDueIntracom: config.compteAutoliquidationDueIntracom }
+        : {}),
+      ...(config.compteAutoliquidationDeductibleIntracom !== undefined
+        ? { compteAutoliquidationDeductibleIntracom: config.compteAutoliquidationDeductibleIntracom }
         : {}),
     }),
   ];
