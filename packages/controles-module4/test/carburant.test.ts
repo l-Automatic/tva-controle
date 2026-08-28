@@ -42,15 +42,13 @@ describe('determinerDeductibiliteCarburant', () => {
     expect(statuts[0]?.tauxDeductible).toBe(80);
   });
 
-  it('indéterminable et signalé si la flotte est mixte', () => {
+  it('flotte mixte (10/08, retiré) : 100% déductible, pas de réduction ni de signalement', () => {
     const ctx = contexte({
       parcVehicules: [{ type: 'vehicule_tourisme' }, { type: 'vehicule_utilitaire' }],
     });
     const { statuts, anomalies } = determinerDeductibiliteCarburant([ecritureCarburant()], config, ctx);
-    expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.type).toBe('flotte_mixte_carburant');
-    expect(anomalies[0]?.gravite).toBe('signale'); // jamais bloquant : décision humaine
-    expect(statuts[0]?.tauxDeductible).toBeNull();
+    expect(anomalies).toEqual([]);
+    expect(statuts[0]?.tauxDeductible).toBe(100);
   });
 
   it('indéterminable et signalé si aucun véhicule n’est répertorié', () => {
