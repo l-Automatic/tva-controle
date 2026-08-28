@@ -485,3 +485,46 @@ recoder, ce qui a été fait cette fois-ci.
 **6ᵉ catégorie de convention "Comptes d'immobilisation" : fait, frontend
 et backend.** Popup + onglet Conventions de comptes, icône dédiée,
 info-bulle expliquant la distinction avec "Comptes d'équipement".
+
+---
+
+## PAUSE explicite du 10/08 — chantier paiement partiel achats à reprendre
+
+Rami demande d'arrêter ici et de revoir l'ensemble de la proratisation/
+déductibilité services plus tard, à tête reposée — pas de correctif
+supplémentaire ce soir. État exact au moment de la pause :
+
+**Ce qui fonctionne, confirmé** :
+- Volet ventes (`calculerProrataEncaissement`) : purement arithmétique,
+  jamais touché aujourd'hui, aucune raison de douter.
+- Le mécanisme de recherche sans lettrage (facture + paiement candidats
+  sur le compte, fenêtre 60 jours) trouve bien les bons candidats et
+  appelle réellement le LLM — confirmé par les logs DEBUG_CYCLE.
+- La correspondance de nom entre facture et paiement ("ACCORD HOTEL" /
+  "CB ACCORD HOTEL") est maintenant bien reconnue par le LLM après le
+  dernier ajustement de prompt.
+
+**Ce qui ne va pas, dernier état observé** :
+- Après le correctif "ne plus faire confiance à montantFacture du LLM,
+  utiliser facture.montantFactureTotal à la place" : le prorata affiché
+  est maintenant de **100%** pour l'hôtel ET pour le cabinet comptable
+  (qui marchait pourtant correctement avant, à 50%) — régression
+  probable introduite par ce dernier correctif, pas encore diagnostiquée.
+- **Nouveau et plus inquiétant** : une anomalie de paiement partiel à
+  100% est apparue sur le compte **401REXEL**, pour une facture **sans
+  aucun paiement du tout** — cette situation ne devrait même pas
+  déclencher la logique de recherche d'acompte (`paiementsCandidats`
+  devrait être vide, donc `continue` avant tout appel LLM). À
+  investiguer en priorité à la reprise : soit le filtre "déjà lettré"
+  ne fonctionne pas comme attendu, soit un candidat est trouvé à tort.
+
+**Hypothèse de départ pour la reprise** (non vérifiée) : le dernier
+correctif a été fait dans la précipitation en toute fin de session — à
+revérifier ligne par ligne avant de creuser plus loin, plutôt que de
+supposer une nouvelle cause exotique.
+
+**Périmètre à revoir plus largement, pas juste ce bug ponctuel** : Rami
+demande explicitement de revoir "toutes ces anomalies" de proratisation
+et déductibilité services à tête reposée — suggère que le chantier
+mérite une relecture d'ensemble (architecture, pas juste un bug precis)
+plutôt qu'un nouveau correctif isolé.
