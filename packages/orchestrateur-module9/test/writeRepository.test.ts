@@ -1074,6 +1074,26 @@ describe('retirerCompteConvention', () => {
       avecClient((client) => retirerCompteConvention(client, dossierId, 'cle_inexistante_xyz', '706', utilisateurId))
     ).rejects.toThrow(/Aucune convention confirmée/);
   });
+
+  it('passe la convention à "rejected" quand le dernier compte est retiré (10/08, bug réel corrigé)', async () => {
+    const utilisateurId = await creerUtilisateur('Retrait3');
+    const cle = `comptes_test_vide_${Date.now()}`;
+
+    const id = await avecClient((client) =>
+      ajouterConventionManuelle(client, dossierId, utilisateurId, cle, ['706'])
+    );
+    await avecClient((client) => confirmerConvention(client, id, utilisateurId));
+
+    await avecClient((client) => retirerCompteConvention(client, dossierId, cle, '706', utilisateurId));
+
+    const confirmees = await avecClient((client) => listerConventions(client, dossierId, 'confirmed'));
+    expect(confirmees.some((c) => c.cle === cle)).toBe(false); // plus "confirmed"
+
+    const rejetees = await avecClient((client) => listerConventions(client, dossierId, 'rejected'));
+    const ligneRejetee = rejetees.find((c) => c.cle === cle);
+    expect(ligneRejetee).toBeDefined();
+    expect(ligneRejetee?.valeur).toEqual([]);
+  });
 });
 
 describe('listerConventions et listerTauxHistorique — rejected masqué par défaut', () => {
