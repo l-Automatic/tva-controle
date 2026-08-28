@@ -47,7 +47,8 @@ function estCompteService(compte: string, comptesService: string[]): boolean {
 export function determinerExigibiliteTva(
   ecritures: EcritureTvaComplete[],
   config: ConfigExigibiliteTva,
-  prorataParEcriture: Map<number, number> = new Map()
+  prorataParEcriture: Map<number, number> = new Map(),
+  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set()
 ): { statuts: StatutExigibilite[]; anomalies: Anomalie[] } {
   const statuts: StatutExigibilite[] = [];
   const anomalies: Anomalie[] = [];
@@ -65,9 +66,20 @@ export function determinerExigibiliteTva(
     // Comptes "toujours payé comptant" (10/08) : court-circuite tout le
     // reste de la logique, y compris la détection bien/service — le
     // lettrage n'a rien à apporter ici, ne jamais l'examiner.
-    const estPaiementComptant = ecriture.autresLignes.some((l) =>
-      (config.comptesPaiementComptant ?? []).some((prefixe) => l.compte.startsWith(prefixe))
-    );
+    //
+    // EXCEPTION (10/08, confirmée par Rami) : les hôtels sont un cas
+    // particulier au sein du 625 (déplacements) — contrairement aux péages
+    // et restaurants, systématiquement payés en une fois, un hôtel peut
+    // être réglé en deux fois (acompte + solde). L'appelant identifie ces
+    // écritures (détection déterministe sur le nom du fournisseur, ou
+    // jugement LLM sur le libellé — cf. pipeline.ts) et les exclut de ce
+    // court-circuit via ledgerEntryIdsExceptionPaiementComptant, pour
+    // qu'elles suivent la logique normale de lettrage/prorata ci-dessous.
+    const estPaiementComptant =
+      !ledgerEntryIdsExceptionPaiementComptant.has(ledgerEntryId) &&
+      ecriture.autresLignes.some((l) =>
+        (config.comptesPaiementComptant ?? []).some((prefixe) => l.compte.startsWith(prefixe))
+      );
     if (estPaiementComptant) {
       statuts.push({
         ledgerEntryId,
