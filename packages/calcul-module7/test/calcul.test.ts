@@ -340,3 +340,40 @@ describe('calculerTva — prorata paiement partiel (10/08)', () => {
     expect(resultat.lignes.find((l) => l.categorie === 'collectee_20')?.montant).toBe(200);
   });
 });
+
+describe('calculerTva — TVA intracom, deuxième paire d’autoliquidation (10/08)', () => {
+  it('reconnaît le compte due intracom configuré, réutilise la catégorie autoliquidation_due', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '4452', credit: 1200, ledgerEntryId: 1 }) });
+    const resultat = calculerTva([e], [], [], [], {
+      compteAutoliquidationDueIntracom: '4452',
+      tauxAutoliquidation: 20,
+    });
+    const ligneDue = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due');
+    expect(ligneDue).toBeDefined();
+    expect(ligneDue?.montant).toBeCloseTo(200); // 1200 TTC -> 200 de TVA a 20%
+  });
+
+  it('reconnaît le compte déductible intracom configuré', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '445662', debit: 1200, ledgerEntryId: 1 }) });
+    const resultat = calculerTva([e], [], [], [], {
+      compteAutoliquidationDeductibleIntracom: '445662',
+      tauxAutoliquidation: 20,
+    });
+    const ligneDeductible = resultat.lignes.find((l) => l.categorie === 'autoliquidation_deductible');
+    expect(ligneDeductible?.montant).toBeCloseTo(200);
+  });
+
+  it('BTP (4454) et intracom (4452) coexistent, s’accumulent dans la même catégorie', () => {
+    const eBtp = ecriture({ ligneTva: ligneTva({ compte: '4454', credit: 1200, ledgerEntryId: 1 }) });
+    const eIntracom = ecriture({ ligneTva: ligneTva({ compte: '4452', credit: 600, ledgerEntryId: 2 }) });
+    const resultat = calculerTva([eBtp, eIntracom], [], [], [], {
+      compteAutoliquidationDue: '4454',
+      compteAutoliquidationDueIntracom: '4452',
+      tauxAutoliquidation: 20,
+    });
+    const ligneDue = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due');
+    expect(ligneDue?.montant).toBeCloseTo(300); // 200 (BTP) + 100 (intracom)
+    expect(ligneDue?.referencesPieces).toContain(1);
+    expect(ligneDue?.referencesPieces).toContain(2);
+  });
+});
