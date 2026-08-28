@@ -159,35 +159,44 @@ export function determinerExigibiliteTva(
     }
 
     const ligneTiers = ecriture.lignesTiers[0]!;
+
+    // Prorata calculé (10/08) : vérifié EN PREMIER, indépendamment de
+    // l'état de lettrage de la ligne — couvre à la fois le cas "groupe
+    // ambigu à plus de 2 lignes" (ventes : calcul pur ; achats : jugement
+    // LLM sur le groupe) ET le cas "facture non lettrée du tout, acompte
+    // retrouvé par recherche sur le compte" (achats uniquement, cf.
+    // identifierFacturesCandidatesAcompte). Bug réel corrigé le 10/08 :
+    // ce contrôle était auparavant enfoui dans le bloc groupeIds > 2,
+    // donc jamais consulté pour une facture totalement non lettrée — le
+    // cas le plus courant en pratique d'après Rami (pas de lettrage
+    // partiel/en attente dans Pennylane).
+    const prorata = prorataParEcriture.get(ledgerEntryId);
+    if (prorata !== undefined) {
+      anomalies.push({
+        type: 'paiement_partiel_calcule',
+        gravite: 'info',
+        ledgerEntryId,
+        compte,
+        description: `Compte tiers ${ligneTiers.compte} : paiement partiel détecté — prorata de ${(prorata * 100).toFixed(0)}% appliqué automatiquement à partir des montants réels.`,
+        details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, prorata },
+      });
+      statuts.push({
+        ledgerEntryId,
+        compte,
+        natureOperation: 'service',
+        exigible: prorata > 0,
+        prorataExigible: prorata,
+        motif: `Service : paiement partiel, ${(prorata * 100).toFixed(0)}% exigible cette période (calculé sur les montants réels).`,
+      });
+      continue;
+    }
+
     const exigible = ligneTiers.lettrage.estLettree;
 
     // Plus de 2 id dans le groupe de lettrage = possible paiement partiel ou
-    // rapprochement multi-factures. Si l'appelant a fourni un prorata
-    // calculé pour cette écriture (montants du groupe déjà récupérés), on
-    // l'applique — sinon on retombe sur le comportement précédent (signalé,
-    // exigible en totalité par prudence, à vérifier manuellement).
+    // rapprochement multi-factures, sans prorata disponible (déjà vérifié
+    // ci-dessus) : signalé pour vérification manuelle.
     if (ligneTiers.lettrage.groupeIds.length > 2) {
-      const prorata = prorataParEcriture.get(ledgerEntryId);
-      if (prorata !== undefined) {
-        anomalies.push({
-          type: 'paiement_partiel_calcule',
-          gravite: 'info',
-          ledgerEntryId,
-          compte,
-          description: `Compte tiers ${ligneTiers.compte} : paiement partiel détecté sur un groupe de ${ligneTiers.lettrage.groupeIds.length} pièces — prorata de ${(prorata * 100).toFixed(0)}% appliqué automatiquement à partir des montants réels du groupe.`,
-          details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, prorata },
-        });
-        statuts.push({
-          ledgerEntryId,
-          compte,
-          natureOperation: 'service',
-          exigible: prorata > 0,
-          prorataExigible: prorata,
-          motif: `Service : paiement partiel, ${(prorata * 100).toFixed(0)}% exigible cette période (calculé sur les montants du groupe de lettrage).`,
-        });
-        continue;
-      }
-
       anomalies.push({
         type: 'paiement_partiel_a_verifier',
         gravite: 'signale',
@@ -201,10 +210,7 @@ export function determinerExigibiliteTva(
       // Rami) : côté ventes, un groupe ambigu non résolu reste exigible
       // par prudence (l'État a droit à la collecte). Côté achats, c'est
       // l'inverse — jamais de déduction sans lien facture/paiement
-      // clairement établi. Sans prorata fourni (LLM n'a pas pu établir le
-      // lien, ou pas encore tenté), on exclut ici plutôt que de retomber
-      // sur le comportement générique de fin de fonction (qui suivrait
-      // aveuglément estLettree, potentiellement à tort pour un achat).
+      // clairement établi.
       if (estDeductible) {
         statuts.push({
           ledgerEntryId,
