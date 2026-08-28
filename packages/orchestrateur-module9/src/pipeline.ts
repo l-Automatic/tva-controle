@@ -224,6 +224,7 @@ export async function executerCycleTva(
     params.comptesCadeauxOverride ?? conventionListe(contexteDossier, 'comptes_cadeaux') ?? [];
   const comptesImmobilisation =
     params.comptesImmobilisationOverride ?? conventionListe(contexteDossier, 'comptes_immobilisation') ?? [];
+  const comptesSansCategorie = conventionListe(contexteDossier, 'comptes_sans_categorie') ?? [];
   const comptesAttentePrefixes =
     params.comptesAttenteOverride ?? conventionListe(contexteDossier, 'comptes_attente') ?? ['471'];
 
@@ -237,6 +238,7 @@ export async function executerCycleTva(
     comptesCarburant,
     comptesCadeaux,
     comptesImmobilisation,
+    comptesSansCategorie,
   });
 
   // Comptes déjà "charge de service" mais pas encore marqués spécifiquement
