@@ -101,6 +101,11 @@ p {
   font-size: 1.05rem;
 }
 
+.sidebar-brand-logo {
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
 .sidebar-section-titre {
   font-size: 0.7rem;
   font-weight: 600;

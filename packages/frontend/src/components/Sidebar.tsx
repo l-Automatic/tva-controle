@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Search, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { ApiError, fetchDossiers } from '../api';
 import { ICONE_ZONE } from '../icons';
 import type { Dossier } from '../types';
@@ -121,8 +121,8 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <ShieldCheck size={20} aria-hidden="true" />
-        <span>Module 6</span>
+        <img src="/favicon.svg" alt="" width={22} height={22} className="sidebar-brand-logo" />
+        <span>TVA Contrôle</span>
       </div>
 
       <div className="sidebar-section">
