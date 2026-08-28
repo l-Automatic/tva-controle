@@ -69,6 +69,7 @@ export {
   identifierFacturesCandidatesAcompte,
   type FactureCandidateAcompte,
 } from './facturesCandidatesAcompte.js';
+export { verifierAbsenceTvaLivraisonIntracom } from './livraisonIntracom.js';
 
 export interface ConfigPreControles {
   tauxNominalParCompte?: Record<string, number>;
