@@ -26,7 +26,8 @@ export interface FactureCandidateAcompte {
 // due, la question ne se pose même pas).
 export function identifierFacturesCandidatesAcompte(
   ecritures: EcritureTvaComplete[],
-  comptesChargeService: string[]
+  comptesChargeService: string[],
+  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set()
 ): FactureCandidateAcompte[] {
   const candidates: FactureCandidateAcompte[] = [];
 
@@ -37,10 +38,16 @@ export function identifierFacturesCandidatesAcompte(
     if (!ligneTiers) continue;
     if (ligneTiers.lettrage.estLettree) continue; // déjà lettrée : traitée par le contrôle existant, pas ici
 
+    // Un hôtel identifié comme exception au "paiement comptant" (625) est
+    // candidat même si 625 n'est pas dans comptes_charge_service — c'est
+    // justement le cas où la nature service n'est pas la question, seul le
+    // fait qu'un hôtel peut être payé en deux fois compte ici.
+    const estExceptionForcee = ledgerEntryIdsExceptionPaiementComptant.has(ecriture.ligneTva.ledgerEntryId);
+
     const toucheChargeService = ecriture.autresLignes.some((l) =>
       comptesChargeService.some((prefixe) => l.compte.startsWith(prefixe))
     );
-    if (!toucheChargeService) continue; // jamais un bien
+    if (!toucheChargeService && !estExceptionForcee) continue; // jamais un bien, sauf exception forcée
 
     const montantTva = Math.abs(ecriture.ligneTva.debit - ecriture.ligneTva.credit);
     if (montantTva === 0) continue;
