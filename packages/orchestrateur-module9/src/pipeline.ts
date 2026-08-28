@@ -437,6 +437,11 @@ export async function executerCycleTva(
   // mouvements du même compte fournisseur sur une fenêtre de temps, plutôt
   // que de dépendre d'un lettrage qui n'existera jamais dans ce cas.
   const facturesCandidatesAcompte = identifierFacturesCandidatesAcompte(ecritures, comptesChargeService);
+  if (process.env.DEBUG_CYCLE) {
+    console.error(
+      `[DEBUG_CYCLE] facturesCandidatesAcompte : ${JSON.stringify(facturesCandidatesAcompte)}`
+    );
+  }
 
   if (
     facturesCandidatesAcompte.length > 0 &&
@@ -466,12 +471,20 @@ export async function executerCycleTva(
         const paiementsCandidats = mouvementsCompte.filter(
           (l) => l.ledgerEntryId !== facture.ledgerEntryId && !l.lettrage.estLettree
         );
+        if (process.env.DEBUG_CYCLE) {
+          console.error(
+            `[DEBUG_CYCLE] facture ${facture.ledgerEntryId} (compteTiersId ${facture.compteTiersId}) : ${mouvementsCompte.length} mouvement(s) trouvé(s) sur la fenêtre, ${paiementsCandidats.length} candidat(s) après filtre`
+          );
+        }
         if (paiementsCandidats.length === 0) continue;
 
         const jugement = await jugerPaiementPartielAchat(mistralClientAcompte, [
           { libelle: facture.libelle, debit: 0, credit: facture.montantFactureTotal, date: facture.date },
           ...paiementsCandidats.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date })),
         ]);
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] jugement acompte facture ${facture.ledgerEntryId} : ${JSON.stringify(jugement)}`);
+        }
 
         if (
           jugement.lienEtabli &&
