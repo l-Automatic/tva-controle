@@ -335,4 +335,64 @@ describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur g
     expect(statuts[0]?.prorataExigible).toBe(0.5);
     expect(anomalies[0]?.type).toBe('paiement_partiel_calcule');
   });
+
+  it('un compte "paiement comptant" (625) reste toujours exigible normalement pour un péage, sans exception', () => {
+    const e: EcritureTvaComplete = {
+      ledgerEntryId: 5,
+      ligneTva: {
+        id: 5,
+        compte: '44566',
+        compteId: 1,
+        libelle: 'PEAGE A6',
+        debit: 20,
+        credit: 0,
+        date: '2025-01-15',
+        ledgerEntryId: 5,
+        lettrage: { estLettree: false, groupeIds: [] },
+      },
+      autresLignes: [{ id: 1, compte: '6251', compteId: 1, libelle: null, debit: 100, credit: 0 }],
+      lignesTiers: [],
+    };
+    const { statuts } = determinerExigibiliteTva([e], { ...configReelle, comptesPaiementComptant: ['6251'] });
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.motif).toContain('payé au comptant');
+  });
+
+  it('un hôtel (625) marqué en exception suit la logique normale de prorata au lieu du court-circuit comptant (10/08)', () => {
+    const e: EcritureTvaComplete = {
+      ledgerEntryId: 6,
+      ligneTva: {
+        id: 6,
+        compte: '44566',
+        compteId: 1,
+        libelle: 'HOTEL IBIS',
+        debit: 20,
+        credit: 0,
+        date: '2025-01-15',
+        ledgerEntryId: 6,
+        lettrage: { estLettree: false, groupeIds: [] },
+      },
+      autresLignes: [{ id: 1, compte: '6251', compteId: 1, libelle: null, debit: 100, credit: 0 }],
+      lignesTiers: [
+        {
+          compte: '401DIVERS',
+          compteId: 1,
+          libelleCompte: null,
+          debit: 0,
+          credit: 100,
+          lettrage: { estLettree: false, groupeIds: [] },
+        },
+      ],
+    };
+    const prorataParEcriture = new Map([[6, 0.5]]);
+    const { statuts } = determinerExigibiliteTva(
+      [e],
+      { ...configReelle, comptesPaiementComptant: ['6251'] },
+      prorataParEcriture,
+      new Set([6]) // exception hôtel
+    );
+    // Le prorata s'applique, pas le court-circuit "payé au comptant"
+    expect(statuts[0]?.prorataExigible).toBe(0.5);
+    expect(statuts[0]?.motif).not.toContain('payé au comptant');
+  });
 });
