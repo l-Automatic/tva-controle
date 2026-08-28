@@ -116,13 +116,13 @@ describe('identifierComptesServiceSansSousCategorieAutoliquidation', () => {
 
 describe('identifierComptesACategoriser — comptesSansCategorie (10/08, bug réel corrigé)', () => {
   it('ne re-propose plus un compte marqué "aucune de celles-là"', () => {
-    const e = ecriture([{ id: 1, compte: '999', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
-    const connus = { ...connusVides, comptesSansCategorie: ['999'] };
+    const e = ecriture([{ id: 1, compte: '699', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
+    const connus = { ...connusVides, comptesSansCategorie: ['699'] };
     expect(identifierComptesACategoriser([e], connus)).toEqual([]);
   });
 
   it('sans comptesSansCategorie, un compte inconnu reste proposé (comportement d’avant, toujours vrai pour un compte jamais vu)', () => {
-    const e = ecriture([{ id: 1, compte: '999', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
+    const e = ecriture([{ id: 1, compte: '699', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
     expect(identifierComptesACategoriser([e], connusVides)).toHaveLength(1);
   });
 });
