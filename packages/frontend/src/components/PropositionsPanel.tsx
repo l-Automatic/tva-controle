@@ -33,7 +33,11 @@ const LIBELLE_STATUT: Record<StatutProposition, string> = {
   rejected: 'Rejetée',
 };
 
-function PropositionRow({
+// Exportée (brief v18) : réutilisée telle quelle pour afficher la carte du
+// motif de numérotation candidate juste après le formulaire d'analyse,
+// garantissant un rendu et des routes de confirmation/rejet identiques à
+// la liste générale, sans dupliquer la logique.
+export function PropositionRow({
   proposition,
   cabinetId,
   utilisateurId,

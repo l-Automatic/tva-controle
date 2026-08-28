@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AnalyseMotifNumerotationPanel, formatMotifNumerotation } from '../AnalyseMotifNumerotationPanel';
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
+import { MotifNumerotationCandidatPanel } from '../MotifNumerotationCandidatPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
 import { SuggestionsAutoliquidationPanel } from '../SuggestionsAutoliquidationPanel';
 import { TauxHistoriquePanel } from '../TauxHistoriquePanel';
@@ -128,6 +129,13 @@ export function ConfigurationZone({
             dossierId={dossierId}
             utilisateurId={utilisateurId}
             onAnalyseTerminee={() => setMotifRefreshKey((k) => k + 1)}
+          />
+          <MotifNumerotationCandidatPanel
+            cabinetId={cabinetId}
+            dossierId={dossierId}
+            utilisateurId={utilisateurId}
+            refreshKey={motifRefreshKey}
+            onChange={() => setMotifRefreshKey((k) => k + 1)}
           />
           <SuggestionsAutoliquidationPanel
             cabinetId={cabinetId}
