@@ -18,9 +18,11 @@ function dernierJourExerciceEnCours(): string {
   return `${new Date().getFullYear()}-12-31`;
 }
 
-// Affichée deux fois (au-dessus et en dessous des champs, brief v15) —
-// constante unique pour ne pas désynchroniser les deux occurrences.
-const RECOMMANDATION_PERIODE = (
+// Affichée une seule fois, entre la fin de ce bloc (bouton + carte de
+// résultat quand elle existe) et le panneau "Conventions génériques" —
+// cf. ConfigurationZone.tsx (brief v17, corrige la double occurrence
+// encadrant les champs introduite par erreur en v15).
+export const RECOMMANDATION_PERIODE = (
   <>
     Pour une première analyse, choisissez une période large (plusieurs mois) pour que le motif dominant se
     dégage clairement. Si le format a changé en cours d'exercice, limitez la période à la partie où le nouveau
@@ -95,7 +97,6 @@ export function AnalyseMotifNumerotationPanel({
         Borné à l'exercice en cours par défaut (modifiable) — propose un motif candidate à confirmer ci-dessous,
         jamais appliqué automatiquement. Peut être relancée à tout moment si le format change.
       </p>
-      <p className="reference cycle-form-warning">{RECOMMANDATION_PERIODE}</p>
       <div className="cycle-form">
         <label>
           Période — début
@@ -120,7 +121,6 @@ export function AnalyseMotifNumerotationPanel({
           {submitting ? 'Analyse en cours…' : 'Analyser le motif de numérotation'}
         </button>
       </div>
-      <p className="reference cycle-form-warning">{RECOMMANDATION_PERIODE}</p>
       {error && <p className="error">{error}</p>}
       {motifPropose !== undefined &&
         (motifPropose ? (

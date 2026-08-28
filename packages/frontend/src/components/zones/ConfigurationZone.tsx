@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AnalyseMotifNumerotationPanel, formatMotifNumerotation } from '../AnalyseMotifNumerotationPanel';
+import { AnalyseMotifNumerotationPanel, RECOMMANDATION_PERIODE, formatMotifNumerotation } from '../AnalyseMotifNumerotationPanel';
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { MotifNumerotationCandidatPanel } from '../MotifNumerotationCandidatPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
@@ -79,9 +79,14 @@ function libelleConvention(proposition: Proposition): string {
 
 // Les 5 conventions de comptes ont leur propre onglet (ConventionsComptesPanel)
 // — exclues ici pour ne pas apparaître en double dans les "génériques".
+// motif_numerotation_facture a, elle, son propre emplacement dédié juste
+// après le formulaire d'analyse (MotifNumerotationCandidatPanel) — exclue
+// ici aussi pour ne plus y apparaître en double (brief v17, point 2).
 async function fetchConventionsGeneriques(cabinetId: string, dossierId: string, statut?: string): Promise<Proposition[]> {
   const toutes = await fetchConventions(cabinetId, dossierId, statut);
-  return toutes.filter((p) => !CLES_CONVENTIONS_COMPTES.includes(p.cle as CleConventionCompte));
+  return toutes.filter(
+    (p) => !CLES_CONVENTIONS_COMPTES.includes(p.cle as CleConventionCompte) && p.cle !== CLE_MOTIF_NUMEROTATION
+  );
 }
 
 // Regroupe, en sous-onglets internes, tout ce qui configure durablement un
@@ -137,6 +142,8 @@ export function ConfigurationZone({
             refreshKey={motifRefreshKey}
             onChange={() => setMotifRefreshKey((k) => k + 1)}
           />
+          <p className="reference cycle-form-warning">{RECOMMANDATION_PERIODE}</p>
+          <div className="panel-separateur" />
           <SuggestionsAutoliquidationPanel
             cabinetId={cabinetId}
             dossierId={dossierId}
