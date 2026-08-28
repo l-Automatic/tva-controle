@@ -329,9 +329,16 @@ export async function retirerCompteConvention(
   }
 
   const nouvelleValeur = ligne.valeur.filter((v) => v !== compte);
-  await client.query(`UPDATE conventions_dossier SET valeur = $2 WHERE id = $1`, [
+  // Bug réel corrigé le 10/08 : une liste vidée par retraits successifs
+  // restait marquée "confirmed" pour toujours, sans plus aucun compte
+  // dedans — trompeur côté interface. Une liste vide n'a plus de sens à
+  // afficher comme confirmée, on repasse à 'rejected' (garde la trace,
+  // contrairement à une suppression pure de la ligne).
+  const nouveauStatut = nouvelleValeur.length === 0 ? 'rejected' : 'confirmed';
+  await client.query(`UPDATE conventions_dossier SET valeur = $2, statut = $3 WHERE id = $1`, [
     ligne.id,
     JSON.stringify(nouvelleValeur),
+    nouveauStatut,
   ]);
   await enregistrerEvenementAudit(client, {
     dossierId,
