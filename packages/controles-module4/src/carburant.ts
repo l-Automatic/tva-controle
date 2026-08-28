@@ -55,33 +55,23 @@ export function determinerDeductibiliteCarburant(
       continue;
     }
 
-    if (typesPresents.size > 1) {
-      anomalies.push({
-        type: 'flotte_mixte_carburant',
-        gravite: 'signale',
-        ledgerEntryId,
-        compte: ligneCarburant.compte,
-        description:
-          'Flotte mixte (véhicules de tourisme ET utilitaires) : impossible de déterminer automatiquement à quel véhicule ce carburant se rapporte. Décision humaine requise.',
-        details: { libelle: ligneCarburant.libelle },
-      });
-      statuts.push({
-        ledgerEntryId,
-        compte: ligneCarburant.compte,
-        tauxDeductible: null,
-        motif: 'Flotte mixte : à déterminer manuellement.',
-      });
-      continue;
-    }
-
-    const seulType = [...typesPresents][0];
-    const tauxDeductible = seulType === 'vehicule_utilitaire' ? 100 : 80;
+    // Flotte mixte (10/08, retiré après discussion avec Rami) : en pratique,
+    // ce cas n'arrive quasiment jamais — un dossier qui a déjà un
+    // utilitaire (100% déductible) n'a aucun intérêt à immobiliser un
+    // véhicule de tourisme en plus, puisque ça compromettrait sa
+    // déduction déjà acquise. Décision explicite si ça arrive quand même :
+    // déduire normalement à 100%, jamais de réduction spéciale ni de
+    // signalement — à revoir si l'hypothèse se révèle fausse en pratique.
+    const tauxDeductible = typesPresents.has('vehicule_tourisme') && typesPresents.size === 1 ? 80 : 100;
 
     statuts.push({
       ledgerEntryId,
       compte: ligneCarburant.compte,
       tauxDeductible,
-      motif: `Flotte homogène (${seulType === 'vehicule_utilitaire' ? 'utilitaire' : 'tourisme'}) -> ${tauxDeductible}% déductible.`,
+      motif:
+        typesPresents.size > 1
+          ? `Flotte mixte (rare en pratique) -> ${tauxDeductible}% déductible, pas de réduction spéciale.`
+          : `Flotte homogène (${[...typesPresents][0] === 'vehicule_utilitaire' ? 'utilitaire' : 'tourisme'}) -> ${tauxDeductible}% déductible.`,
     });
   }
 
