@@ -18,6 +18,17 @@ function dernierJourExerciceEnCours(): string {
   return `${new Date().getFullYear()}-12-31`;
 }
 
+// Affichée deux fois (au-dessus et en dessous des champs, brief v15) —
+// constante unique pour ne pas désynchroniser les deux occurrences.
+const RECOMMANDATION_PERIODE = (
+  <>
+    Pour une première analyse, choisissez une période large (plusieurs mois) pour que le motif dominant se
+    dégage clairement. Si le format a changé en cours d'exercice, limitez la période à la partie où le nouveau
+    format s'applique uniquement — mélanger l'ancien et le nouveau format dans la même analyse produira un
+    résultat confus.
+  </>
+);
+
 export function formatMotifNumerotation(motif: MotifNumerotation): string {
   const parties = [`Préfixe ${motif.prefixe || '(aucun)'}`];
   parties.push(typeof motif.nombreChiffres === 'number' ? `${motif.nombreChiffres} chiffres` : 'nombre de chiffres variable');
@@ -84,6 +95,7 @@ export function AnalyseMotifNumerotationPanel({
         Borné à l'exercice en cours par défaut (modifiable) — propose un motif candidate à confirmer ci-dessous,
         jamais appliqué automatiquement. Peut être relancée à tout moment si le format change.
       </p>
+      <p className="reference cycle-form-warning">{RECOMMANDATION_PERIODE}</p>
       <div className="cycle-form">
         <label>
           Période — début
@@ -108,12 +120,7 @@ export function AnalyseMotifNumerotationPanel({
           {submitting ? 'Analyse en cours…' : 'Analyser le motif de numérotation'}
         </button>
       </div>
-      <p className="reference cycle-form-warning">
-        Pour une première analyse, choisissez une période large (plusieurs mois) pour que le motif dominant se
-        dégage clairement. Si le format a changé en cours d'exercice, limitez la période à la partie où le nouveau
-        format s'applique uniquement — mélanger l'ancien et le nouveau format dans la même analyse produira un
-        résultat confus.
-      </p>
+      <p className="reference cycle-form-warning">{RECOMMANDATION_PERIODE}</p>
       {error && <p className="error">{error}</p>}
       {motifPropose !== undefined &&
         (motifPropose ? (
