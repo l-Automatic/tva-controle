@@ -301,4 +301,38 @@ describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur g
     const { statuts } = determinerExigibiliteTva([e], configReelle);
     expect(statuts[0]?.exigible).toBe(true);
   });
+
+  it('applique le prorata même sur une facture TOTALEMENT non lettrée (bug réel corrigé le 10/08 : le contrôle était enfoui dans le bloc groupeIds > 2, jamais consulté sinon)', () => {
+    const e: EcritureTvaComplete = {
+      ledgerEntryId: 1,
+      ligneTva: {
+        id: 1,
+        compte: '44566',
+        compteId: 1,
+        libelle: null,
+        debit: 100,
+        credit: 0,
+        date: '2025-01-15',
+        ledgerEntryId: 1,
+        lettrage: { estLettree: false, groupeIds: [] },
+      },
+      autresLignes: [{ id: 1, compte: '611', compteId: 1, libelle: null, debit: 500, credit: 0 }],
+      lignesTiers: [
+        {
+          compte: '401DIVERS',
+          compteId: 1,
+          libelleCompte: null,
+          debit: 0,
+          credit: 600,
+          lettrage: { estLettree: false, groupeIds: [] }, // aucun lettrage du tout
+        },
+      ],
+    };
+    const prorataParEcriture = new Map([[1, 0.5]]);
+    const { statuts, anomalies } = determinerExigibiliteTva([e], configReelle, prorataParEcriture);
+
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.prorataExigible).toBe(0.5);
+    expect(anomalies[0]?.type).toBe('paiement_partiel_calcule');
+  });
 });
