@@ -96,3 +96,20 @@ describe('detecterComptesTvaNonReconnus', () => {
     });
   });
 });
+
+describe('detecterComptesTvaNonReconnus — TVA intracom (10/08)', () => {
+  it('reconnaît 4452 (due) et 445662 (déductible) quand confirmés en convention', () => {
+    const ecritures = [ecriture('4452', 1), ecriture('445662', 2)];
+    const anomalies = detecterComptesTvaNonReconnus(ecritures, {
+      compteAutoliquidationDueIntracom: '4452',
+      compteAutoliquidationDeductibleIntracom: '445662',
+    });
+    expect(anomalies).toEqual([]);
+  });
+
+  it('signale toujours 4452 comme non reconnu si la convention intracom n’est pas confirmée', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('4452', 1)], {});
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.compte).toBe('4452');
+  });
+});
