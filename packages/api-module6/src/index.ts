@@ -11,7 +11,7 @@ const app = buildApp(pool);
 app
   .listen({ port, host: '0.0.0.0' })
   .then(() => {
-    console.log(`Module 6 API en écoute sur http://0.0.0.0:${port}`);
+    console.log(`TVA Contrôle — API en écoute sur http://0.0.0.0:${port}`);
   })
   .catch((err) => {
     console.error(err);
