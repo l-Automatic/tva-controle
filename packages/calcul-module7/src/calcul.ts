@@ -48,6 +48,13 @@ export interface ConfigCalculTva {
   contexteDossier?: ContexteDossier;
   compteAutoliquidationDue?: string;
   compteAutoliquidationDeductible?: string;
+  // TVA intracom (10/08) — deuxième paire d'autoliquidation, réutilise les
+  // mêmes catégories 'autoliquidation_due'/'autoliquidation_deductible'
+  // que le BTP (les deux s'annulent identiquement dans le calcul final,
+  // pas besoin de catégories séparées) — seule la reconnaissance du compte
+  // change.
+  compteAutoliquidationDueIntracom?: string;
+  compteAutoliquidationDeductibleIntracom?: string;
   // Taux appliqué pour extraire la TVA du montant porté sur les comptes
   // d'autoliquidation (4454/445664...). Défaut 20% : quasi systématique en
   // pratique pour l'autoliquidation générale sur prestations de services
@@ -104,6 +111,8 @@ export function calculerTva(
   const politique = config.politiqueIndetermine ?? 'exclure';
   const compteDue = config.compteAutoliquidationDue ?? '4454';
   const compteDeductible = config.compteAutoliquidationDeductible ?? '445664';
+  const compteDueIntracom = config.compteAutoliquidationDueIntracom;
+  const compteDeductibleIntracom = config.compteAutoliquidationDeductibleIntracom;
   const tauxAutoliquidation = config.tauxAutoliquidation ?? 20;
   const tauxNominalParCompte = config.tauxNominalParCompte ?? TAUX_NATIONAL_PAR_DEFAUT;
 
@@ -148,12 +157,12 @@ export function calculerTva(
     // integrerRegularisations) : montant - montant/(1+taux/100). La formule
     // est linéaire, donc s'applique correctement même à un net négatif
     // (régularisation) sans traitement particulier.
-    if (compte === compteDue) {
+    if (compte === compteDue || compte === compteDueIntracom) {
       const tva = netSensCredit - netSensCredit / (1 + tauxAutoliquidation / 100);
       ajouter('autoliquidation_due', tva, ledgerEntryId);
       continue;
     }
-    if (compte === compteDeductible) {
+    if (compte === compteDeductible || compte === compteDeductibleIntracom) {
       const tva = netSensDebit - netSensDebit / (1 + tauxAutoliquidation / 100);
       ajouter('autoliquidation_deductible', tva, ledgerEntryId);
       continue;
