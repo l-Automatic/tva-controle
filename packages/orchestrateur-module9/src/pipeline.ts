@@ -557,10 +557,17 @@ export async function executerCycleTva(
         if (
           jugement.lienEtabli &&
           jugement.confiance !== 'basse' &&
-          jugement.montantFacture &&
           jugement.montantPayeRattache !== null
         ) {
-          const prorata = Math.min(jugement.montantPayeRattache / jugement.montantFacture, 1);
+          // Bug réel corrigé le 10/08 : ne fait PLUS confiance au
+          // montantFacture renvoyé par le LLM (déjà vu se tromper de ligne
+          // — un cas où il a pris le montant d'une AUTRE facture sans
+          // rapport présente dans les candidats, donnant un prorata de 1%
+          // au lieu de ~45%). Le montant de la facture est déjà connu avec
+          // certitude par l'appelant (facture.montantFactureTotal) — on
+          // ne demande au LLM que d'identifier le paiement rattaché,
+          // jamais de répéter un chiffre qu'on connaît déjà.
+          const prorata = Math.min(jugement.montantPayeRattache / facture.montantFactureTotal, 1);
           prorataParEcriture.set(facture.ledgerEntryId, prorata);
         }
       } catch (err) {
