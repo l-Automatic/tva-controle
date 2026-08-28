@@ -539,6 +539,11 @@ export async function executerCycleTva(
             `[DEBUG_CYCLE] facture ${facture.ledgerEntryId} (compteTiersId ${facture.compteTiersId}) : ${mouvementsCompte.length} mouvement(s) trouvé(s) sur la fenêtre, ${paiementsCandidats.length} candidat(s) après filtre`
           );
         }
+        if (process.env.DEBUG_CYCLE) {
+          console.error(
+            `[DEBUG_CYCLE] facture ${facture.ledgerEntryId} candidats détaillés : ${JSON.stringify(paiementsCandidats.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date })))}`
+          );
+        }
         if (paiementsCandidats.length === 0) continue;
 
         const jugement = await jugerPaiementPartielAchat(mistralClientAcompte, [
