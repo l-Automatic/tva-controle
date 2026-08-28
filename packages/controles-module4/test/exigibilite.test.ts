@@ -117,13 +117,13 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(anomalies[0]?.type).toBe('nature_operation_mixte');
   });
 
-  it('signale une ligne tiers introuvable sur une pièce de service', () => {
+  it('vente comptant sans ligne tiers (caisse) : exigible sans être signalée (10/08, retiré après discussion avec Rami)', () => {
     const ecriture = ecritureRousseau({ lignesTiers: [] });
     const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
 
-    expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.type).toBe('ligne_tiers_introuvable');
-    expect(statuts[0]?.exigible).toBe(true); // par défaut, à vérifier manuellement
+    expect(anomalies).toEqual([]);
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.motif).toContain('vente comptant');
   });
 
   it('signale un paiement partiel possible si le groupe de lettrage a plus de 2 lignes', () => {
@@ -220,10 +220,10 @@ describe('determinerExigibiliteTva — comptes toujours payés au comptant (10/0
         motif: 'Compte systématiquement payé au comptant (frais de déplacement, postaux, bancaires...) : exigible sans vérification de lettrage.',
       },
     ]);
-    expect(anomalies).toEqual([]); // pas de "ligne_tiers_introuvable" malgré lignesTiers vide
+    expect(anomalies).toEqual([]); // aucune ligne tiers, mais plus signalé (vente comptant)
   });
 
-  it('sans la convention configurée, le comportement habituel (ligne_tiers_introuvable) reprend le dessus', () => {
+  it('sans la convention comptesPaiementComptant, retombe sur le comportement "vente comptant sans ligne tiers" (10/08)', () => {
     const e: EcritureTvaComplete = {
       ledgerEntryId: 1,
       ligneTva: {
@@ -241,12 +241,13 @@ describe('determinerExigibiliteTva — comptes toujours payés au comptant (10/0
       lignesTiers: [],
     };
 
-    const { anomalies } = determinerExigibiliteTva([e], {
+    const { anomalies, statuts } = determinerExigibiliteTva([e], {
       ...configReelle,
       comptesChargeService: ['6251'],
       // comptesPaiementComptant absent
     });
-    expect(anomalies.some((a) => a.type === 'ligne_tiers_introuvable')).toBe(true);
+    expect(anomalies).toEqual([]);
+    expect(statuts[0]?.exigible).toBe(true);
   });
 });
 
