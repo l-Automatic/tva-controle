@@ -430,13 +430,76 @@ export async function executerCycleTva(
     }
   }
 
+  // Contrôle hôtel (10/08) : résout le nom réel des comptes fournisseurs
+  // touchés par une ligne déductible ABS (44566) — jamais un libellé
+  // d'écriture, même raison que pour la présélection IA plus haut.
+  const comptesFournisseurConcernes = [
+    ...new Set(
+      ecritures
+        .filter((e) => e.ligneTva.compte.startsWith('44566'))
+        .map((e) => e.lignesTiers[0]?.compte)
+        .filter((c): c is string => c !== undefined)
+    ),
+  ];
+  const nomsComptesFournisseur =
+    comptesFournisseurConcernes.length > 0
+      ? new Map(
+          [...(await resolveLedgerAccounts(params.client, comptesFournisseurConcernes)).entries()].map(
+            ([numero, resolu]) => [numero, resolu.libelle]
+          )
+        )
+      : new Map<string, string>();
+  const anomaliesHotel = verifierCoherenceTvaHotel(ecritures, nomsComptesFournisseur);
+
+  // Jugement LLM sur le libellé (10/08) — extension du contrôle hôtel
+  // déterministe ci-dessus, pour les fournisseurs génériques où seul le
+  // libellé de l'écriture porte le nom de l'hôtel. Contrairement au
+  // contrôle déterministe (bloquant, jamais faux par construction), ce
+  // jugement reste 'signale' — une IA ne doit jamais bloquer un cycle
+  // seule sur la reconnaissance d'un nom de marque, risque de faux positif
+  // réel contrairement à un nom de compte explicite.
+  const candidatsJugementHotel = identifierCandidatsJugementHotel(ecritures, nomsComptesFournisseur);
+  const anomaliesJugementHotel: Anomalie[] = [];
+  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0 && candidatsJugementHotel.length > 0) {
+    try {
+      const mistralClientHotel = new MistralClient({ apiKey: mistralApiKey });
+      const jugements = await jugerLibellesHotel(mistralClientHotel, candidatsJugementHotel);
+      for (const j of jugements.filter((j) => j.estHotel)) {
+        anomaliesJugementHotel.push({
+          type: 'tva_hotel_a_verifier',
+          gravite: 'signale',
+          ledgerEntryId: j.ledgerEntryId,
+          compte: '44566',
+          description: `Le libellé de cette écriture ressemble à une facture d'hôtel (${j.justification}) — si confirmé, la TVA n'est pas déductible. À vérifier manuellement.`,
+          details: { confiance: j.confiance, justification: j.justification },
+        });
+      }
+    } catch (err) {
+      if (process.env.DEBUG_CYCLE) {
+        console.error(`[DEBUG_CYCLE] échec jugement IA (hôtel) : ${String(err)}`);
+      }
+    }
+  }
+
+  // Ensemble combiné (déterministe + jugement LLM) des écritures hôtel,
+  // utilisé pour exempter ces pièces du court-circuit "paiement comptant"
+  // (625) et les inclure dans la recherche d'acompte ci-dessous.
+  const ledgerEntryIdsHotel = new Set<number>([
+    ...anomaliesHotel.map((a) => a.ledgerEntryId),
+    ...anomaliesJugementHotel.map((a) => a.ledgerEntryId),
+  ]);
+
   // Paiement partiel achats, volet SANS lettrage (10/08) — confirmé par
   // Rami : il n'existe pas de lettrage partiel/en attente en pratique, donc
   // un vrai acompte se traduit par une facture ET un paiement TOUS LES DEUX
   // non lettrés, sans aucun lien structurel. Recherche active parmi les
   // mouvements du même compte fournisseur sur une fenêtre de temps, plutôt
   // que de dépendre d'un lettrage qui n'existera jamais dans ce cas.
-  const facturesCandidatesAcompte = identifierFacturesCandidatesAcompte(ecritures, comptesChargeService);
+  const facturesCandidatesAcompte = identifierFacturesCandidatesAcompte(
+    ecritures,
+    comptesChargeService,
+    ledgerEntryIdsHotel
+  );
   if (process.env.DEBUG_CYCLE) {
     console.error(
       `[DEBUG_CYCLE] facturesCandidatesAcompte : ${JSON.stringify(facturesCandidatesAcompte)}`
@@ -506,7 +569,8 @@ export async function executerCycleTva(
   const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
     ecritures,
     { comptesVenteService, comptesChargeService, comptesPaiementComptant },
-    prorataParEcriture
+    prorataParEcriture,
+    ledgerEntryIdsHotel
   );
 
   const { statuts: statutsCarburant, anomalies: anomaliesCarburant } = determinerDeductibiliteCarburant(
@@ -533,56 +597,6 @@ export async function executerCycleTva(
         })
       : [];
 
-  // Contrôle hôtel (10/08) : résout le nom réel des comptes fournisseurs
-  // touchés par une ligne déductible ABS (44566) — jamais un libellé
-  // d'écriture, même raison que pour la présélection IA plus haut.
-  const comptesFournisseurConcernes = [
-    ...new Set(
-      ecritures
-        .filter((e) => e.ligneTva.compte.startsWith('44566'))
-        .map((e) => e.lignesTiers[0]?.compte)
-        .filter((c): c is string => c !== undefined)
-    ),
-  ];
-  const nomsComptesFournisseur =
-    comptesFournisseurConcernes.length > 0
-      ? new Map(
-          [...(await resolveLedgerAccounts(params.client, comptesFournisseurConcernes)).entries()].map(
-            ([numero, resolu]) => [numero, resolu.libelle]
-          )
-        )
-      : new Map<string, string>();
-  const anomaliesHotel = verifierCoherenceTvaHotel(ecritures, nomsComptesFournisseur);
-
-  // Jugement LLM sur le libellé (10/08) — extension du contrôle hôtel
-  // déterministe ci-dessus, pour les fournisseurs génériques où seul le
-  // libellé de l'écriture porte le nom de l'hôtel. Contrairement au
-  // contrôle déterministe (bloquant, jamais faux par construction), ce
-  // jugement reste 'signale' — une IA ne doit jamais bloquer un cycle
-  // seule sur la reconnaissance d'un nom de marque, risque de faux positif
-  // réel contrairement à un nom de compte explicite.
-  const candidatsJugementHotel = identifierCandidatsJugementHotel(ecritures, nomsComptesFournisseur);
-  const anomaliesJugementHotel: Anomalie[] = [];
-  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0 && candidatsJugementHotel.length > 0) {
-    try {
-      const mistralClientHotel = new MistralClient({ apiKey: mistralApiKey });
-      const jugements = await jugerLibellesHotel(mistralClientHotel, candidatsJugementHotel);
-      for (const j of jugements.filter((j) => j.estHotel)) {
-        anomaliesJugementHotel.push({
-          type: 'tva_hotel_a_verifier',
-          gravite: 'signale',
-          ledgerEntryId: j.ledgerEntryId,
-          compte: '44566',
-          description: `Le libellé de cette écriture ressemble à une facture d'hôtel (${j.justification}) — si confirmé, la TVA n'est pas déductible. À vérifier manuellement.`,
-          details: { confiance: j.confiance, justification: j.justification },
-        });
-      }
-    } catch (err) {
-      if (process.env.DEBUG_CYCLE) {
-        console.error(`[DEBUG_CYCLE] échec jugement IA (hôtel) : ${String(err)}`);
-      }
-    }
-  }
 
   // Trous de numérotation de facture (10/08) — n'applique que si un motif
   // a déjà été confirmé (via l'endpoint dédié
