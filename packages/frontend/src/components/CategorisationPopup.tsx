@@ -40,14 +40,14 @@ function CompteCard({
   // que l'utilisateur n'a pas lui-même cliqué sur "Ajouter" — la présélection
   // n'est qu'un point de départ, jamais une validation implicite.
   const [cle, setCle] = useState(compte.suggestionIA?.categorieSuggeree ?? '');
-  const [enCours, setEnCours] = useState(false);
+  const [enCours, setEnCours] = useState<'ajouter' | 'aucune' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const notifier = useToast();
 
   async function handleAjouter() {
     if (!cle) return;
     const libelle = CHOIX.find((c) => c.cle === cle)?.libelle ?? cle;
-    setEnCours(true);
+    setEnCours('ajouter');
     setError(null);
     try {
       const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, cle, [compte.compte]);
@@ -57,7 +57,31 @@ function CompteCard({
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de la catégorisation du compte ${compte.compte}`);
     } finally {
-      setEnCours(false);
+      setEnCours(null);
+    }
+  }
+
+  // Bug réel corrigé côté backend (brief v20) : "Aucune de celles-là" ne
+  // mémorisait rien nulle part — le compte était redétecté à l'identique à
+  // chaque cycle suivant. Même geste que les 6 vraies catégories (mêmes
+  // routes), clé technique 'comptes_sans_categorie' distincte — jamais
+  // ajoutée à CLES_CONVENTIONS_COMPTES pour ne pas apparaître comme une 7ᵉ
+  // catégorie fiscale ; elle atterrit naturellement dans Conventions
+  // génériques, comme les autres clés techniques.
+  async function handleAucuneCategorie() {
+    setEnCours('aucune');
+    setError(null);
+    try {
+      const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, 'comptes_sans_categorie', [
+        compte.compte,
+      ]);
+      await confirmerConvention(cabinetId, id, utilisateurId);
+      notifier(`Compte ${compte.compte} — aucune catégorie, ne réapparaîtra plus`);
+      onTraite();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : `Échec de l'enregistrement du compte ${compte.compte}`);
+    } finally {
+      setEnCours(null);
     }
   }
 
@@ -68,7 +92,7 @@ function CompteCard({
       {compte.suggestionIA && <SuggestionIABlock suggestion={compte.suggestionIA} />}
       {error && <p className="error">{error}</p>}
       <div className="popup-choix">
-        <select value={cle} disabled={enCours} onChange={(e) => setCle(e.target.value)}>
+        <select value={cle} disabled={enCours !== null} onChange={(e) => setCle(e.target.value)}>
           <option value="">Choisir une catégorie…</option>
           {CHOIX.map((c) => (
             <option key={c.cle} value={c.cle}>
@@ -76,11 +100,11 @@ function CompteCard({
             </option>
           ))}
         </select>
-        <button disabled={enCours || !cle} onClick={() => void handleAjouter()}>
-          {enCours ? '…' : 'Ajouter'}
+        <button disabled={enCours !== null || !cle} onClick={() => void handleAjouter()}>
+          {enCours === 'ajouter' ? '…' : 'Ajouter'}
         </button>
-        <button className="secondary" disabled={enCours} onClick={onTraite}>
-          Aucune de celles-là
+        <button className="secondary" disabled={enCours !== null} onClick={() => void handleAucuneCategorie()}>
+          {enCours === 'aucune' ? '…' : 'Aucune de celles-là'}
         </button>
       </div>
     </li>
