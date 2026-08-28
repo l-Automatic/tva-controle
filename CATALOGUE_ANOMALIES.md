@@ -5,6 +5,13 @@
 > n'est pas traité manuellement ; `signale` = n'empêche rien, juste une
 > alerte à vérifier), et un déclencheur précis. 12 types existent
 > aujourd'hui, listés dans l'ordre où ils apparaissent dans un cycle.
+>
+> **Retirées le 10/08** après audit avec Rami : `ligne_tiers_introuvable`
+> (en réalité une vente comptant sans compte client, jamais une vraie
+> anomalie — exigible silencieusement désormais) et `flotte_mixte_carburant`
+> (cas jugé quasi inexistant en pratique — un dossier avec un utilitaire
+> n'a aucun intérêt à immobiliser aussi un véhicule de tourisme ; si ça
+> arrive quand même, déduit à 100% sans réduction ni signalement).
 
 ## Bloquantes (arrêtent le calcul)
 
@@ -43,13 +50,6 @@ calcul traite quand même la ligne comme exigible (prudence côté collecte).
 produits de nature différente (certaines "bien", certaines "service").
 **Action attendue** : vérifier ligne par ligne dans Pennylane — le calcul
 ne peut pas trancher automatiquement lequel s'applique.
-
-### `ligne_tiers_introuvable`
-**Déclencheur** : une vente identifiée comme "service" (donc soumise à la
-règle d'encaissement) n'a aucune ligne client (411) rattachée à la pièce
-— impossible de vérifier si c'est payé.
-**Action attendue** : vérifier la pièce ; le calcul suppose exigible par
-défaut en attendant.
 
 ### `paiement_partiel_a_verifier`
 **Déclencheur** : sur une vente de service, la ligne client est lettrée,
@@ -94,14 +94,6 @@ la déductibilité doit être 80% (tourisme) ou 100% (utilitaire).
 **Action attendue** : renseigner le parc de véhicules du dossier
 (actuellement : ajout manuel dans les immobilisations Pennylane, aucun
 paramétrage dédié dans ce logiciel pour l'instant).
-
-### `flotte_mixte_carburant`
-**Déclencheur** : le dossier a À LA FOIS des véhicules tourisme et
-utilitaires répertoriés — le logiciel ne peut pas savoir automatiquement
-à quel véhicule un achat de carburant précis se rapporte.
-**Action attendue** : décision humaine sur le taux applicable pour cette
-écriture précise (pas de mécanisme de correction dédié construit à ce
-jour — traité comme les autres anomalies signalées, résoudre/justifier).
 
 ### `immobilisation_potentielle_non_passee`
 **Déclencheur** : une ligne (ou plusieurs sur la même pièce) sur un
