@@ -181,23 +181,20 @@ export function determinerExigibiliteTva(
       continue;
     }
 
-    // Service : l'exigibilité dépend du lettrage de la ligne tiers, pas de la ligne TVA.
+    // Service : l'exigibilité dépend du lettrage de la ligne tiers, pas de
+    // la ligne TVA. Aucune ligne tiers du tout (10/08, retiré après
+    // discussion avec Rami) : signe normal d'une vente comptant sans
+    // compte client (caisse directement en banque, aucun crédit accordé)
+    // — pas une vraie anomalie de données, plus besoin de la signaler.
+    // Exigible par défaut reste correct : une vente comptant est par
+    // nature déjà payée.
     if (ecriture.lignesTiers.length === 0) {
-      anomalies.push({
-        type: 'ligne_tiers_introuvable',
-        gravite: 'signale',
-        ledgerEntryId,
-        compte,
-        description:
-          'Prestation de service sans ligne tiers identifiée sur la pièce : exigibilité (TVA sur encaissement) non vérifiable.',
-        details: { libelle },
-      });
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'service',
         exigible: true,
-        motif: 'Ligne tiers introuvable : exigibilité supposée par défaut, à vérifier.',
+        motif: 'Aucune ligne tiers (vente comptant sans compte client) : exigible par nature.',
       });
       continue;
     }
