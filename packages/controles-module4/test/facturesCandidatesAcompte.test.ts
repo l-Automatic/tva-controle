@@ -66,4 +66,17 @@ describe('identifierFacturesCandidatesAcompte', () => {
     e.ligneTva.compte = '44562';
     expect(identifierFacturesCandidatesAcompte([e], comptesChargeService)).toEqual([]);
   });
+
+  it('inclut un compte hors comptes_charge_service (625) si marqué en exception forcée (hôtel)', () => {
+    const e = ecriture({ compteCharge: '6251', estLettree: false });
+    const sansException = identifierFacturesCandidatesAcompte([e], comptesChargeService);
+    expect(sansException).toEqual([]); // 625 n'est pas dans comptes_charge_service, exclu normalement
+
+    const avecException = identifierFacturesCandidatesAcompte(
+      [e],
+      comptesChargeService,
+      new Set([1]) // ledgerEntryId 1, forcé en exception
+    );
+    expect(avecException).toHaveLength(1);
+  });
 });
