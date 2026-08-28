@@ -91,6 +91,38 @@ export function determinerExigibiliteTva(
       continue;
     }
 
+    // Prorata calculé (10/08) : vérifié ICI, avant même la détermination
+    // bien/service (pas seulement avant le lettrage) — bug réel trouvé en
+    // testant l'exception hôtel : un compte comme 625 n'est jamais dans
+    // comptes_charge_service (ce n'est pas sa fonction habituelle), donc
+    // sans ce déplacement la ligne sortait déjà classée "bien" avant
+    // d'atteindre le contrôle du prorata plus bas. Un prorata fourni par
+    // l'appelant signifie que le lien service+paiement partiel a déjà été
+    // établi (calcul pur pour les ventes, jugement LLM pour les achats) —
+    // ça prévaut sur toute classification bien/service par convention.
+    const prorataAnticipe = prorataParEcriture.get(ledgerEntryId);
+    if (prorataAnticipe !== undefined) {
+      const compteTiersProrata = ecriture.lignesTiers[0]?.compte ?? 'inconnu';
+      const groupeIdsProrata = ecriture.lignesTiers[0]?.lettrage.groupeIds ?? [];
+      anomalies.push({
+        type: 'paiement_partiel_calcule',
+        gravite: 'info',
+        ledgerEntryId,
+        compte,
+        description: `Compte tiers ${compteTiersProrata} : paiement partiel détecté — prorata de ${(prorataAnticipe * 100).toFixed(0)}% appliqué automatiquement à partir des montants réels.`,
+        details: { compteTiers: compteTiersProrata, groupeIds: groupeIdsProrata, prorata: prorataAnticipe },
+      });
+      statuts.push({
+        ledgerEntryId,
+        compte,
+        natureOperation: 'service',
+        exigible: prorataAnticipe > 0,
+        prorataExigible: prorataAnticipe,
+        motif: `Service : paiement partiel, ${(prorataAnticipe * 100).toFixed(0)}% exigible cette période (calculé sur les montants réels).`,
+      });
+      continue;
+    }
+
     const comptesServiceApplicables = estCollecte ? config.comptesVenteService : config.comptesChargeService;
 
     if (ecriture.autresLignes.length === 0) {
@@ -171,38 +203,6 @@ export function determinerExigibiliteTva(
     }
 
     const ligneTiers = ecriture.lignesTiers[0]!;
-
-    // Prorata calculé (10/08) : vérifié EN PREMIER, indépendamment de
-    // l'état de lettrage de la ligne — couvre à la fois le cas "groupe
-    // ambigu à plus de 2 lignes" (ventes : calcul pur ; achats : jugement
-    // LLM sur le groupe) ET le cas "facture non lettrée du tout, acompte
-    // retrouvé par recherche sur le compte" (achats uniquement, cf.
-    // identifierFacturesCandidatesAcompte). Bug réel corrigé le 10/08 :
-    // ce contrôle était auparavant enfoui dans le bloc groupeIds > 2,
-    // donc jamais consulté pour une facture totalement non lettrée — le
-    // cas le plus courant en pratique d'après Rami (pas de lettrage
-    // partiel/en attente dans Pennylane).
-    const prorata = prorataParEcriture.get(ledgerEntryId);
-    if (prorata !== undefined) {
-      anomalies.push({
-        type: 'paiement_partiel_calcule',
-        gravite: 'info',
-        ledgerEntryId,
-        compte,
-        description: `Compte tiers ${ligneTiers.compte} : paiement partiel détecté — prorata de ${(prorata * 100).toFixed(0)}% appliqué automatiquement à partir des montants réels.`,
-        details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, prorata },
-      });
-      statuts.push({
-        ledgerEntryId,
-        compte,
-        natureOperation: 'service',
-        exigible: prorata > 0,
-        prorataExigible: prorata,
-        motif: `Service : paiement partiel, ${(prorata * 100).toFixed(0)}% exigible cette période (calculé sur les montants réels).`,
-      });
-      continue;
-    }
-
     const exigible = ligneTiers.lettrage.estLettree;
 
     // Plus de 2 id dans le groupe de lettrage = possible paiement partiel ou
