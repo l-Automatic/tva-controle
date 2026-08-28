@@ -3,6 +3,11 @@ import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
 export interface ConfigComptesTva {
   compteAutoliquidationDue?: string;
   compteAutoliquidationDeductible?: string;
+  // TVA intracom (10/08) — deuxième paire d'autoliquidation, structurellement
+  // parallèle à celle du BTP ci-dessus mais confirmée séparément (comptes
+  // dédiés propres au dossier, jamais les mêmes que le BTP).
+  compteAutoliquidationDueIntracom?: string;
+  compteAutoliquidationDeductibleIntracom?: string;
 }
 
 const PREFIXES_RECONNUS = ['44571', '44566', '44562'];
@@ -36,6 +41,8 @@ export function detecterComptesTvaNonReconnus(
       PREFIXES_RECONNUS.some((p) => compte.startsWith(p)) ||
       compte === config.compteAutoliquidationDue ||
       compte === config.compteAutoliquidationDeductible ||
+      compte === config.compteAutoliquidationDueIntracom ||
+      compte === config.compteAutoliquidationDeductibleIntracom ||
       COMPTES_HORS_PERIMETRE_CONNUS.includes(compte);
 
     if (estReconnu) continue;
