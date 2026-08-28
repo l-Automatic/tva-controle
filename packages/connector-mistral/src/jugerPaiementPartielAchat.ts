@@ -50,24 +50,34 @@ export async function jugerPaiementPartielAchat(
     `proximité dans le temps sur le même compte, sans lien structurel établi), ` +
     `pour déterminer s'il s'agit d'un acompte payé sur UNE facture de service ` +
     `précise et identifiable.\n\n` +
-    `L'indice d'un acompte peut se trouver dans le libellé de LA FACTURE ` +
-    `elle-même (modalités de paiement du type "50/50", échéancier, référence) ` +
-    `OU dans le libellé du RÈGLEMENT lui-même (une écriture de banque avec une ` +
-    `mention abrégée ou explicite : "acpt", "acompte", "1er versement", et ` +
-    `bien d'autres formulations possibles — ne te limite pas à une liste ` +
-    `fixe, comprends l'intention du libellé). Base-toi aussi sur les montants ` +
-    `(le total facturé doit être identifiable, distinct du ou des montants ` +
-    `réellement payés) et sur la proximité des dates.\n\n` +
+    `SIGNAL LE PLUS FORT, à ne jamais sous-estimer : si le libellé d'un ` +
+    `règlement reprend le même nom ou une variante proche du libellé de la ` +
+    `facture (ex: facture "ACCORD HOTEL" et règlement "CB ACCORD HOTEL"), ` +
+    `c'est en pratique la meilleure preuve de lien qui existe — aussi fiable ` +
+    `qu'une mention explicite du mot "acompte". Une correspondance de nom ` +
+    `entre facture et règlement ne doit JAMAIS être écartée au profit d'un ` +
+    `mouvement sans rapport juste parce qu'aucun mot-clé de type "acompte" ` +
+    `n'apparaît littéralement — le rapprochement par nom suffit à lui seul.\n\n` +
+    `Autres indices possibles, moins forts mais utiles en complément : le ` +
+    `libellé de LA FACTURE elle-même (modalités de paiement du type "50/50", ` +
+    `échéancier, référence), ou le libellé du RÈGLEMENT avec une mention ` +
+    `abrégée ou explicite ("acpt", "acompte", "1er versement", et bien ` +
+    `d'autres formulations possibles — ne te limite pas à une liste fixe). ` +
+    `Base-toi aussi sur les montants (le total facturé doit être ` +
+    `identifiable, distinct du ou des montants réellement payés) et sur la ` +
+    `proximité des dates.\n\n` +
     `Ne conclus lienEtabli: true QUE si tu peux identifier avec un niveau de ` +
     `confiance raisonnable : (1) laquelle des lignes constitue LA facture ` +
     `concernée, (2) quel montant a été RÉELLEMENT payé pour CETTE facture ` +
     `précise (pas un montant qui semble concerner autre chose). Si l'ensemble ` +
     `mélange plusieurs factures sans que l'attribution soit claire, ou si tu ` +
-    `hésites, réponds lienEtabli: false — ne jamais deviner un lien qui n'est ` +
-    `pas clairement établi, une fausse déduction de TVA est plus grave qu'une ` +
-    `absence de déduction. Tu ne calcules AUCUN prorata toi-même — donne ` +
-    `uniquement les deux montants bruts, le calcul est fait ailleurs. Réponds ` +
-    `uniquement en JSON, sans texte hors du JSON.`;
+    `hésites vraiment (aucun des signaux ci-dessus, y compris la ` +
+    `correspondance de nom, n'est présent), réponds lienEtabli: false — ne ` +
+    `jamais deviner un lien qui n'est pas du tout établi, une fausse ` +
+    `déduction de TVA est plus grave qu'une absence de déduction. Tu ne ` +
+    `calcules AUCUN prorata toi-même — donne uniquement les deux montants ` +
+    `bruts, le calcul est fait ailleurs. Réponds uniquement en JSON, sans ` +
+    `texte hors du JSON.`;
 
   const lignesTexte = lignesGroupe
     .map(
