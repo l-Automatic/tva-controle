@@ -7,6 +7,13 @@ export interface ComptesConnus {
   comptesCarburant: string[];
   comptesCadeaux?: string[];
   comptesImmobilisation?: string[];
+  // Bug réel corrigé le 10/08 : un compte marqué "aucune de celles-là"
+  // dans le popup n'était jamais mémorisé nulle part — donc redétecté à
+  // l'identique à chaque cycle suivant, indéfiniment. Ce n'est PAS une
+  // 7e catégorie fiscale au même titre que les autres (rien à en faire
+  // dans le calcul), juste un registre technique de "déjà vu, rien à
+  // proposer ici" pour ne plus jamais le re-présenter.
+  comptesSansCategorie?: string[];
 }
 
 export interface CompteACategoriser {
@@ -38,6 +45,7 @@ export function identifierComptesACategoriser(
     ...connus.comptesCarburant,
     ...(connus.comptesCadeaux ?? []),
     ...(connus.comptesImmobilisation ?? []),
+    ...(connus.comptesSansCategorie ?? []),
   ];
   // Comparaison par préfixe, cohérente avec exigibilite.ts/carburant.ts/
   // immobilisation.ts : les conventions contiennent des préfixes ('706'),
