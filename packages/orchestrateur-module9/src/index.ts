@@ -40,6 +40,8 @@ export {
   creerUtilisateurCabinet,
   desactiverUtilisateurCabinet,
   DernierAdminCabinetError,
+  synchroniserDossiersCabinet,
+  type DossierSynchronise,
   EmailDejaUtiliseError,
   qualifierEncaissementNonAffecte,
   type QualificationEncaissement,
