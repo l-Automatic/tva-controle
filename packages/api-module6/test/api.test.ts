@@ -176,6 +176,65 @@ describe('API Module 6 — authentification (10/08)', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  it('un admin_cabinet liste les utilisateurs de son cabinet, un collaborateur ne peut pas', async () => {
+    const resAdmin = await app.inject({
+      method: 'GET',
+      url: '/utilisateurs',
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+    });
+    expect(resAdmin.statusCode).toBe(200);
+    const liste = JSON.parse(resAdmin.body);
+    expect(liste.some((u: { id: string }) => u.id === utilisateurId)).toBe(true);
+    // Jamais le hash, quel que soit le champ demandé
+    expect(liste[0]).not.toHaveProperty('motDePasseHash');
+    expect(liste[0]).not.toHaveProperty('mot_de_passe_hash');
+
+    const resCollab = await app.inject({
+      method: 'GET',
+      url: '/utilisateurs',
+      headers: { authorization: `Bearer ${jetonCollab}` },
+    });
+    expect(resCollab.statusCode).toBe(403);
+  });
+
+  it('un admin_cabinet crée un nouveau collaborateur, qui peut ensuite se connecter', async () => {
+    const emailNouveau = `nouveau-${Date.now()}@test.fr`;
+    const resCreation = await app.inject({
+      method: 'POST',
+      url: '/utilisateurs',
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+      payload: { nom: 'Nouveau Collab', email: emailNouveau, role: 'collaborateur', motDePasse: 'mot-de-passe-1234' },
+    });
+    expect(resCreation.statusCode).toBe(201);
+
+    const resLogin = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: emailNouveau, motDePasse: 'mot-de-passe-1234' },
+    });
+    expect(resLogin.statusCode).toBe(200);
+  });
+
+  it('refuse de créer un utilisateur avec un email déjà utilisé', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/utilisateurs',
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+      payload: { nom: 'Doublon', email: emailCollab, role: 'collaborateur', motDePasse: 'mot-de-passe-1234' },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('un collaborateur ne peut pas créer de nouvel utilisateur', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/utilisateurs',
+      headers: { authorization: `Bearer ${jetonCollab}` },
+      payload: { nom: 'X', email: `x-${Date.now()}@test.fr`, role: 'collaborateur', motDePasse: 'mot-de-passe-1234' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
 });
 
 describe('API Module 6 — cycle de vie d’une anomalie', () => {
