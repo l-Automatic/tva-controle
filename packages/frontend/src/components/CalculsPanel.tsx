@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { ApiError, fetchCalculs, rejeterCalcul, validerCalcul } from '../api';
+import { ApiError, fetchAjustementsCalcul, fetchCalculs, rejeterCalcul, validerCalcul } from '../api';
 import { formatDate } from '../dateUtils';
 import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
-import type { Calcul, StatutCalcul } from '../types';
+import type { AjustementCalcul, Calcul, StatutCalcul } from '../types';
 import { BadgeStatut } from './BadgeStatut';
 
 interface CalculsPanelProps {
@@ -29,17 +29,38 @@ export function CalculRow({
   cabinetId,
   utilisateurId,
   onChanged,
+  refreshKey,
 }: {
   calcul: Calcul;
   cabinetId: string;
   utilisateurId: string;
   onChanged: () => void;
+  // Optionnel : incrémenté par un parent pour forcer un rechargement des
+  // ajustements après une action ailleurs (ex : CycleForm.tsx, sibling —
+  // brief v23), même pattern que AnomaliesPanel/PropositionsPanel.
+  refreshKey?: number;
 }) {
   const [motif, setMotif] = useState('');
   const [submitting, setSubmitting] = useState<'valider' | 'rejeter' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflit, setConflit] = useState(false);
+  const [ajustements, setAjustements] = useState<AjustementCalcul[]>([]);
   const notifier = useToast();
+
+  // Recalcul pur affichage (brief v23) : le formulaire d'ajustement lui-même
+  // vit dans CycleForm.tsx (seul endroit où les totaux collectée/déductible
+  // d'origine sont connus, dérivés des lignes du calcul fraîchement reçu) —
+  // ici, sans ces lignes, seul le delta (ajusté - original) de chaque
+  // ajustement actif est nécessaire pour corriger la TVA nette affichée,
+  // évitant que ce panneau affiche une valeur périmée face à celle,
+  // recalculée, du résultat de cycle juste au-dessus.
+  useEffect(() => {
+    if (cabinetId && calcul.id) {
+      fetchAjustementsCalcul(cabinetId, calcul.id)
+        .then(setAjustements)
+        .catch(() => setAjustements([]));
+    }
+  }, [cabinetId, calcul.id, refreshKey]);
 
   async function handleValider() {
     if (
@@ -97,6 +118,16 @@ export function CalculRow({
 
   const estBrouillon = calcul.statut === 'brouillon';
 
+  const ajustementCollectee = ajustements.find((a) => a.typeMontant === 'collectee_totale');
+  const ajustementDeductible = ajustements.find((a) => a.typeMontant === 'deductible_totale');
+  const signeOrigine = calcul.sens === 'a_decaisser' ? 1 : -1;
+  const deltaCollectee = ajustementCollectee ? ajustementCollectee.montantAjuste - ajustementCollectee.montantOriginal : 0;
+  const deltaDeductible = ajustementDeductible ? ajustementDeductible.montantAjuste - ajustementDeductible.montantOriginal : 0;
+  const netSigneAjuste = signeOrigine * calcul.tvaNette + deltaCollectee - deltaDeductible;
+  const tvaNetteAffichee = Math.abs(netSigneAjuste);
+  const sensAffiche: 'a_decaisser' | 'credit' = netSigneAjuste >= 0 ? 'a_decaisser' : 'credit';
+  const aUnAjustementActif = Boolean(ajustementCollectee || ajustementDeductible);
+
   return (
     <li className={`card calcul statut-carte-${calcul.statut}`}>
       <div className="card-header">
@@ -106,8 +137,9 @@ export function CalculRow({
         </span>
       </div>
       <p className="label">
-        {calcul.sens === 'a_decaisser' ? 'TVA à décaisser' : 'Crédit de TVA'} :{' '}
-        <strong>{formatMontant(calcul.tvaNette)}</strong>
+        {sensAffiche === 'a_decaisser' ? 'TVA à décaisser' : 'Crédit de TVA'} :{' '}
+        <strong>{formatMontant(tvaNetteAffichee)}</strong>
+        {aUnAjustementActif && <span className="reference"> (montants ajustés manuellement)</span>}
       </p>
 
       {estBrouillon ? (

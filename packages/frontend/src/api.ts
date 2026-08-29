@@ -1,4 +1,5 @@
 import type {
+  AjustementCalcul,
   Anomalie,
   AuditEvenement,
   Calcul,
@@ -14,6 +15,7 @@ import type {
   TauxAssigneEntry,
   TiersReference,
   TypeBienVehicule,
+  TypeMontantAjustement,
   Vehicule,
 } from './types';
 
@@ -353,6 +355,41 @@ export function rejeterCalcul(
   return request<void>(`/calculs/${id}/rejeter`, cabinetId, {
     method: 'POST',
     body: JSON.stringify({ utilisateurId, motif }),
+  });
+}
+
+// --- Ajustement manuel des montants de TVA (brief v23) — restreint aux
+// calculs encore 'brouillon' côté backend (409 sinon).
+export function fetchAjustementsCalcul(cabinetId: string, calculId: string): Promise<AjustementCalcul[]> {
+  return request<AjustementCalcul[]>(`/calculs/${calculId}/ajustements`, cabinetId);
+}
+
+export function ajusterMontantCalcul(
+  cabinetId: string,
+  calculId: string,
+  params: {
+    typeMontant: TypeMontantAjustement;
+    montantOriginal: number;
+    montantAjuste: number;
+    justification: string;
+    utilisateurId: string;
+  }
+): Promise<void> {
+  return request<void>(`/calculs/${calculId}/ajustements`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export function retirerAjustementCalcul(
+  cabinetId: string,
+  calculId: string,
+  typeMontant: TypeMontantAjustement,
+  utilisateurId: string
+): Promise<void> {
+  return request<void>(`/calculs/${calculId}/ajustements/${typeMontant}/retirer`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId }),
   });
 }
 

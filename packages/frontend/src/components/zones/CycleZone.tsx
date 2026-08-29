@@ -70,6 +70,7 @@ function CalculsDuCycle({
             cabinetId={cabinetId}
             utilisateurId={utilisateurId}
             onChanged={() => void charger()}
+            refreshKey={refreshKey}
           />
         ))}
       </ul>
@@ -120,6 +121,7 @@ export function CycleZone({
       <CycleForm
         cabinetId={cabinetId}
         dossierId={dossierId}
+        utilisateurId={utilisateurId}
         onCycleLance={(debut, fin, resultat) => {
           onPeriodeChange({ debut, fin });
           setCycleRefreshKey((k) => k + 1);
@@ -127,6 +129,7 @@ export function CycleZone({
           onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
           onSuggestionsAutoliquidation(resultat.comptesAutoliquidationSuggeres);
         }}
+        onAjustementChange={() => setCycleRefreshKey((k) => k + 1)}
       />
       {periode && (
         <>

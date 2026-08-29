@@ -932,6 +932,13 @@ button:focus-visible {
   color: var(--danger);
 }
 
+/* Ajustement manuel des montants de TVA (brief v23) */
+.montant-original {
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-right: 0.3rem;
+}
+
 .table-lignes-calcul {
   width: 100%;
   border-collapse: collapse;

@@ -353,3 +353,22 @@ export interface MotifNumerotation {
   nombreChiffres: number | null;
   description: string;
 }
+
+// --- Ajustement manuel des montants de TVA (brief v23) — additif côté
+// backend : montantOriginal ne représente jamais la valeur d'un ajustement
+// précédent, toujours ce que le moteur de calcul a produit (préservé
+// automatiquement par le backend à travers plusieurs modifications). Portée
+// volontairement limitée au résultat fraîchement calculé (CycleForm) : c'est
+// le seul endroit où les deux totaux collectée/déductible (dérivés des
+// lignes du calcul) sont connus côté frontend — ni GET /calculs ni le
+// journal d'audit ne les exposent pour un calcul déjà persisté. ---
+
+export type TypeMontantAjustement = 'collectee_totale' | 'deductible_totale';
+
+export interface AjustementCalcul {
+  typeMontant: TypeMontantAjustement;
+  montantOriginal: number;
+  montantAjuste: number;
+  justification: string;
+  createdAt: string;
+}
