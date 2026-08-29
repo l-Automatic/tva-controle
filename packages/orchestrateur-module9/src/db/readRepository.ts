@@ -590,3 +590,35 @@ export async function trouverUtilisateurPourConnexion(
     statut: r.statut as 'actif' | 'inactif',
   };
 }
+
+export interface UtilisateurCabinetDb {
+  id: string;
+  nom: string;
+  email: string;
+  role: 'collaborateur' | 'admin_cabinet';
+  statut: string;
+  aUnMotDePasse: boolean;
+}
+
+// Jamais le hash lui-même — aUnMotDePasse indique juste s'il peut se
+// connecter (utile pour qu'un admin_cabinet sache qui n'a pas encore été
+// amorcé). Restreint au cabinet courant via RLS (utilisateurs a du RLS
+// forcé), appelé via avecContexteCabinet côté appelant.
+export async function listerUtilisateursCabinet(
+  client: PoolClient,
+  cabinetId: string
+): Promise<UtilisateurCabinetDb[]> {
+  const res = await client.query(
+    `SELECT id, nom, email, role, statut, (mot_de_passe_hash IS NOT NULL) AS a_un_mot_de_passe
+     FROM utilisateurs WHERE cabinet_id = $1 ORDER BY nom`,
+    [cabinetId]
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    nom: r.nom,
+    email: r.email,
+    role: r.role,
+    statut: r.statut,
+    aUnMotDePasse: r.a_un_mot_de_passe,
+  }));
+}
