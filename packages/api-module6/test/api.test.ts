@@ -235,6 +235,46 @@ describe('API Module 6 — authentification (10/08)', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  it('un admin_cabinet désactive un collaborateur, qui ne peut plus se connecter ensuite', async () => {
+    const emailACreer = `a-desactiver-${Date.now()}@test.fr`;
+    const resCreation = await app.inject({
+      method: 'POST',
+      url: '/utilisateurs',
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+      payload: { nom: 'À Désactiver', email: emailACreer, role: 'collaborateur', motDePasse: 'mot-de-passe-1234' },
+    });
+    const { id: idACreer } = JSON.parse(resCreation.body);
+
+    const resDesactivation = await app.inject({
+      method: 'POST',
+      url: `/utilisateurs/${idACreer}/desactiver`,
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+    });
+    expect(resDesactivation.statusCode).toBe(204);
+
+    const resLogin = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: emailACreer, motDePasse: 'mot-de-passe-1234' },
+    });
+    expect(resLogin.statusCode).toBe(401);
+  });
+
+  it('un collaborateur ne peut pas désactiver un utilisateur (réservé à admin_cabinet)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/utilisateurs/${utilisateurAdminId}/desactiver`,
+      headers: { authorization: `Bearer ${jetonCollab}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Le refus de désactiver le dernier admin_cabinet est déjà couvert, de
+  // façon isolée, côté writeRepository.test.ts — pas retesté ici : ce
+  // fichier partage UN SEUL cabinet entre tous ses tests, désactiver le
+  // seul admin_cabinet existant (celui de jetonAdmin) casserait tous les
+  // autres tests de rôle de ce fichier.
 });
 
 describe('API Module 6 — cycle de vie d’une anomalie', () => {
