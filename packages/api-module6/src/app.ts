@@ -39,6 +39,10 @@ import {
   listerAuditLog,
   listerAuditLogPourExport,
   CalculDejaValideError,
+  ajusterMontantCalcul,
+  retirerAjustementCalcul,
+  listerAjustementsCalcul,
+  CalculPlusEnBrouillonError,
   CalculPasEnBrouillonError,
   definirParametreCabinet,
   definirParametreDossier,
@@ -460,6 +464,60 @@ export function buildApp(pool: Pool): FastifyInstance {
       }
     }
   );
+
+  // --- Ajustement manuel des montants de TVA (10/08) — restreint aux
+  // calculs encore 'brouillon', additif (jamais un remplacement, cf.
+  // migration 012).
+  app.get<{ Params: { id: string } }>('/calculs/:id/ajustements', async (request) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    return avecContexteCabinet(pool, cabinetId, (client) => listerAjustementsCalcul(client, request.params.id));
+  });
+
+  app.post<{
+    Params: { id: string };
+    Body: {
+      typeMontant: 'collectee_totale' | 'deductible_totale';
+      montantOriginal: number;
+      montantAjuste: number;
+      justification: string;
+      utilisateurId: string;
+    };
+  }>('/calculs/:id/ajustements', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const { typeMontant, montantOriginal, montantAjuste, justification, utilisateurId } = request.body;
+    if (!justification || justification.trim().length === 0) {
+      return reply.code(400).send({ erreur: 'justification requise pour ajuster un montant' });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        ajusterMontantCalcul(client, request.params.id, typeMontant, montantOriginal, montantAjuste, justification, utilisateurId)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof CalculPlusEnBrouillonError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  app.post<{
+    Params: { id: string; typeMontant: 'collectee_totale' | 'deductible_totale' };
+    Body: { utilisateurId: string };
+  }>('/calculs/:id/ajustements/:typeMontant/retirer', async (request, reply) => {
+    const cabinetId = request.headers[HEADER_CABINET] as string;
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        retirerAjustementCalcul(client, request.params.id, request.params.typeMontant, request.body.utilisateurId)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof CalculPlusEnBrouillonError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
 
   // --- Audit (Module 10) ---
   app.get<{
