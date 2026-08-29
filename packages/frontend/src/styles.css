@@ -432,6 +432,7 @@ button {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   border: 1px solid transparent;
   background: var(--degrade-actif);
