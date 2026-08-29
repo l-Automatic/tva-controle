@@ -528,3 +528,77 @@ demande explicitement de revoir "toutes ces anomalies" de proratisation
 et déductibilité services à tête reposée — suggère que le chantier
 mérite une relecture d'ensemble (architecture, pas juste un bug precis)
 plutôt qu'un nouveau correctif isolé.
+
+---
+
+## Chantier API Cabinet Pennylane (10/08) — plan en 4 phases
+
+### Contexte
+Jusqu'ici, tout reposait sur un jeton Company API par dossier (vestige du
+sandbox mono-société utilisé pendant tout le développement). L'API Cabinet
+(Firm API) utilise un seul jeton par cabinet, ciblant un dossier précis via
+un segment d'URL (`/companies/{id}/...`), et répond directement à la
+question "comment les dossiers arrivent sur la plateforme" : auto-découverte
+via `List companies`, pas de CSV, pas de FEC pour un dossier déjà sous
+Pennylane.
+
+**Sources confirmées** (documentation officielle, deux points indépendants) :
+- Company API : `https://app.pennylane.com/api/external/v2/<ressource>`
+- Firm API : `https://app.pennylane.com/api/external/firm/v1/companies/{id}/<ressource>`
+- Jeton cabinet généré dans Pennylane : Réglages du cabinet > Jetons cabinet
+- Nuance : le jeton cabinet ne voit que les dossiers auxquels la personne
+  qui l'a généré a elle-même accès dans Pennylane — pas automatiquement
+  tout le portefeuille dans l'absolu.
+
+### Phase 1 — Le socle (EN COURS, backend posé le 10/08)
+Construit et poussé :
+- `FirmApiClient` (connector-pennylane) — même interface publique que
+  `PennylaneClient`, réécrit silencieusement tout chemin `/api/external/v2/...`
+  vers son équivalent `/api/external/firm/v1/companies/{id}/...` : toutes
+  les fonctions connecteur déjà écrites (lignes par compte, lettrage,
+  comptes, balance...) fonctionnent SANS MODIFICATION avec ce nouveau
+  client. **À vérifier en conditions réelles avec un vrai jeton cabinet.**
+- `fetchDossiersCabinet` — liste les dossiers du cabinet (`List companies`).
+  **Forme de réponse (items vs data, noms de champs) à vérifier en
+  conditions réelles**, construite à partir de documentation seule.
+- `synchroniserDossiersCabinet` — upsert des dossiers découverts. Un
+  nouveau dossier est créé `statut='onboarding'`, `regime_tva='reel_normal'`
+  (une hypothèse, pas une vérité fiscale) — un dossier déjà connu n'est
+  mis à jour que sur nom/siren, jamais sur regime_tva/tva_encaissement/statut.
+- Route `POST /synchroniser-dossiers` (admin_cabinet uniquement), jeton lu
+  depuis `parametres_cabinet` (clé `pennylane_firm_api_key`, masquée comme
+  la clé Mistral).
+
+**Reste à faire pour clore la Phase 1** :
+- Vérifier en conditions réelles (vrai jeton cabinet Rami) que
+  `fetchDossiersCabinet` et le chemin réécrit par `FirmApiClient`
+  fonctionnent bien tels que documentés.
+- Frontend : formulaire pour saisir le jeton cabinet (paramètres cabinet),
+  bouton "Synchroniser les dossiers", affichage des dossiers
+  nouveaux/mis à jour.
+- Adapter le déclenchement de cycle : ne plus demander un `pennylaneToken`
+  manuel à chaque cycle — utiliser le jeton cabinet stocké + le
+  `external_company_id` du dossier.
+
+### Phase 2 — Onboarding d'un dossier nouvellement découvert
+Un dossier synchronisé automatiquement a `regime_tva='reel_normal'` par
+défaut et `statut='onboarding'` — il faut une étape de configuration
+(régime réel, TVA sur encaissement ou non, etc.) avant qu'un premier cycle
+soit possible. Pas encore cadré en détail.
+
+### Phase 3 — Import FEC (chantier distinct, pas commencé)
+Composant séparé, pas une extension du connecteur Pennylane : lit le
+format FEC (texte à plat, colonnes propres au FEC) et le transforme vers
+exactement la même structure interne (EcritureTvaComplete[]) que le
+moteur de calcul et les contrôles consomment déjà — pour que tout le
+reste du projet fonctionne à l'identique, peu importe la source des
+données. Point le plus délicat identifié : le lettrage — Pennylane le
+représente par un identifiant de groupe numérique, le FEC par un code
+partagé entre les lignes rapprochées (`EcritureLet`) — logique de
+correspondance différente à écrire entièrement.
+
+### Phase 4 — Autres connecteurs comptables (inqom, ACD, Génération Expert, Cegid Loop)
+Mentionné dans la liste d'origine de Rami, jamais creusé. Les valeurs
+`logiciel_source` existent déjà dans le schéma (`001_schema_initial.sql`)
+pour ces quatre-là, mais aucun connecteur n'existe. Ordre de priorité pas
+encore décidé.
