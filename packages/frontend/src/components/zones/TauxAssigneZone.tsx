@@ -26,6 +26,14 @@ interface SectionProps {
 
 const TAUX_TIERS_SUGGERES = ['20', '10', '5.5', '2.1'];
 
+// 'mixte' (brief v22, migration 011) : plusieurs taux légitimement
+// appliqués sur ce client — transmis tel quel dans le body JSON, stocké
+// comme NULL côté serveur (taux_historique_tiers.taux_habituel). Distinct
+// des taux numériques du select côté suggestions/formulaire manuel.
+function versTauxEnvoye(brut: string): number | 'mixte' {
+  return brut === 'mixte' ? 'mixte' : Number.parseFloat(brut);
+}
+
 function SuggestionsProduitCharge({
   cabinetId,
   dossierId,
@@ -231,7 +239,7 @@ function SuggestionsClient({
   const notifier = useToast();
 
   async function handleConfirmer(numeroCompteTiers: string) {
-    const taux = Number.parseFloat(choix[numeroCompteTiers] ?? '20');
+    const taux = versTauxEnvoye(choix[numeroCompteTiers] ?? '20');
     setEnCours(numeroCompteTiers);
     setError(null);
     try {
@@ -272,6 +280,7 @@ function SuggestionsClient({
                     {t.replace('.', ',')} %
                   </option>
                 ))}
+                <option value="mixte">Mixte (plusieurs taux)</option>
               </select>
               <button onClick={() => void handleConfirmer(s.numeroCompteTiers)} disabled={enCours === s.numeroCompteTiers}>
                 {enCours === s.numeroCompteTiers ? '…' : 'Assigner'}
@@ -302,6 +311,7 @@ function TauxAssigneClientSection({
   const [assignations, setAssignations] = useState<Proposition[]>([]);
   const [numeroCompteTiers, setNumeroCompteTiers] = useState('');
   const [taux, setTaux] = useState('20');
+  const [tauxMixte, setTauxMixte] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -327,15 +337,20 @@ function TauxAssigneClientSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId, dossierId]);
 
-  async function handleAssigner(compteCible: string, tauxCible: string) {
-    const valeur = Number.parseFloat(tauxCible);
+  async function handleAssigner(compteCible: string, tauxCible: string, mixte: boolean) {
     if (!compteCible.trim()) {
       setError('Un numéro de compte client est requis');
       return;
     }
-    if (Number.isNaN(valeur) || valeur < 0 || valeur > 100) {
-      setError('Le taux doit être un nombre entre 0 et 100');
-      return;
+    let valeur: number | 'mixte';
+    if (mixte) {
+      valeur = 'mixte';
+    } else {
+      valeur = Number.parseFloat(tauxCible);
+      if (Number.isNaN(valeur) || valeur < 0 || valeur > 100) {
+        setError('Le taux doit être un nombre entre 0 et 100 (ou cocher "Mixte")');
+        return;
+      }
     }
     setSubmitting(true);
     setError(null);
@@ -343,6 +358,7 @@ function TauxAssigneClientSection({
       await assignerTauxHistoriqueTiersManuel(cabinetId, dossierId, compteCible.trim(), valeur, utilisateurId);
       notifier('Taux client assigné');
       setNumeroCompteTiers('');
+      setTauxMixte(false);
       await charger();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de l’assignation');
@@ -374,7 +390,8 @@ function TauxAssigneClientSection({
         {assignations.map((a) => (
           <li key={a.id} className="card">
             <p className="label">
-              Client {a.numeroCompteTiers} : <strong>{a.tauxHabituel}%</strong>
+              Client {a.numeroCompteTiers} :{' '}
+              <strong>{a.tauxHabituel !== undefined ? `${a.tauxHabituel}%` : 'Mixte'}</strong>
             </p>
             <p className="reference">{a.source === 'saisie_manuelle' ? 'Assigné manuellement' : a.source}</p>
           </li>
@@ -399,10 +416,19 @@ function TauxAssigneClientSection({
             placeholder="ex : 20"
             value={taux}
             onChange={(e) => setTaux(e.target.value)}
-            disabled={submitting}
+            disabled={submitting || tauxMixte}
           />
         </label>
-        <button onClick={() => void handleAssigner(numeroCompteTiers, taux)} disabled={submitting}>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={tauxMixte}
+            onChange={(e) => setTauxMixte(e.target.checked)}
+            disabled={submitting}
+          />
+          Mixte
+        </label>
+        <button onClick={() => void handleAssigner(numeroCompteTiers, taux, tauxMixte)} disabled={submitting}>
           {submitting ? '…' : 'Assigner'}
         </button>
       </div>

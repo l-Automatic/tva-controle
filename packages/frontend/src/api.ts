@@ -284,7 +284,7 @@ export function assignerTauxHistoriqueTiersManuel(
   cabinetId: string,
   dossierId: string,
   numeroCompteTiers: string,
-  tauxHabituel: number,
+  tauxHabituel: number | 'mixte',
   utilisateurId: string
 ): Promise<void> {
   return request<void>(`/dossiers/${dossierId}/taux-historique-tiers/assigner`, cabinetId, {

@@ -239,6 +239,10 @@ export const VALEURS_TAUX_ASSIGNE = [
   'autoliquide_20',
   'autoliquide_10',
   'autoliquide_5.5',
+  // Plusieurs taux légitimement appliqués sur ce compte selon les cas
+  // (brief v22, migration 011) — n'affecte que la suggestion, aucun
+  // contrôle ne compare ce taux à autre chose pour l'instant.
+  'mixte',
 ] as const;
 export type TauxAssigne = (typeof VALEURS_TAUX_ASSIGNE)[number];
 
@@ -252,6 +256,7 @@ export const LIBELLE_TAUX_ASSIGNE: Record<TauxAssigne, string> = {
   autoliquide_20: 'Intracommunautaire - 20%',
   autoliquide_10: 'Intracommunautaire - 10%',
   'autoliquide_5.5': 'Intracommunautaire - 5,5%',
+  mixte: 'Mixte (plusieurs taux)',
 };
 
 export interface TauxAssigneEntry {
