@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pg from 'pg';
 import { buildApp } from '../src/app.js';
+import { hasherMotDePasse } from '@tva-controle/orchestrateur-module9';
 
 const CONNECTION_STRING =
   process.env.DATABASE_URL ?? 'postgresql://pennylane_tva_app:CHANGE_ME_APP@localhost:5432/tva_orchestrateur_test';
@@ -14,6 +15,11 @@ const app = buildApp(pool);
 let cabinetId = '';
 let dossierId = '';
 let utilisateurId = '';
+let jetonCollab = '';
+let jetonAdmin = '';
+let utilisateurAdminId = '';
+let emailCollab = '';
+let emailAdmin = '';
 
 beforeAll(async () => {
   const provisioningPool = new pg.Pool({ connectionString: PROVISIONING_CONNECTION_STRING });
@@ -34,11 +40,22 @@ beforeAll(async () => {
     );
     dossierId = resDossier.rows[0]!.id;
 
+    emailCollab = `collab-${Date.now()}@test.fr`;
+    emailAdmin = `admin-${Date.now()}@test.fr`;
+    const hashCollab = await hasherMotDePasse('mot-de-passe-test-collab');
+    const hashAdmin = await hasherMotDePasse('mot-de-passe-test-admin');
+
     const resUser = await client.query<{ id: string }>(
-      `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'Collaborateur Test', $2, 'collaborateur') RETURNING id`,
-      [cabinetId, `collab-${Date.now()}@test.fr`]
+      `INSERT INTO utilisateurs (cabinet_id, nom, email, role, mot_de_passe_hash) VALUES ($1, 'Collaborateur Test', $2, 'collaborateur', $3) RETURNING id`,
+      [cabinetId, emailCollab, hashCollab]
     );
     utilisateurId = resUser.rows[0]!.id;
+
+    const resAdmin = await client.query<{ id: string }>(
+      `INSERT INTO utilisateurs (cabinet_id, nom, email, role, mot_de_passe_hash) VALUES ($1, 'Admin Cabinet Test', $2, 'admin_cabinet', $3) RETURNING id`,
+      [cabinetId, emailAdmin, hashAdmin]
+    );
+    utilisateurAdminId = resAdmin.rows[0]!.id;
 
     await client.query('COMMIT');
   } catch (err) {
@@ -48,6 +65,22 @@ beforeAll(async () => {
     client.release();
     await provisioningPool.end();
   }
+
+  // Connexion réelle via la vraie route /auth/login (pas un jeton fabriqué
+  // à la main) — pour les deux comptes, un jeton par rôle.
+  const resLoginCollab = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: { email: emailCollab, motDePasse: 'mot-de-passe-test-collab' },
+  });
+  jetonCollab = JSON.parse(resLoginCollab.body).jeton;
+
+  const resLoginAdmin = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: { email: emailAdmin, motDePasse: 'mot-de-passe-test-admin' },
+  });
+  jetonAdmin = JSON.parse(resLoginAdmin.body).jeton;
 }, 20_000);
 
 afterAll(async () => {
@@ -55,15 +88,93 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe('API Module 6 — garde-fou header cabinet', () => {
-  it('refuse une requête sans header x-cabinet-id', async () => {
+describe('API Module 6 — authentification (10/08)', () => {
+  it('refuse une requête sans jeton', async () => {
     const res = await app.inject({ method: 'GET', url: `/dossiers/${dossierId}/anomalies` });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 
-  it('/health ne nécessite pas de header cabinet', async () => {
+  it('refuse un jeton invalide', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/anomalies`,
+      headers: { authorization: 'Bearer pas-un-vrai-jeton' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('accepte un jeton valide obtenu via une vraie connexion', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/anomalies`,
+      headers: { authorization: `Bearer ${jetonCollab}` },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('/health ne nécessite pas de jeton', async () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
+  });
+
+  it('/auth/login refuse un mauvais mot de passe, même message que pour un email inconnu', async () => {
+    const resMauvaisMdp = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: emailCollab, motDePasse: 'mauvais-mot-de-passe' },
+    });
+    expect(resMauvaisMdp.statusCode).toBe(401);
+
+    const resEmailInconnu = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: 'inconnu@test.fr', motDePasse: 'peu-importe' },
+    });
+    expect(resEmailInconnu.statusCode).toBe(401);
+    expect(JSON.parse(resMauvaisMdp.body).erreur).toBe(JSON.parse(resEmailInconnu.body).erreur);
+  });
+
+  it('les paramètres cabinet sont réservés au rôle admin_cabinet', async () => {
+    const resCollab = await app.inject({
+      method: 'GET',
+      url: '/parametres-cabinet',
+      headers: { authorization: `Bearer ${jetonCollab}` },
+    });
+    expect(resCollab.statusCode).toBe(403);
+
+    const resAdmin = await app.inject({
+      method: 'GET',
+      url: '/parametres-cabinet',
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+    });
+    expect(resAdmin.statusCode).toBe(200);
+  });
+
+  it('un admin_cabinet peut définir le mot de passe d’un collaborateur de son cabinet', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/utilisateurs/${utilisateurId}/mot-de-passe`,
+      headers: { authorization: `Bearer ${jetonAdmin}` },
+      payload: { motDePasse: 'nouveau-mot-de-passe-1234' },
+    });
+    expect(res.statusCode).toBe(204);
+
+    const resLogin = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: emailCollab, motDePasse: 'nouveau-mot-de-passe-1234' },
+    });
+    expect(resLogin.statusCode).toBe(200);
+  });
+
+  it('un collaborateur ne peut pas définir de mot de passe (réservé à admin_cabinet)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/utilisateurs/${utilisateurAdminId}/mot-de-passe`,
+      headers: { authorization: `Bearer ${jetonCollab}` },
+      payload: { motDePasse: 'peu-importe-1234' },
+    });
+    expect(res.statusCode).toBe(403);
   });
 });
 
@@ -89,7 +200,7 @@ describe('API Module 6 — cycle de vie d’une anomalie', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/anomalies`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -101,7 +212,7 @@ describe('API Module 6 — cycle de vie d’une anomalie', () => {
     const resResoudre = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/resoudre`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, commentaire: 'Corrigé en compta' },
     });
     expect(resResoudre.statusCode).toBe(204);
@@ -109,14 +220,14 @@ describe('API Module 6 — cycle de vie d’une anomalie', () => {
     const resListeOuvertes = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/anomalies?statut=ouvert`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListeOuvertes.json()).toEqual([]);
 
     const resListeResolues = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/anomalies?statut=resolu`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListeResolues.json()).toHaveLength(1);
   });
@@ -147,7 +258,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const res = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/qualifier`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, decision: 'vente' },
     });
     expect(res.statusCode).toBe(400);
@@ -158,7 +269,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const res = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/qualifier`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, decision: 'hors_vente' },
     });
     expect(res.statusCode).toBe(400);
@@ -169,7 +280,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const res = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/qualifier`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, decision: 'vente', taux: 20 },
     });
     expect(res.statusCode).toBe(204);
@@ -177,7 +288,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const resListe = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/anomalies?statut=resolu`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     const ligne = resListe.json().find((a: { id: string }) => a.id === anomalieId);
     expect(ligne).toMatchObject({ statut: 'resolu', resolution: { taux: 20 } });
@@ -188,7 +299,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const res = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/qualifier`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, decision: 'hors_vente', motif: 'Remboursement assurance' },
     });
     expect(res.statusCode).toBe(204);
@@ -196,7 +307,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const resListe = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/anomalies?statut=justifie`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     const ligne = resListe.json().find((a: { id: string }) => a.id === anomalieId);
     expect(ligne?.statut).toBe('justifie');
@@ -207,7 +318,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const premiere = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/qualifier`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, decision: 'vente', taux: 10 },
     });
     expect(premiere.statusCode).toBe(204);
@@ -215,7 +326,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const seconde = await app.inject({
       method: 'POST',
       url: `/anomalies/${anomalieId}/qualifier`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, decision: 'hors_vente', motif: 'tentative concurrente' },
     });
     expect(seconde.statusCode).toBe(409);
@@ -225,7 +336,7 @@ describe('API Module 6 — qualification d’un encaissement non affecté (compt
     const resListe = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/anomalies?statut=resolu`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     const ligne = resListe.json().find((a: { id: string }) => a.id === anomalieId);
     expect(ligne).toMatchObject({ statut: 'resolu', resolution: { taux: 10 } });
@@ -254,7 +365,7 @@ describe('API Module 6 — cycle de vie d’une convention candidate', () => {
     const resConfirmer = await app.inject({
       method: 'POST',
       url: `/conventions/${conventionId}/confirmer`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId },
     });
     expect(resConfirmer.statusCode).toBe(204);
@@ -262,7 +373,7 @@ describe('API Module 6 — cycle de vie d’une convention candidate', () => {
     const resListe = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/conventions?statut=confirmed`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListe.json()).toHaveLength(1);
   });
@@ -287,14 +398,14 @@ describe('API Module 6 — cycle de vie d’une convention candidate', () => {
     await app.inject({
       method: 'POST',
       url: `/conventions/${nouvelleId}/confirmer`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId },
     });
 
     const resListeConfirmees = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/conventions?statut=confirmed`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     const confirmees = resListeConfirmees.json();
     expect(confirmees).toHaveLength(1); // une seule confirmed à la fois
@@ -303,7 +414,7 @@ describe('API Module 6 — cycle de vie d’une convention candidate', () => {
     const resAncienne = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/conventions?statut=rejected`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resAncienne.json().some((c: { id: string }) => c.id === conventionId)).toBe(true);
   });
@@ -314,7 +425,7 @@ describe('API Module 6 — ajout manuel d’une convention', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/dossiers/${dossierId}/conventions`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId },
     });
     expect(res.statusCode).toBe(400);
@@ -324,7 +435,7 @@ describe('API Module 6 — ajout manuel d’une convention', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/dossiers/${dossierId}/conventions`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, cle: 'comptes_equipement', valeur: ['6063'] },
     });
     expect(res.statusCode).toBe(201);
@@ -334,7 +445,7 @@ describe('API Module 6 — ajout manuel d’une convention', () => {
     const resListe = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/conventions?statut=candidate`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     const creee = resListe.json().find((c: { id: string }) => c.id === id);
     expect(creee).toMatchObject({ cle: 'comptes_equipement', valeur: ['6063'], source: 'saisie_manuelle' });
@@ -344,7 +455,7 @@ describe('API Module 6 — ajout manuel d’une convention', () => {
     const resCreation = await app.inject({
       method: 'POST',
       url: `/dossiers/${dossierId}/conventions`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId, cle: 'comptes_charge_service', valeur: ['611'] },
     });
     const { id } = resCreation.json();
@@ -352,7 +463,7 @@ describe('API Module 6 — ajout manuel d’une convention', () => {
     const resConfirmer = await app.inject({
       method: 'POST',
       url: `/conventions/${id}/confirmer`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId },
     });
     expect(resConfirmer.statusCode).toBe(204);
@@ -360,7 +471,7 @@ describe('API Module 6 — ajout manuel d’une convention', () => {
     const resListe = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/conventions?statut=confirmed`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListe.json().some((c: { id: string }) => c.id === id)).toBe(true);
   });
@@ -377,7 +488,7 @@ describe('API Module 6 — consultation et export de l’audit (Module 10)', () 
     const res = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/audit?typeEvenement=anomalie_resolue`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(res.statusCode).toBe(200);
     const evenements = res.json();
@@ -394,7 +505,7 @@ describe('API Module 6 — consultation et export de l’audit (Module 10)', () 
     const resUtilisateur = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/audit?acteur=utilisateur`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     const evenementsUtilisateur = resUtilisateur.json();
     expect(evenementsUtilisateur.length).toBeGreaterThan(0);
@@ -403,7 +514,7 @@ describe('API Module 6 — consultation et export de l’audit (Module 10)', () 
     const resSysteme = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/audit?acteur=systeme`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resSysteme.json()).toEqual([]); // aucun cycle pipeline lancé dans ce test file
   });
@@ -412,7 +523,7 @@ describe('API Module 6 — consultation et export de l’audit (Module 10)', () 
     const res = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/audit/export?typeEvenement=convention_confirmee`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/csv');
@@ -428,7 +539,7 @@ describe('API Module 6 — consultation et export de l’audit (Module 10)', () 
     const res = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/audit?typeEvenement=type_qui_nexiste_pas`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([]);
@@ -456,7 +567,7 @@ describe('API Module 6 — taux historique tiers (chantier B) via HTTP', () => {
     const resListeCandidates = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/taux-historique-tiers?statut=candidate`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListeCandidates.statusCode).toBe(200);
     expect(resListeCandidates.json().some((t: { id: string }) => t.id === propositionId)).toBe(true);
@@ -464,7 +575,7 @@ describe('API Module 6 — taux historique tiers (chantier B) via HTTP', () => {
     const resConfirmer = await app.inject({
       method: 'POST',
       url: `/taux-historique-tiers/${propositionId}/confirmer`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId },
     });
     expect(resConfirmer.statusCode).toBe(204);
@@ -472,7 +583,7 @@ describe('API Module 6 — taux historique tiers (chantier B) via HTTP', () => {
     const resListeConfirmees = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/taux-historique-tiers?statut=confirmed`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListeConfirmees.json().some((t: { id: string }) => t.id === propositionId)).toBe(true);
   });
@@ -497,7 +608,7 @@ describe('API Module 6 — taux historique tiers (chantier B) via HTTP', () => {
     const resRejeter = await app.inject({
       method: 'POST',
       url: `/taux-historique-tiers/${propositionId}/rejeter`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: { utilisateurId },
     });
     expect(resRejeter.statusCode).toBe(204);
@@ -505,7 +616,7 @@ describe('API Module 6 — taux historique tiers (chantier B) via HTTP', () => {
     const resListeRejetees = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/taux-historique-tiers?statut=rejected`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(resListeRejetees.json().some((t: { id: string }) => t.id === propositionId)).toBe(true);
   });
@@ -530,7 +641,7 @@ describe('API Module 6 — GET /dossiers/:id/tiers', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/dossiers/${dossierId}/tiers`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
     });
     expect(res.statusCode).toBe(200);
     const tiers = res.json().find((t: { numeroCompteTiers: string }) => t.numeroCompteTiers === '411tiers-http');
@@ -551,18 +662,18 @@ describe('API Module 6 — POST /dossiers/:id/cycles — validation seulement', 
     const res = await app.inject({
       method: 'POST',
       url: `/dossiers/${dossierId}/cycles`,
-      headers: { 'x-cabinet-id': cabinetId },
+      headers: { authorization: `Bearer ${jetonCollab}` },
       payload: {},
     });
     expect(res.statusCode).toBe(400);
   });
 
-  it('refuse sans header x-cabinet-id, comme toutes les autres routes', async () => {
+  it('refuse sans jeton d’authentification, comme toutes les autres routes', async () => {
     const res = await app.inject({
       method: 'POST',
       url: `/dossiers/${dossierId}/cycles`,
       payload: { periodeDebut: '2025-01-01', periodeFin: '2025-01-31', pennylaneToken: 'x' },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 });
