@@ -17,6 +17,8 @@ export {
 export { fetchLignesDePiece, type LignePiece } from './connectors/pennylane/pieceLines.js';
 export { fetchLettrage, fetchLignesGroupeLettrage } from './connectors/pennylane/lettering.js';
 export { fetchPieceNumbers } from './connectors/pennylane/pieceNumbers.js';
+export { FirmApiClient, FirmApiError, type FirmApiClientConfig } from './connectors/pennylane/firmClient.js';
+export { fetchDossiersCabinet, type DossierCabinet } from './connectors/pennylane/firmCompanies.js';
 export {
   fetchEcrituresTvaCompletes,
   type FetchEcrituresTvaComptletesParams,
