@@ -1217,3 +1217,54 @@ export async function desactiverUtilisateurCabinet(
 
   await client.query(`UPDATE utilisateurs SET statut = 'inactif' WHERE id = $1`, [utilisateurId]);
 }
+
+// ============================================================================
+// SYNCHRONISATION DES DOSSIERS DEPUIS L'API CABINET (10/08)
+// ============================================================================
+
+export interface DossierSynchronise {
+  id: string;
+  nom: string;
+  nouveau: boolean; // true si cette synchronisation vient de le créer
+}
+
+// Auto-découverte des dossiers du cabinet (chantier connecteur Firm API,
+// 10/08) — répond directement à la question de Rami sur l'onboarding : un
+// dossier déjà présent chez Pennylane apparaît automatiquement, sans import
+// CSV ni FEC.
+//
+// Un dossier NOUVEAU est créé avec statut='onboarding' (déjà la valeur par
+// défaut du schéma, cf. 001_schema_initial.sql — cette table anticipait
+// déjà ce flux sans qu'il ait jamais été construit) et regime_tva à
+// 'reel_normal' par défaut : une vraie hypothèse, PAS une vérité fiscale
+// vérifiée — à confirmer par un humain avant qu'un premier cycle ne soit
+// lancé sur ce dossier (chantier "Phase 2", pas encore construit).
+//
+// Un dossier DÉJÀ CONNU (même cabinet + même logiciel_source +
+// même external_company_id, la contrainte unique du schéma) n'est mis à
+// jour que sur nom/siren — jamais sur regime_tva, tva_encaissement, ni
+// statut, pour ne jamais écraser une configuration humaine déjà faite.
+export async function synchroniserDossiersCabinet(
+  client: PoolClient,
+  cabinetId: string,
+  dossiersDecouverts: { id: string; nom: string; siren: string | null }[]
+): Promise<DossierSynchronise[]> {
+  const resultat: DossierSynchronise[] = [];
+
+  for (const d of dossiersDecouverts) {
+    const res = await client.query<{ id: string; xmax: string }>(
+      `INSERT INTO dossiers (cabinet_id, nom, siren, regime_tva, logiciel_source, external_company_id, tva_encaissement)
+       VALUES ($1, $2, $3, 'reel_normal', 'pennylane', $4, false)
+       ON CONFLICT (cabinet_id, logiciel_source, external_company_id)
+       DO UPDATE SET nom = EXCLUDED.nom, siren = EXCLUDED.siren, updated_at = now()
+       RETURNING id, xmax::text`,
+      [cabinetId, d.nom, d.siren, d.id]
+    );
+    // xmax = '0' uniquement pour une ligne fraîchement insérée par CETTE
+    // requête (jamais mise à jour) — distingue "nouveau" de "déjà connu,
+    // juste rafraîchi" sans requête supplémentaire.
+    resultat.push({ id: res.rows[0]!.id, nom: d.nom, nouveau: res.rows[0]!.xmax === '0' });
+  }
+
+  return resultat;
+}
