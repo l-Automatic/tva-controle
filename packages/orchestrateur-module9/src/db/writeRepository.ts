@@ -1022,3 +1022,93 @@ export async function retirerVehicule(client: PoolClient, immobilisationId: stri
     details: { immobilisationId },
   });
 }
+
+// ============================================================================
+// AJUSTEMENT MANUEL DES MONTANTS DE TVA (10/08)
+// ============================================================================
+
+export class CalculPlusEnBrouillonError extends Error {
+  constructor(calculId: string) {
+    super(
+      `Calcul ${calculId} : introuvable ou plus en statut 'brouillon' — un ajustement manuel n'est possible ` +
+        `que sur un calcul encore en brouillon.`
+    );
+    this.name = 'CalculPlusEnBrouillonError';
+  }
+}
+
+// Additif, jamais un remplacement (cf. migration 012) — calculs_tva et
+// calculs_tva_lignes restent intouchés, cette table est une couche
+// séparée combinée au résultat d'origine uniquement à l'affichage.
+//
+// montantOriginal n'est écrit que lors du tout premier ajustement pour ce
+// (calcul, type) — un ré-ajustement met à jour montant_ajuste et la
+// justification, mais montant_original reste celui du tout premier appel :
+// il doit toujours représenter ce que le moteur de calcul a produit, pas
+// la valeur juste avant le dernier ajustement.
+export async function ajusterMontantCalcul(
+  client: PoolClient,
+  calculId: string,
+  typeMontant: 'collectee_totale' | 'deductible_totale',
+  montantOriginal: number,
+  montantAjuste: number,
+  justification: string,
+  utilisateurId: string
+): Promise<void> {
+  const calcul = await client.query<{ statut: string; dossier_id: string }>(
+    `SELECT statut, dossier_id FROM calculs_tva WHERE id = $1`,
+    [calculId]
+  );
+  if (calcul.rows.length === 0 || calcul.rows[0]!.statut !== 'brouillon') {
+    throw new CalculPlusEnBrouillonError(calculId);
+  }
+
+  await client.query(
+    `INSERT INTO ajustements_calcul (calcul_id, type_montant, montant_original, montant_ajuste, justification, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (calcul_id, type_montant)
+     DO UPDATE SET montant_ajuste = EXCLUDED.montant_ajuste, justification = EXCLUDED.justification,
+                    created_at = now(), created_by = EXCLUDED.created_by`,
+    [calculId, typeMontant, montantOriginal, montantAjuste, justification, utilisateurId]
+  );
+
+  await enregistrerEvenementAudit(client, {
+    dossierId: calcul.rows[0]!.dossier_id,
+    typeEvenement: 'montant_calcul_ajuste',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { calculId, typeMontant, montantOriginal, montantAjuste, justification },
+  });
+}
+
+// Retire un ajustement — le montant redevient celui calculé par le moteur,
+// sans qu'il soit nécessaire de relancer un cycle.
+export async function retirerAjustementCalcul(
+  client: PoolClient,
+  calculId: string,
+  typeMontant: 'collectee_totale' | 'deductible_totale',
+  utilisateurId: string
+): Promise<void> {
+  const calcul = await client.query<{ statut: string; dossier_id: string }>(
+    `SELECT statut, dossier_id FROM calculs_tva WHERE id = $1`,
+    [calculId]
+  );
+  if (calcul.rows.length === 0 || calcul.rows[0]!.statut !== 'brouillon') {
+    throw new CalculPlusEnBrouillonError(calculId);
+  }
+
+  await client.query(`DELETE FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = $2`, [
+    calculId,
+    typeMontant,
+  ]);
+
+  await enregistrerEvenementAudit(client, {
+    dossierId: calcul.rows[0]!.dossier_id,
+    typeEvenement: 'ajustement_calcul_retire',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { calculId, typeMontant },
+  });
+}
