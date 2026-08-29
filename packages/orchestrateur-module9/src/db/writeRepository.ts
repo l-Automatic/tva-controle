@@ -1134,3 +1134,40 @@ export async function definirMotDePasse(
     throw new Error(`Utilisateur ${utilisateurId} introuvable, ou hors du cabinet courant.`);
   }
 }
+
+export class EmailDejaUtiliseError extends Error {
+  constructor(email: string) {
+    super(`Un utilisateur existe déjà avec l'email ${email}.`);
+    this.name = 'EmailDejaUtiliseError';
+  }
+}
+
+// Crée un nouveau collaborateur ou admin_cabinet dans le cabinet courant
+// (RLS classique, via avecContexteCabinet côté appelant) — avec un mot de
+// passe défini dès la création, pas de flux en deux temps. C'est ce qui
+// permet à un cabinet de gérer lui-même l'arrivée d'un nouveau
+// collaborateur sans jamais repasser par du SQL direct.
+export async function creerUtilisateurCabinet(
+  client: PoolClient,
+  cabinetId: string,
+  nom: string,
+  email: string,
+  role: 'collaborateur' | 'admin_cabinet',
+  motDePasseHash: string
+): Promise<string> {
+  try {
+    const res = await client.query<{ id: string }>(
+      `INSERT INTO utilisateurs (cabinet_id, nom, email, role, mot_de_passe_hash)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [cabinetId, nom, email, role, motDePasseHash]
+    );
+    return res.rows[0]!.id;
+  } catch (err) {
+    // Contrainte unique sur email (si elle existe) — remonte une erreur
+    // métier claire plutôt que l'erreur Postgres brute.
+    if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23505') {
+      throw new EmailDejaUtiliseError(email);
+    }
+    throw err;
+  }
+}
