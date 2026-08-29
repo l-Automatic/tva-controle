@@ -149,7 +149,15 @@ export function ConfigurationZone({
             dossierId={dossierId}
             utilisateurId={utilisateurId}
             suggestions={suggestionsAutoliquidation}
-            onConsomme={onSuggestionAutoliquidationConsommee}
+            onConsomme={(compte) => {
+              onSuggestionAutoliquidationConsommee(compte);
+              // Bug réel trouvé en vérifiant v21 (préexistant, touchait déjà
+              // "Confirmer") : confirmer/refuser ici persiste bien en base
+              // mais ne rafraîchissait jamais la liste "Conventions
+              // génériques" juste en dessous — invisible sans recharger
+              // toute la page. Même refreshKey que motif_numerotation_facture.
+              setMotifRefreshKey((k) => k + 1);
+            }}
           />
           <PropositionsPanel
             title="Conventions génériques"
