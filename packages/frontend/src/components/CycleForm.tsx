@@ -78,8 +78,12 @@ function AjustementLigne({
   const [error, setError] = useState<string | null>(null);
   const notifier = useToast();
 
+  // Champ vide au départ (brief v24) — décision explicite de Rami : le
+  // collaborateur saisit le montant lui-même, aucune valeur suggérée.
+  // montantOriginal envoyé au backend reste montantCalcule (donnée interne),
+  // indépendant de ce qui s'affiche dans ce champ.
   function ouvrirFormulaire() {
-    setNouveauMontant(String(ajustement ? ajustement.montantAjuste : montantCalcule).replace('.', ','));
+    setNouveauMontant('');
     setJustification('');
     setError(null);
     setOuvert(true);
