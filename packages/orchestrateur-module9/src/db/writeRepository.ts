@@ -1171,3 +1171,49 @@ export async function creerUtilisateurCabinet(
     throw err;
   }
 }
+
+export class DernierAdminCabinetError extends Error {
+  constructor() {
+    super(
+      "Impossible de désactiver ce compte : c'est le dernier administrateur du cabinet. " +
+        'Il doit en rester au moins un pour gérer les paramètres du cabinet.'
+    );
+    this.name = 'DernierAdminCabinetError';
+  }
+}
+
+// Désactive plutôt que supprimer (10/08) — statut='inactif', jamais un
+// DELETE : plusieurs tables référencent utilisateurs.id sans ON DELETE
+// CASCADE (audit_log, confirmed_by des conventions et taux, calculs
+// validés...), une vraie suppression échouerait de toute façon pour un
+// utilisateur ayant déjà agi. Un compte inactif ne peut déjà plus se
+// connecter (vérifié à /auth/login), donc le résultat pratique est le
+// même sans perdre la trace des actions passées.
+//
+// Garde-fou : jamais désactiver le dernier admin_cabinet d'un cabinet,
+// sinon plus personne ne peut gérer les paramètres du cabinet ni les
+// autres utilisateurs.
+export async function desactiverUtilisateurCabinet(
+  client: PoolClient,
+  cabinetId: string,
+  utilisateurId: string
+): Promise<void> {
+  const cible = await client.query<{ role: string }>(`SELECT role FROM utilisateurs WHERE id = $1`, [
+    utilisateurId,
+  ]);
+  if (cible.rows.length === 0) {
+    throw new Error(`Utilisateur ${utilisateurId} introuvable, ou hors du cabinet courant.`);
+  }
+
+  if (cible.rows[0]!.role === 'admin_cabinet') {
+    const compte = await client.query<{ count: string }>(
+      `SELECT count(*) FROM utilisateurs WHERE cabinet_id = $1 AND role = 'admin_cabinet' AND statut = 'actif'`,
+      [cabinetId]
+    );
+    if (Number.parseInt(compte.rows[0]!.count, 10) <= 1) {
+      throw new DernierAdminCabinetError();
+    }
+  }
+
+  await client.query(`UPDATE utilisateurs SET statut = 'inactif' WHERE id = $1`, [utilisateurId]);
+}
