@@ -244,10 +244,13 @@ export async function executerCycleTva(
   // Comptes déjà "charge de service" mais pas encore marqués spécifiquement
   // autoliquidation — distinct du popup ci-dessus (un compte peut être les
   // deux à la fois, ce n'est pas une catégorie exclusive).
+  const comptesChargeAutoliquidationRejetee =
+    conventionListe(contexteDossier, 'comptes_charge_autoliquidation_rejetee') ?? [];
   const comptesAutoliquidationBruts = identifierComptesServiceSansSousCategorieAutoliquidation(
     ecritures,
     comptesChargeService,
-    comptesChargeAutoliquidation
+    comptesChargeAutoliquidation,
+    comptesChargeAutoliquidationRejetee
   );
 
   // Présélection IA (10/08) — premier vrai usage du LLM du projet. Purement
