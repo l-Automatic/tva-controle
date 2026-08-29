@@ -1112,3 +1112,25 @@ export async function retirerAjustementCalcul(
     details: { calculId, typeMontant },
   });
 }
+
+// ============================================================================
+// AUTHENTIFICATION (10/08)
+// ============================================================================
+
+// Restreint au cabinet courant via RLS (utilisateurs a du RLS forcé) — pas
+// de vérification manuelle nécessaire, appelé via avecContexteCabinet côté
+// appelant (app.ts), donc seul un utilisateur du cabinet de l'acteur peut
+// être modifié.
+export async function definirMotDePasse(
+  client: PoolClient,
+  utilisateurId: string,
+  motDePasseHash: string
+): Promise<void> {
+  const res = await client.query(`UPDATE utilisateurs SET mot_de_passe_hash = $2 WHERE id = $1`, [
+    utilisateurId,
+    motDePasseHash,
+  ]);
+  if (res.rowCount === 0) {
+    throw new Error(`Utilisateur ${utilisateurId} introuvable, ou hors du cabinet courant.`);
+  }
+}
