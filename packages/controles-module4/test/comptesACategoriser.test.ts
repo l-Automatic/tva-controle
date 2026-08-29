@@ -108,6 +108,17 @@ describe('identifierComptesServiceSansSousCategorieAutoliquidation', () => {
     expect(resultat).toEqual([]);
   });
 
+  it('ne re-propose plus un compte explicitement rejeté (10/08, bug réel corrigé)', () => {
+    const e = ecriture([{ id: 1, compte: '6155', compteId: 1, libelle: 'GARAGE DUPONT', debit: 500, credit: 0 }]);
+    const resultat = identifierComptesServiceSansSousCategorieAutoliquidation(
+      [e],
+      ['615'],
+      [],
+      ['6155'] // rejeté explicitement
+    );
+    expect(resultat).toEqual([]);
+  });
+
   it('ignore un compte qui n’est même pas charge de service', () => {
     const e = ecriture([{ id: 1, compte: '607', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
     expect(identifierComptesServiceSansSousCategorieAutoliquidation([e], ['604', '611'], [])).toEqual([]);
