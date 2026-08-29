@@ -844,7 +844,12 @@ export type TauxAssigne =
   | 'autoliquide_intracom'
   | 'autoliquide_20'
   | 'autoliquide_10'
-  | 'autoliquide_5.5';
+  | 'autoliquide_5.5'
+  // Plusieurs taux légitimement appliqués sur ce compte selon les cas
+  // (10/08) — n'affecte aujourd'hui que la suggestion (ce compte n'est
+  // plus proposé une fois assigné, quelle que soit la valeur), aucun
+  // contrôle ne compare ce taux à autre chose pour l'instant.
+  | 'mixte';
 
 // Assignation directe, pas de workflow candidate/confirmed — un simple
 // upsert. Contrairement aux conventions de comptes (listes), c'est une
@@ -920,20 +925,28 @@ export async function resoudreAnomaliesEnMasse(
 // celle-ci confirme immédiatement — c'est une décision humaine directe, pas
 // une proposition à valider. Remplace toute confirmation précédente pour ce
 // même compte (upsert sur la ligne confirmed).
+//
+// 'mixte' (10/08) : le client applique plusieurs taux légitimement selon
+// les cas — jamais de taux par défaut fixe pour ce compte. Stocké comme
+// NULL en base (colonne rendue nullable en migration 011), filtré à la
+// lecture (dossierRepository.ts) pour ne jamais entrer dans
+// tauxHistorique[] — le chantier B retombe alors automatiquement sur sa
+// prudence habituelle (20%), sans aucun changement de sa propre logique.
 export async function assignerTauxHistoriqueTiersManuel(
   client: PoolClient,
   dossierId: string,
   numeroCompteTiers: string,
-  tauxHabituel: number,
+  tauxHabituel: number | 'mixte',
   utilisateurId: string
 ): Promise<void> {
+  const valeurStockee = tauxHabituel === 'mixte' ? null : tauxHabituel;
   await client.query(
     `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source, confirmed_by, confirmed_at)
      VALUES ($1, $2, $3, 0, 'confirmed', 'saisie_manuelle', $4, now())
      ON CONFLICT (dossier_id, numero_compte_tiers) WHERE statut = 'confirmed'
      DO UPDATE SET taux_habituel = EXCLUDED.taux_habituel, source = 'saisie_manuelle',
                     confirmed_by = EXCLUDED.confirmed_by, confirmed_at = now(), derniere_maj = now()`,
-    [dossierId, numeroCompteTiers, tauxHabituel, utilisateurId]
+    [dossierId, numeroCompteTiers, valeurStockee, utilisateurId]
   );
   await enregistrerEvenementAudit(client, {
     dossierId,
