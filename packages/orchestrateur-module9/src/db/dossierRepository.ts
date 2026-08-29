@@ -120,11 +120,19 @@ export async function chargerContexteDossier(client: PoolClient, dossierId: stri
         nbOccurrences: r.nb_occurrences,
       })
     ),
-    ...tauxTiersRes.rows.map((r: { numero_compte_tiers: string; taux_habituel: string; nb_occurrences: number }) => ({
-      compteOuTiers: r.numero_compte_tiers,
-      tauxHabituel: Number.parseFloat(r.taux_habituel),
-      nbOccurrences: r.nb_occurrences,
-    })),
+    // 'mixte' (10/08) : stocké comme NULL en base (migration 011) — exclu
+    // ici volontairement, jamais ajouté à tauxHistorique[]. Conséquence
+    // directe : tauxHabituelPour() retourne null pour ce tiers, exactement
+    // comme si aucun taux n'avait jamais été confirmé — le chantier B
+    // retombe sur sa prudence habituelle (20%) sans code spécifique à
+    // écrire ici ni dans encaissementClientNonAffecte.ts.
+    ...tauxTiersRes.rows
+      .filter((r: { taux_habituel: string | null }) => r.taux_habituel !== null)
+      .map((r: { numero_compte_tiers: string; taux_habituel: string; nb_occurrences: number }) => ({
+        compteOuTiers: r.numero_compte_tiers,
+        tauxHabituel: Number.parseFloat(r.taux_habituel),
+        nbOccurrences: r.nb_occurrences,
+      })),
   ];
 
   const conventions: ConventionDossier[] = conventionsRes.rows.map(
