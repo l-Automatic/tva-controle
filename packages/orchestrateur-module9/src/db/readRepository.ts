@@ -534,7 +534,7 @@ export interface AjustementCalculDb {
   montantOriginal: number;
   montantAjuste: number;
   justification: string;
-  createdAt: string;
+  createdAt: Date;
 }
 
 export async function listerAjustementsCalcul(client: PoolClient, calculId: string): Promise<AjustementCalculDb[]> {
