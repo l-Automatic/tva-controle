@@ -36,6 +36,7 @@ import {
   definirMotDePasse,
   desactiverUtilisateurCabinet,
   DernierAdminCabinetError,
+  synchroniserDossiersCabinet,
 } from '../src/db/writeRepository.js';
 import {
   listerAnomalies,
@@ -1603,5 +1604,68 @@ describe('desactiverUtilisateurCabinet', () => {
         desactiverUtilisateurCabinet(client, cabinetId, '00000000-0000-0000-0000-000000000000')
       )
     ).rejects.toThrow(/introuvable/);
+  });
+});
+
+describe('synchroniserDossiersCabinet', () => {
+  it('crée un nouveau dossier avec statut onboarding et regime_tva par défaut', async () => {
+    const idExterne = `pennylane-sync-${Date.now()}`;
+    const resultat = await avecClient((client) =>
+      synchroniserDossiersCabinet(client, cabinetId, [{ id: idExterne, nom: 'Nouveau Dossier Sync', siren: '111222333' }])
+    );
+
+    expect(resultat).toHaveLength(1);
+    expect(resultat[0]?.nouveau).toBe(true);
+    expect(resultat[0]?.nom).toBe('Nouveau Dossier Sync');
+
+    const ligne = await avecClient((client) =>
+      client.query(`SELECT statut, regime_tva, siren FROM dossiers WHERE id = $1`, [resultat[0]!.id])
+    );
+    expect(ligne.rows[0]?.statut).toBe('onboarding');
+    expect(ligne.rows[0]?.regime_tva).toBe('reel_normal');
+    expect(ligne.rows[0]?.siren).toBe('111222333');
+  });
+
+  it('met à jour nom/siren d’un dossier déjà connu, sans jamais toucher regime_tva/statut', async () => {
+    const idExterne = `pennylane-sync-existant-${Date.now()}`;
+
+    const premiereSync = await avecClient((client) =>
+      synchroniserDossiersCabinet(client, cabinetId, [{ id: idExterne, nom: 'Nom Initial', siren: null }])
+    );
+    expect(premiereSync[0]?.nouveau).toBe(true);
+
+    // Simule une configuration humaine faite entre-temps : régime réel simplifié, dossier passé actif
+    await avecClient((client) =>
+      client.query(`UPDATE dossiers SET regime_tva = 'reel_simplifie', statut = 'actif' WHERE id = $1`, [
+        premiereSync[0]!.id,
+      ])
+    );
+
+    const secondeSync = await avecClient((client) =>
+      synchroniserDossiersCabinet(client, cabinetId, [{ id: idExterne, nom: 'Nom Mis À Jour', siren: '999888777' }])
+    );
+    expect(secondeSync[0]?.nouveau).toBe(false);
+    expect(secondeSync[0]?.id).toBe(premiereSync[0]?.id); // même dossier, pas un doublon
+
+    const ligne = await avecClient((client) =>
+      client.query(`SELECT nom, siren, regime_tva, statut FROM dossiers WHERE id = $1`, [premiereSync[0]!.id])
+    );
+    expect(ligne.rows[0]?.nom).toBe('Nom Mis À Jour');
+    expect(ligne.rows[0]?.siren).toBe('999888777');
+    // Jamais écrasés par la synchronisation, malgré le defaut different envoye a l'insertion initiale
+    expect(ligne.rows[0]?.regime_tva).toBe('reel_simplifie');
+    expect(ligne.rows[0]?.statut).toBe('actif');
+  });
+
+  it('traite plusieurs dossiers en un seul appel', async () => {
+    const suffixe = Date.now();
+    const resultat = await avecClient((client) =>
+      synchroniserDossiersCabinet(client, cabinetId, [
+        { id: `multi-a-${suffixe}`, nom: 'A', siren: null },
+        { id: `multi-b-${suffixe}`, nom: 'B', siren: null },
+      ])
+    );
+    expect(resultat).toHaveLength(2);
+    expect(resultat.every((r) => r.nouveau)).toBe(true);
   });
 });
