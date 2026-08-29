@@ -36,6 +36,7 @@ export {
   ajusterMontantCalcul,
   retirerAjustementCalcul,
   CalculPlusEnBrouillonError,
+  definirMotDePasse,
   qualifierEncaissementNonAffecte,
   type QualificationEncaissement,
   AnomalieNonQualifiableError,
@@ -72,6 +73,8 @@ export {
   listerTauxAssignes,
   listerAjustementsCalcul,
   type AjustementCalculDb,
+  trouverUtilisateurPourConnexion,
+  type UtilisateurPourConnexion,
   listerVehicules,
   type VehiculeDb,
   parametreDossierValeur,
@@ -85,3 +88,10 @@ export {
   type ElementATraiter,
   type TiersReferenceDb,
 } from './db/readRepository.js';
+export {
+  hasherMotDePasse,
+  verifierMotDePasse,
+  creerJeton,
+  verifierJeton,
+  type PayloadJeton,
+} from './db/auth.js';
