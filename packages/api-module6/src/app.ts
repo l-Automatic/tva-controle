@@ -55,6 +55,8 @@ import {
   definirMotDePasse,
   creerUtilisateurCabinet,
   EmailDejaUtiliseError,
+  desactiverUtilisateurCabinet,
+  DernierAdminCabinetError,
   listerUtilisateursCabinet,
   hasherMotDePasse,
   verifierMotDePasse,
@@ -232,6 +234,25 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(201).send({ id });
     } catch (err) {
       if (err instanceof EmailDejaUtiliseError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // Désactive plutôt que supprime (cf. desactiverUtilisateurCabinet) —
+  // jamais le dernier admin_cabinet actif du cabinet.
+  app.post<{ Params: { id: string } }>('/utilisateurs/:id/desactiver', async (request, reply) => {
+    if (request.utilisateur!.role !== 'admin_cabinet') {
+      return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+    }
+    try {
+      await avecContexteCabinet(pool, request.utilisateur!.cabinetId, (client) =>
+        desactiverUtilisateurCabinet(client, request.utilisateur!.cabinetId, request.params.id)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof DernierAdminCabinetError) {
         return reply.code(409).send({ erreur: err.message });
       }
       throw err;
