@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { PennylaneClient } from '@tva-controle/connector-pennylane';
+import { PennylaneClient, fetchDossiersCabinet } from '@tva-controle/connector-pennylane';
 import {
   avecContexteCabinet,
   executerCycleTva,
@@ -58,6 +58,8 @@ import {
   desactiverUtilisateurCabinet,
   DernierAdminCabinetError,
   listerUtilisateursCabinet,
+  parametreCabinetValeur,
+  synchroniserDossiersCabinet,
   hasherMotDePasse,
   verifierMotDePasse,
   creerJeton,
@@ -202,6 +204,49 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(204).send();
     }
   );
+
+  // --- Synchronisation des dossiers depuis l'API Cabinet Pennylane (10/08) ---
+  // Réservé aux admin_cabinet — auto-découverte des dossiers déjà gérés
+  // sous Pennylane, réponse directe à "comment les dossiers arrivent sur la
+  // plateforme". Le jeton cabinet est lu depuis les paramètres cabinet
+  // (clé pennylane_firm_api_key), jamais transmis dans la requête.
+  app.post('/synchroniser-dossiers', async (request, reply) => {
+    if (request.utilisateur!.role !== 'admin_cabinet') {
+      return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+    }
+    const cabinetId = request.utilisateur!.cabinetId;
+
+    const jetonCabinet = await avecContexteCabinet(pool, cabinetId, (client) =>
+      parametreCabinetValeur(client, cabinetId, 'pennylane_firm_api_key')
+    );
+    if (typeof jetonCabinet !== 'string' || jetonCabinet.length === 0) {
+      return reply.code(400).send({
+        erreur:
+          "Aucun jeton d'API Cabinet Pennylane configuré. Définir la clé pennylane_firm_api_key dans les paramètres du cabinet avant de synchroniser.",
+      });
+    }
+
+    let dossiersDecouverts;
+    try {
+      dossiersDecouverts = await fetchDossiersCabinet(jetonCabinet);
+    } catch (err) {
+      return reply.code(502).send({ erreur: `Échec de l'appel à l'API Cabinet Pennylane : ${String(err)}` });
+    }
+
+    const resultat = await avecContexteCabinet(pool, cabinetId, (client) =>
+      synchroniserDossiersCabinet(
+        client,
+        cabinetId,
+        dossiersDecouverts.map((d) => ({ id: d.id, nom: d.nom, siren: d.siren }))
+      )
+    );
+
+    reply.code(200).send({
+      total: resultat.length,
+      nouveaux: resultat.filter((d) => d.nouveau).length,
+      dossiers: resultat,
+    });
+  });
 
   // Réservé aux admin_cabinet — permet à un cabinet de gérer lui-même ses
   // utilisateurs (lister, ajouter) sans jamais repasser par du SQL direct.
