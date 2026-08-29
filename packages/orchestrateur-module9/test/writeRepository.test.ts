@@ -34,6 +34,8 @@ import {
   retirerAjustementCalcul,
   CalculPlusEnBrouillonError,
   definirMotDePasse,
+  desactiverUtilisateurCabinet,
+  DernierAdminCabinetError,
 } from '../src/db/writeRepository.js';
 import {
   listerAnomalies,
@@ -1522,6 +1524,84 @@ describe('definirMotDePasse et trouverUtilisateurPourConnexion', () => {
   it('définir un mot de passe pour un id inexistant échoue proprement', async () => {
     await expect(
       avecClient((client) => definirMotDePasse(client, '00000000-0000-0000-0000-000000000000', 'x'))
+    ).rejects.toThrow(/introuvable/);
+  });
+});
+
+describe('desactiverUtilisateurCabinet', () => {
+  async function creerAdmin(nom: string): Promise<string> {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, $2, $3, 'admin_cabinet') RETURNING id`,
+        [cabinetId, nom, `${nom.toLowerCase()}-${Date.now()}@test.fr`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  async function creerCollab(nom: string): Promise<string> {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, $2, $3, 'collaborateur') RETURNING id`,
+        [cabinetId, nom, `${nom.toLowerCase()}-${Date.now()}@test.fr`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('désactive un collaborateur normalement (statut -> inactif, pas supprimé)', async () => {
+    const collabId = await creerCollab('DesactiverCollab');
+    await avecClient((client) => desactiverUtilisateurCabinet(client, cabinetId, collabId));
+
+    const res = await avecClient((client) =>
+      client.query<{ statut: string }>(`SELECT statut FROM utilisateurs WHERE id = $1`, [collabId])
+    );
+    expect(res.rows[0]?.statut).toBe('inactif');
+  });
+
+  it('refuse de désactiver le dernier admin_cabinet actif du cabinet', async () => {
+    // Compte le nombre d'admin déjà actifs, désactive tous sauf le dernier
+    const admin1 = await creerAdmin('DernierAdmin1');
+    await expect(
+      (async () => {
+        // Désactive tous les AUTRES admins actifs pour isoler le cas "il n'en reste qu'un"
+        const autresAdmins = await avecClient((client) =>
+          client.query<{ id: string }>(
+            `SELECT id FROM utilisateurs WHERE cabinet_id = $1 AND role = 'admin_cabinet' AND statut = 'actif' AND id != $2`,
+            [cabinetId, admin1]
+          )
+        );
+        for (const row of autresAdmins.rows) {
+          await avecClient((client) => desactiverUtilisateurCabinet(client, cabinetId, row.id));
+        }
+        // À ce stade, admin1 est le seul admin actif restant
+        await avecClient((client) => desactiverUtilisateurCabinet(client, cabinetId, admin1));
+      })()
+    ).rejects.toThrow(DernierAdminCabinetError);
+  });
+
+  it('permet de désactiver un admin_cabinet s’il en reste un autre actif', async () => {
+    const admin1 = await creerAdmin('AutreAdmin1');
+    const admin2 = await creerAdmin('AutreAdmin2');
+    await avecClient((client) => desactiverUtilisateurCabinet(client, cabinetId, admin1));
+
+    const res = await avecClient((client) =>
+      client.query<{ statut: string }>(`SELECT statut FROM utilisateurs WHERE id = $1`, [admin1])
+    );
+    expect(res.rows[0]?.statut).toBe('inactif');
+
+    // admin2 reste actif, non affecté
+    const res2 = await avecClient((client) =>
+      client.query<{ statut: string }>(`SELECT statut FROM utilisateurs WHERE id = $1`, [admin2])
+    );
+    expect(res2.rows[0]?.statut).toBe('actif');
+  });
+
+  it('échoue proprement pour un id inexistant', async () => {
+    await expect(
+      avecClient((client) =>
+        desactiverUtilisateurCabinet(client, cabinetId, '00000000-0000-0000-0000-000000000000')
+      )
     ).rejects.toThrow(/introuvable/);
   });
 });
