@@ -53,6 +53,9 @@ import {
   type AuditEvenementDb,
   trouverUtilisateurPourConnexion,
   definirMotDePasse,
+  creerUtilisateurCabinet,
+  EmailDejaUtiliseError,
+  listerUtilisateursCabinet,
   hasherMotDePasse,
   verifierMotDePasse,
   creerJeton,
@@ -197,6 +200,43 @@ export function buildApp(pool: Pool): FastifyInstance {
       reply.code(204).send();
     }
   );
+
+  // Réservé aux admin_cabinet — permet à un cabinet de gérer lui-même ses
+  // utilisateurs (lister, ajouter) sans jamais repasser par du SQL direct.
+  app.get('/utilisateurs', async (request, reply) => {
+    if (request.utilisateur!.role !== 'admin_cabinet') {
+      return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+    }
+    const cabinetId = request.utilisateur!.cabinetId;
+    return avecContexteCabinet(pool, cabinetId, (client) => listerUtilisateursCabinet(client, cabinetId));
+  });
+
+  app.post<{
+    Body: { nom: string; email: string; role: 'collaborateur' | 'admin_cabinet'; motDePasse: string };
+  }>('/utilisateurs', async (request, reply) => {
+    if (request.utilisateur!.role !== 'admin_cabinet') {
+      return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+    }
+    const { nom, email, role, motDePasse } = request.body;
+    if (!nom || !email || !role) {
+      return reply.code(400).send({ erreur: 'nom, email et role requis' });
+    }
+    if (!motDePasse || motDePasse.length < 8) {
+      return reply.code(400).send({ erreur: 'Mot de passe requis (au moins 8 caractères).' });
+    }
+    const hash = await hasherMotDePasse(motDePasse);
+    try {
+      const id = await avecContexteCabinet(pool, request.utilisateur!.cabinetId, (client) =>
+        creerUtilisateurCabinet(client, request.utilisateur!.cabinetId, nom, email, role, hash)
+      );
+      reply.code(201).send({ id });
+    } catch (err) {
+      if (err instanceof EmailDejaUtiliseError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
 
   app.get('/health', async () => ({ statut: 'ok' }));
 
