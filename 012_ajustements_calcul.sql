@@ -37,7 +37,7 @@ CREATE TABLE ajustements_calcul (
 
 CREATE INDEX idx_ajustements_calcul_calcul ON ajustements_calcul(calcul_id);
 
-GRANT SELECT, INSERT, UPDATE ON ajustements_calcul TO pennylane_tva_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ajustements_calcul TO pennylane_tva_app;  -- DELETE pour retirerAjustementCalcul
 
 ALTER TABLE ajustements_calcul ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ajustements_calcul FORCE ROW LEVEL SECURITY;
