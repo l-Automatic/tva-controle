@@ -156,3 +156,40 @@ describe('listerDossiers', () => {
     expect(resultats.some((d) => d.id === dossierId)).toBe(true);
   });
 });
+
+describe('chargerContexteDossier — taux "mixte" (NULL) filtré, 10/08', () => {
+  it('un client confirmé avec taux_habituel NULL (mixte) n’apparaît jamais dans tauxHistorique[]', async () => {
+    const compteTiersMixte = `411MIXTE${Date.now()}`;
+    await avecContexteCabinet(pool, cabinetId, (client) =>
+      client.query(
+        `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source)
+         VALUES ($1, $2, NULL, 0, 'confirmed', 'saisie_manuelle')`,
+        [dossierId, compteTiersMixte]
+      )
+    );
+
+    const contexte = await avecContexteCabinet(pool, cabinetId, (client) =>
+      chargerContexteDossier(client, dossierId)
+    );
+
+    expect(contexte.tauxHistorique.some((t) => t.compteOuTiers === compteTiersMixte)).toBe(false);
+  });
+
+  it('un client confirmé avec un vrai taux continue d’apparaître normalement', async () => {
+    const compteTiersNormal = `411NORMAL${Date.now()}`;
+    await avecContexteCabinet(pool, cabinetId, (client) =>
+      client.query(
+        `INSERT INTO taux_historique_tiers (dossier_id, numero_compte_tiers, taux_habituel, nb_occurrences, statut, source)
+         VALUES ($1, $2, 20, 0, 'confirmed', 'saisie_manuelle')`,
+        [dossierId, compteTiersNormal]
+      )
+    );
+
+    const contexte = await avecContexteCabinet(pool, cabinetId, (client) =>
+      chargerContexteDossier(client, dossierId)
+    );
+
+    const trouve = contexte.tauxHistorique.find((t) => t.compteOuTiers === compteTiersNormal);
+    expect(trouve?.tauxHabituel).toBe(20);
+  });
+});
