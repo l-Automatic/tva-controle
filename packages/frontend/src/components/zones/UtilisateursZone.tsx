@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { ApiError, creerUtilisateur, fetchUtilisateurs, redefinirMotDePasse } from '../../api';
+import { ApiError, creerUtilisateur, desactiverUtilisateur, fetchUtilisateurs, redefinirMotDePasse } from '../../api';
 import { useToast } from '../../toast';
 import { LIBELLE_ROLE, type Role, type UtilisateurCabinet } from '../../types';
 
@@ -69,21 +69,46 @@ function ReinitialiserMotDePasseForm({
 function UtilisateurRow({
   cabinetId,
   utilisateur,
+  onChanged,
 }: {
   cabinetId: string;
   utilisateur: UtilisateurCabinet;
+  onChanged: () => void;
 }) {
   const [reinitOuvert, setReinitOuvert] = useState(false);
+  const [desactivation, setDesactivation] = useState<'en_cours' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+  const estActif = utilisateur.statut === 'actif';
+
+  async function handleDesactiver() {
+    if (!window.confirm('Désactiver ce compte ? Il ne pourra plus se connecter.')) return;
+    setDesactivation('en_cours');
+    setError(null);
+    try {
+      await desactiverUtilisateur(cabinetId, utilisateur.id);
+      notifier('Compte désactivé');
+      onChanged();
+    } catch (err) {
+      // 409 (dernier admin_cabinet actif) porte déjà un message clair côté
+      // backend (cf. app.ts, DernierAdminCabinetError) — affiché tel quel.
+      setError(err instanceof ApiError ? err.message : 'Échec de la désactivation');
+    } finally {
+      setDesactivation(null);
+    }
+  }
 
   return (
-    <li className="card">
+    <li className={`card${estActif ? '' : ' utilisateur-inactif'}`}>
       <p className="label">
         {utilisateur.nom} — <strong>{LIBELLE_ROLE[utilisateur.role]}</strong>
+        {!estActif && <span className="badge statut-rejete"> Inactif</span>}
       </p>
       <p className="reference">{utilisateur.email}</p>
       {!utilisateur.aUnMotDePasse && (
         <p className="empty">N'a jamais pu se connecter — aucun mot de passe défini.</p>
       )}
+      {error && <p className="error">{error}</p>}
       {reinitOuvert ? (
         <ReinitialiserMotDePasseForm
           cabinetId={cabinetId}
@@ -95,6 +120,11 @@ function UtilisateurRow({
           <button className="secondary" onClick={() => setReinitOuvert(true)}>
             Réinitialiser le mot de passe
           </button>
+          {estActif && (
+            <button className="secondary" onClick={() => void handleDesactiver()} disabled={desactivation !== null}>
+              {desactivation === 'en_cours' ? '…' : 'Désactiver'}
+            </button>
+          )}
         </div>
       )}
     </li>
@@ -218,7 +248,7 @@ export function UtilisateursZone({ cabinetId }: UtilisateursZoneProps) {
       {!loading && utilisateurs.length === 0 && <p className="empty">Aucun utilisateur pour ce cabinet.</p>}
       <ul className="card-list">
         {utilisateurs.map((u) => (
-          <UtilisateurRow key={u.id} cabinetId={cabinetId} utilisateur={u} />
+          <UtilisateurRow key={u.id} cabinetId={cabinetId} utilisateur={u} onChanged={() => void charger()} />
         ))}
       </ul>
     </section>

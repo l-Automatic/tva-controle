@@ -684,6 +684,11 @@ button:focus-visible {
   border-left-color: var(--neutral);
 }
 
+/* Utilisateur désactivé (brief v26) — grisé, reste visible/lisible */
+.card.utilisateur-inactif {
+  opacity: 0.6;
+}
+
 .card-header {
   display: flex;
   align-items: center;

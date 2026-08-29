@@ -139,6 +139,12 @@ export function redefinirMotDePasse(cabinetId: string, utilisateurId: string, mo
   });
 }
 
+// Désactive plutôt que supprime — 409 si c'est le dernier admin_cabinet
+// actif du cabinet (brief v26), message backend déjà clair, affiché tel quel.
+export function desactiverUtilisateur(cabinetId: string, utilisateurId: string): Promise<void> {
+  return request<void>(`/utilisateurs/${utilisateurId}/desactiver`, cabinetId, { method: 'POST' });
+}
+
 export function fetchAnomalies(
   cabinetId: string,
   dossierId: string,
