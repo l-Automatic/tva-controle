@@ -33,6 +33,7 @@ import {
   ajusterMontantCalcul,
   retirerAjustementCalcul,
   CalculPlusEnBrouillonError,
+  definirMotDePasse,
 } from '../src/db/writeRepository.js';
 import {
   listerAnomalies,
@@ -49,6 +50,7 @@ import {
   listerParametresDossier,
   listerTauxAssignes,
   listerAjustementsCalcul,
+  trouverUtilisateurPourConnexion,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -1467,5 +1469,59 @@ describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
     await expect(
       avecClient((client) => retirerAjustementCalcul(client, calculId, 'deductible_totale', utilisateurId))
     ).rejects.toThrow(CalculPlusEnBrouillonError);
+  });
+});
+
+describe('definirMotDePasse et trouverUtilisateurPourConnexion', () => {
+  it('définit un mot de passe, retrouvable ensuite via authentifier_par_email (RLS contourné exprès)', async () => {
+    const emailUnique = `u-auth-${Date.now()}@test.fr`;
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U Auth', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, emailUnique]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+
+    await avecClient((client) => definirMotDePasse(client, utilisateurId, 'un-hash-quelconque'));
+
+    // trouverUtilisateurPourConnexion doit fonctionner via un client SANS
+    // contexte cabinet fixé — c'est exactement le point de cette fonction.
+    const provisioningPoolLocal = new pg.Pool({ connectionString: PROVISIONING_CONNECTION_STRING });
+    const clientBrut = await provisioningPoolLocal.connect();
+    let trouve;
+    try {
+      trouve = await trouverUtilisateurPourConnexion(clientBrut, emailUnique);
+    } finally {
+      clientBrut.release();
+      await provisioningPoolLocal.end();
+    }
+
+    expect(trouve).toMatchObject({
+      id: utilisateurId,
+      cabinetId,
+      role: 'collaborateur',
+      motDePasseHash: 'un-hash-quelconque',
+      statut: 'actif',
+    });
+  });
+
+  it('retourne null pour un email inconnu', async () => {
+    const provisioningPoolLocal = new pg.Pool({ connectionString: PROVISIONING_CONNECTION_STRING });
+    const clientBrut = await provisioningPoolLocal.connect();
+    let trouve;
+    try {
+      trouve = await trouverUtilisateurPourConnexion(clientBrut, `inconnu-${Date.now()}@test.fr`);
+    } finally {
+      clientBrut.release();
+      await provisioningPoolLocal.end();
+    }
+    expect(trouve).toBeNull();
+  });
+
+  it('définir un mot de passe pour un id inexistant échoue proprement', async () => {
+    await expect(
+      avecClient((client) => definirMotDePasse(client, '00000000-0000-0000-0000-000000000000', 'x'))
+    ).rejects.toThrow(/introuvable/);
   });
 });
