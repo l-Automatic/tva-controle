@@ -90,17 +90,26 @@ export function identifierComptesACategoriser(
 export function identifierComptesServiceSansSousCategorieAutoliquidation(
   ecritures: EcritureTvaComplete[],
   comptesChargeService: string[],
-  comptesChargeAutoliquidationDejaConnus: string[]
+  comptesChargeAutoliquidationDejaConnus: string[],
+  // Bug réel corrigé le 10/08 (même défaut que comptesSansCategorie pour
+  // le popup principal) : cette détection est recalculée en direct depuis
+  // les écritures brutes à chaque cycle, sans aucune mémoire — sans ce
+  // paramètre, refuser une suggestion ne l'empêche jamais de revenir au
+  // cycle suivant.
+  comptesRejetes: string[] = []
 ): CompteACategoriser[] {
   const estDejaMarqueAutoliquidation = (compte: string) =>
     comptesChargeAutoliquidationDejaConnus.some((prefixe) => compte.startsWith(prefixe));
   const estChargeService = (compte: string) => comptesChargeService.some((prefixe) => compte.startsWith(prefixe));
+  const estRejete = (compte: string) => comptesRejetes.some((prefixe) => compte.startsWith(prefixe));
 
   const libellesParCompte = new Map<string, Set<string>>();
 
   for (const ecriture of ecritures) {
     for (const ligne of ecriture.autresLignes) {
-      if (!estChargeService(ligne.compte) || estDejaMarqueAutoliquidation(ligne.compte)) continue;
+      if (!estChargeService(ligne.compte) || estDejaMarqueAutoliquidation(ligne.compte) || estRejete(ligne.compte)) {
+        continue;
+      }
 
       const libelles = libellesParCompte.get(ligne.compte) ?? new Set<string>();
       if (ligne.libelle && libelles.size < 3) {
