@@ -528,3 +528,26 @@ export async function listerVehicules(client: PoolClient, dossierId: string): Pr
     statut: r.statut,
   }));
 }
+
+export interface AjustementCalculDb {
+  typeMontant: 'collectee_totale' | 'deductible_totale';
+  montantOriginal: number;
+  montantAjuste: number;
+  justification: string;
+  createdAt: string;
+}
+
+export async function listerAjustementsCalcul(client: PoolClient, calculId: string): Promise<AjustementCalculDb[]> {
+  const res = await client.query(
+    `SELECT type_montant, montant_original, montant_ajuste, justification, created_at
+     FROM ajustements_calcul WHERE calcul_id = $1`,
+    [calculId]
+  );
+  return res.rows.map((r) => ({
+    typeMontant: r.type_montant,
+    montantOriginal: Number.parseFloat(r.montant_original),
+    montantAjuste: Number.parseFloat(r.montant_ajuste),
+    justification: r.justification,
+    createdAt: r.created_at,
+  }));
+}
