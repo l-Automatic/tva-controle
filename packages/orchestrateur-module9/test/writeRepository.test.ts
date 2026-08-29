@@ -1407,7 +1407,7 @@ describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
         montantOriginal: 1000,
         montantAjuste: 1100,
         justification: 'Facture oubliée',
-        createdAt: expect.any(String),
+        createdAt: expect.any(Date),
       },
     ]);
 
