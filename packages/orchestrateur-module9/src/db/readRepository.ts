@@ -551,3 +551,42 @@ export async function listerAjustementsCalcul(client: PoolClient, calculId: stri
     createdAt: r.created_at,
   }));
 }
+
+// ============================================================================
+// AUTHENTIFICATION (10/08)
+// ============================================================================
+
+export interface UtilisateurPourConnexion {
+  id: string;
+  cabinetId: string;
+  role: 'collaborateur' | 'admin_cabinet';
+  motDePasseHash: string | null;
+  statut: 'actif' | 'inactif';
+}
+
+// Appelle authentifier_par_email (SECURITY DEFINER, migration 013) — le
+// cabinet n'est justement pas encore connu à ce stade, RLS classique
+// inutilisable ici. Appelé avec un client obtenu directement (pool.connect()),
+// jamais via avecContexteCabinet — il n'y a pas encore de cabinet à fixer.
+export async function trouverUtilisateurPourConnexion(
+  client: PoolClient,
+  email: string
+): Promise<UtilisateurPourConnexion | null> {
+  const res = await client.query<{
+    id: string;
+    cabinet_id: string;
+    role: string;
+    mot_de_passe_hash: string | null;
+    statut: string;
+  }>(`SELECT * FROM authentifier_par_email($1)`, [email]);
+
+  if (res.rows.length === 0) return null;
+  const r = res.rows[0]!;
+  return {
+    id: r.id,
+    cabinetId: r.cabinet_id,
+    role: r.role as 'collaborateur' | 'admin_cabinet',
+    motDePasseHash: r.mot_de_passe_hash,
+    statut: r.statut as 'actif' | 'inactif',
+  };
+}
