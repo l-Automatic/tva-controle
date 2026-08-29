@@ -406,7 +406,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   // directement, pas de candidate à valider séparément.
   app.post<{
     Params: { dossierId: string };
-    Body: { numeroCompteTiers: string; tauxHabituel: number; utilisateurId: string };
+    Body: { numeroCompteTiers: string; tauxHabituel: number | 'mixte'; utilisateurId: string };
   }>('/dossiers/:dossierId/taux-historique-tiers/assigner', async (request, reply) => {
     const cabinetId = request.headers[HEADER_CABINET] as string;
     const { numeroCompteTiers, tauxHabituel, utilisateurId } = request.body;
