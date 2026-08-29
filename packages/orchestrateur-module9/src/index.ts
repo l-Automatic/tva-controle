@@ -38,6 +38,8 @@ export {
   CalculPlusEnBrouillonError,
   definirMotDePasse,
   creerUtilisateurCabinet,
+  desactiverUtilisateurCabinet,
+  DernierAdminCabinetError,
   EmailDejaUtiliseError,
   qualifierEncaissementNonAffecte,
   type QualificationEncaissement,
