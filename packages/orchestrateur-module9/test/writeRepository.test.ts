@@ -30,6 +30,9 @@ import {
   CalculDejaValideError,
   CalculPasEnBrouillonError,
   AnomalieNonQualifiableError,
+  ajusterMontantCalcul,
+  retirerAjustementCalcul,
+  CalculPlusEnBrouillonError,
 } from '../src/db/writeRepository.js';
 import {
   listerAnomalies,
@@ -45,6 +48,7 @@ import {
   parametreCabinetValeur,
   listerParametresDossier,
   listerTauxAssignes,
+  listerAjustementsCalcul,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -1353,5 +1357,104 @@ describe('listerAnomaliesTraiteesParTypeEtPiece', () => {
 
     expect(traitees.has('avoir_a_verifier:9200')).toBe(true);
     expect(traitees.has('paiement_partiel_a_verifier:9200')).toBe(false);
+  });
+});
+
+describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
+  async function creerCalculBrouillon(periodeDebut: string, periodeFin: string): Promise<string> {
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 1000, referencesPieces: [1] }],
+      tvaNette: 1000,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    return avecClient((client) => enregistrerCalcul(client, dossierId, periodeDebut, periodeFin, resultat));
+  }
+
+  async function creerUtilisateurAjust(): Promise<string> {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U Ajust', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u-ajust-${Date.now()}@test.fr`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('ajuste un montant sur un calcul en brouillon, trace l’audit', async () => {
+    const calculId = await creerCalculBrouillon('2025-07-01', '2025-07-31');
+    const utilisateurId = await creerUtilisateurAjust();
+
+    await avecClient((client) =>
+      ajusterMontantCalcul(client, calculId, 'collectee_totale', 1000, 1100, 'Facture oubliée', utilisateurId)
+    );
+
+    const ajustements = await avecClient((client) => listerAjustementsCalcul(client, calculId));
+    expect(ajustements).toEqual([
+      {
+        typeMontant: 'collectee_totale',
+        montantOriginal: 1000,
+        montantAjuste: 1100,
+        justification: 'Facture oubliée',
+        createdAt: expect.any(String),
+      },
+    ]);
+
+    const audit = await avecClient((client) =>
+      client.query(`SELECT * FROM audit_log WHERE type_evenement = 'montant_calcul_ajuste' AND details->>'calculId' = $1`, [
+        calculId,
+      ])
+    );
+    expect(audit.rows).toHaveLength(1);
+  });
+
+  it('un ré-ajustement garde le montant_original du tout premier appel', async () => {
+    const calculId = await creerCalculBrouillon('2025-08-01', '2025-08-31');
+    const utilisateurId = await creerUtilisateurAjust();
+
+    await avecClient((client) =>
+      ajusterMontantCalcul(client, calculId, 'collectee_totale', 1000, 1100, 'Premier ajustement', utilisateurId)
+    );
+    await avecClient((client) =>
+      ajusterMontantCalcul(client, calculId, 'collectee_totale', 1000, 1200, 'Deuxième ajustement', utilisateurId)
+    );
+
+    const ajustements = await avecClient((client) => listerAjustementsCalcul(client, calculId));
+    expect(ajustements).toHaveLength(1);
+    expect(ajustements[0]).toMatchObject({
+      montantOriginal: 1000, // toujours le tout premier, pas 1100
+      montantAjuste: 1200,
+      justification: 'Deuxième ajustement',
+    });
+  });
+
+  it('refuse un ajustement sur un calcul déjà validé', async () => {
+    const calculId = await creerCalculBrouillon('2025-09-01', '2025-09-30');
+    const utilisateurId = await creerUtilisateurAjust();
+    await avecClient((client) => validerCalcul(client, calculId, utilisateurId));
+
+    await expect(
+      avecClient((client) =>
+        ajusterMontantCalcul(client, calculId, 'collectee_totale', 1000, 1100, 'Trop tard', utilisateurId)
+      )
+    ).rejects.toThrow(CalculPlusEnBrouillonError);
+  });
+
+  it('retire un ajustement existant, refuse aussi sur un calcul validé', async () => {
+    const calculId = await creerCalculBrouillon('2025-10-01', '2025-10-31');
+    const utilisateurId = await creerUtilisateurAjust();
+
+    await avecClient((client) =>
+      ajusterMontantCalcul(client, calculId, 'deductible_totale', 500, 450, 'Correction', utilisateurId)
+    );
+    await avecClient((client) => retirerAjustementCalcul(client, calculId, 'deductible_totale', utilisateurId));
+
+    const ajustements = await avecClient((client) => listerAjustementsCalcul(client, calculId));
+    expect(ajustements).toEqual([]);
+
+    await avecClient((client) => validerCalcul(client, calculId, utilisateurId));
+    await expect(
+      avecClient((client) => retirerAjustementCalcul(client, calculId, 'deductible_totale', utilisateurId))
+    ).rejects.toThrow(CalculPlusEnBrouillonError);
   });
 });
