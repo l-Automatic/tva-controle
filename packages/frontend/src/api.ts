@@ -11,11 +11,14 @@ import type {
   Proposition,
   QualificationEncaissement,
   ResultatCycle,
+  Role,
+  Session,
   TauxAssigne,
   TauxAssigneEntry,
   TiersReference,
   TypeBienVehicule,
   TypeMontantAjustement,
+  UtilisateurCabinet,
   Vehicule,
 } from './types';
 
@@ -31,19 +34,48 @@ export class ApiError extends Error {
   }
 }
 
+// Authentification (brief v25) — remplace l'ancien en-tête x-cabinet-id
+// (disparu côté backend) par Authorization: Bearer <jeton>, le cabinet
+// vient désormais du jeton côté serveur. Module-level plutôt que passé en
+// paramètre partout : évite de faire remonter le jeton jusqu'à chacun des
+// ~60 appels existants pour un mécanisme purement transverse.
+let jetonActuel: string | null = null;
+let gestionnaireNonAutorise: (() => void) | null = null;
+
+export function definirJeton(jeton: string | null): void {
+  jetonActuel = jeton;
+}
+
+// Appelé une fois par App.tsx pour être notifié d'un 401 sur N'IMPORTE
+// quel appel (jeton absent, invalide ou expiré) — efface la session et
+// revient à l'écran de connexion, peu importe quel composant a déclenché
+// l'appel qui a échoué.
+export function surSessionExpiree(gestionnaire: (() => void) | null): void {
+  gestionnaireNonAutorise = gestionnaire;
+}
+
+// cabinetId conservé en paramètre sur toutes les fonctions ci-dessous pour
+// ne pas devoir toucher chacun de leurs appelants existants — mais il n'est
+// plus utilisé ici : le cabinet vient exclusivement du jeton côté serveur
+// depuis le retrait de x-cabinet-id (brief v25).
 async function request<T>(
   path: string,
   cabinetId: string,
   init: RequestInit = {}
 ): Promise<T> {
+  void cabinetId;
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
-      'x-cabinet-id': cabinetId,
+      ...(jetonActuel ? { Authorization: `Bearer ${jetonActuel}` } : {}),
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...init.headers,
     },
   });
+
+  if (response.status === 401) {
+    gestionnaireNonAutorise?.();
+  }
 
   if (!response.ok) {
     let message = response.statusText;
@@ -60,6 +92,51 @@ async function request<T>(
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+// Route publique (pas de jeton à envoyer, cf. ROUTES_PUBLIQUES côté
+// backend) — 401 volontairement générique ("Identifiants invalides."),
+// jamais de distinction email inconnu / mot de passe incorrect.
+export async function login(email: string, motDePasse: string): Promise<Session> {
+  const response = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, motDePasse }),
+  });
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const body = (await response.json()) as { erreur?: string };
+      if (body.erreur) message = body.erreur;
+    } catch {
+      // corps non-JSON, on garde le statusText
+    }
+    throw new ApiError(message, response.status);
+  }
+  return (await response.json()) as Session;
+}
+
+// --- Gestion des utilisateurs (admin_cabinet uniquement, 403 sinon) ---
+
+export function fetchUtilisateurs(cabinetId: string): Promise<UtilisateurCabinet[]> {
+  return request<UtilisateurCabinet[]>('/utilisateurs', cabinetId);
+}
+
+export function creerUtilisateur(
+  cabinetId: string,
+  params: { nom: string; email: string; role: Role; motDePasse: string }
+): Promise<{ id: string }> {
+  return request<{ id: string }>('/utilisateurs', cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export function redefinirMotDePasse(cabinetId: string, utilisateurId: string, motDePasse: string): Promise<void> {
+  return request<void>(`/utilisateurs/${utilisateurId}/mot-de-passe`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ motDePasse }),
+  });
 }
 
 export function fetchAnomalies(
@@ -193,23 +270,29 @@ export function fetchAudit(
   return request<AuditEvenement[]>(`/dossiers/${dossierId}/audit${query}`, cabinetId);
 }
 
-// Un lien <a href> classique ne peut pas envoyer le header x-cabinet-id
-// (nécessaire pour le contexte RLS côté serveur) — on récupère donc le CSV
-// via fetch, puis on déclenche le téléchargement navigateur nous-mêmes via
-// une URL objet temporaire.
+// Un lien <a href> classique ne peut pas envoyer le header Authorization
+// (nécessaire pour l'authentification côté serveur) — on récupère donc le
+// CSV via fetch, puis on déclenche le téléchargement navigateur nous-mêmes
+// via une URL objet temporaire.
 export async function telechargerExportAudit(
   cabinetId: string,
   dossierId: string,
   filtres: { typeEvenement?: string; acteur?: string } = {}
 ): Promise<void> {
+  void cabinetId;
   const params = new URLSearchParams();
   if (filtres.typeEvenement) params.set('typeEvenement', filtres.typeEvenement);
   if (filtres.acteur) params.set('acteur', filtres.acteur);
   const query = params.toString() ? `?${params.toString()}` : '';
 
+  // Fetch brut (pas de JSON, réponse CSV) — même remplacement d'en-tête que
+  // request() ci-dessus, cf. brief v25.
   const response = await fetch(`${BASE_URL}/dossiers/${dossierId}/audit/export${query}`, {
-    headers: { 'x-cabinet-id': cabinetId },
+    headers: jetonActuel ? { Authorization: `Bearer ${jetonActuel}` } : {},
   });
+  if (response.status === 401) {
+    gestionnaireNonAutorise?.();
+  }
   if (!response.ok) {
     throw new ApiError(response.statusText, response.status);
   }

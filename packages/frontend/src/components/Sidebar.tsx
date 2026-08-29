@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, LogOut, Search } from 'lucide-react';
 import { ApiError, fetchDossiers } from '../api';
 import { ICONE_ZONE } from '../icons';
-import type { Dossier } from '../types';
+import { LIBELLE_ROLE, type Dossier, type Role } from '../types';
 
-export type Zone = 'cycle' | 'configuration' | 'historique' | 'parametres';
+export type Zone = 'cycle' | 'configuration' | 'historique' | 'parametres' | 'utilisateurs';
 
-export const ZONES: { id: Zone; libelle: string; description: string }[] = [
+export const ZONES: { id: Zone; libelle: string; description: string; roles?: Role[] }[] = [
   {
     id: 'cycle',
     libelle: 'Cycle',
@@ -30,16 +30,24 @@ export const ZONES: { id: Zone; libelle: string; description: string }[] = [
     description:
       'Réglages techniques — clé Mistral (cabinet), et décisions déjà validées modifiables (confiance des tiers, comptes retirés d’une convention, taux rejetés).',
   },
+  {
+    id: 'utilisateurs',
+    libelle: 'Utilisateurs',
+    // Réservée à admin_cabinet côté backend (brief v25) — masquée
+    // entièrement pour un collaborateur, pas juste désactivée.
+    roles: ['admin_cabinet'],
+    description: 'Ajoute des utilisateurs au cabinet, réinitialise un mot de passe oublié.',
+  },
 ];
 
 interface SidebarProps {
   cabinetId: string;
-  utilisateurId: string;
-  onIdentiteChange: (champ: 'cabinetId' | 'utilisateurId', valeur: string) => void;
+  role: Role;
   dossier: Dossier | null;
   onSelectDossier: (d: Dossier) => void;
   zone: Zone;
   onChangeZone: (z: Zone) => void;
+  onDeconnexion: () => void;
 }
 
 function RechercheDossier({
@@ -104,14 +112,15 @@ function RechercheDossier({
 // pas ici (cf. brief v2, section 1).
 export function Sidebar({
   cabinetId,
-  utilisateurId,
-  onIdentiteChange,
+  role,
   dossier,
   onSelectDossier,
   zone,
   onChangeZone,
+  onDeconnexion,
 }: SidebarProps) {
   const [rechercheOuverte, setRechercheOuverte] = useState(!dossier);
+  const zonesVisibles = ZONES.filter((z) => !z.roles || z.roles.includes(role));
 
   function handleSelect(d: Dossier) {
     onSelectDossier(d);
@@ -139,7 +148,7 @@ export function Sidebar({
 
       {dossier && !rechercheOuverte && (
         <nav className="sidebar-nav">
-          {ZONES.map((z) => {
+          {zonesVisibles.map((z) => {
             const Icone = ICONE_ZONE[z.id];
             return (
               <button
@@ -157,24 +166,11 @@ export function Sidebar({
 
       <div className="sidebar-footer">
         <p className="sidebar-section-titre">Session</p>
-        <label className="sidebar-footer-label">
-          Cabinet
-          <input
-            type="text"
-            value={cabinetId}
-            onChange={(e) => onIdentiteChange('cabinetId', e.target.value)}
-            placeholder="UUID du cabinet"
-          />
-        </label>
-        <label className="sidebar-footer-label">
-          Utilisateur
-          <input
-            type="text"
-            value={utilisateurId}
-            onChange={(e) => onIdentiteChange('utilisateurId', e.target.value)}
-            placeholder="UUID de l'utilisateur"
-          />
-        </label>
+        <p className="sidebar-footer-role">{LIBELLE_ROLE[role]}</p>
+        <button className="sidebar-logout" onClick={onDeconnexion}>
+          <LogOut size={14} aria-hidden="true" />
+          Déconnexion
+        </button>
       </div>
     </aside>
   );

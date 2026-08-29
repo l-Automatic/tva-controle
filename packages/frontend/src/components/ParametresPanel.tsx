@@ -16,6 +16,7 @@ import {
   VALEURS_REGIME_TVA_ENCAISSEMENT,
   type Parametre,
   type RegimeTvaEncaissement,
+  type Role,
 } from '../types';
 import { ParametresDecisionsPanel } from './ParametresDecisionsPanel';
 
@@ -23,6 +24,7 @@ interface ParametresPanelProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
+  role: Role;
   degradeActif: string;
   onDegradeChange: (degrade: string) => void;
 }
@@ -355,19 +357,22 @@ function DossierSection({
 
 // Deux sous-sections distinctes et clairement séparées visuellement : les
 // routes API sont déjà séparées (/parametres-cabinet vs
-// /dossiers/:id/parametres), on garde cette séparation côté utilisateur —
-// pas de mode admin/collaborateur pour l'instant, les deux restent
-// accessibles sans distinction de rôle (cf. brief refonte, section 3).
+// /dossiers/:id/parametres). Depuis le brief v25, /parametres-cabinet
+// répond 403 à un collaborateur côté backend — CabinetSection est donc
+// masquée ENTIÈREMENT pour ce rôle, pas juste désactivée ; le reste
+// (paramètres dossier) reste accessible aux deux rôles, cf. brief refonte
+// section 3 pour ce choix d'origine.
 export function ParametresPanel({
   cabinetId,
   dossierId,
   utilisateurId,
+  role,
   degradeActif,
   onDegradeChange,
 }: ParametresPanelProps) {
   return (
     <>
-      <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />
+      {role === 'admin_cabinet' && <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />}
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <DegradeSection

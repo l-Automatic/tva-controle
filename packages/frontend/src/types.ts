@@ -372,3 +372,38 @@ export interface AjustementCalcul {
   justification: string;
   createdAt: string;
 }
+
+// --- Authentification (brief v25) — remplace l'ancienne identité saisie à
+// la main (cabinetId/utilisateurId tapés dans le volet latéral) par une
+// vraie connexion email/mot de passe. Le jeton dure 12h, aucun
+// renouvellement automatique dans cette v1. ---
+
+export type Role = 'collaborateur' | 'admin_cabinet';
+
+export const LIBELLE_ROLE: Record<Role, string> = {
+  collaborateur: 'Collaborateur',
+  admin_cabinet: 'Administrateur cabinet',
+};
+
+export interface UtilisateurConnecte {
+  id: string;
+  cabinetId: string;
+  role: Role;
+}
+
+export interface Session {
+  jeton: string;
+  utilisateur: UtilisateurConnecte;
+}
+
+// Gestion des utilisateurs (admin_cabinet uniquement) — aUnMotDePasse:false
+// signale un utilisateur créé mais qui n'a encore jamais pu se connecter
+// (mot de passe jamais défini).
+export interface UtilisateurCabinet {
+  id: string;
+  nom: string;
+  email: string;
+  role: Role;
+  statut: string;
+  aUnMotDePasse: boolean;
+}

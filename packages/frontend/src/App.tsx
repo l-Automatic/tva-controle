@@ -1,12 +1,14 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ATraiterPanel } from './components/ATraiterPanel';
+import { LoginScreen } from './components/LoginScreen';
 import { ParametresPanel } from './components/ParametresPanel';
 import { ProgressionPanel } from './components/ProgressionPanel';
 import { Sidebar, ZONES, type Zone } from './components/Sidebar';
 import { ConfigurationZone, type SousOngletConfiguration } from './components/zones/ConfigurationZone';
 import { CycleZone } from './components/zones/CycleZone';
 import { HistoriqueZone } from './components/zones/HistoriqueZone';
-import { fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresDossier } from './api';
+import { UtilisateursZone } from './components/zones/UtilisateursZone';
+import { definirJeton, fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresDossier, surSessionExpiree } from './api';
 import { toDateOnly } from './dateUtils';
 import {
   CLE_THEME_DEGRADE,
@@ -18,24 +20,21 @@ import {
   type CompteSansTauxAssigne,
   type Dossier,
   type ElementATraiter,
+  type Session,
 } from './types';
 
-const STORAGE_KEY = 'module6.identite';
+const STORAGE_KEY_SESSION = 'module6.session';
 const STORAGE_KEY_DOSSIER = 'module6.dossier';
 
-interface Identite {
-  cabinetId: string;
-  utilisateurId: string;
-}
-
-function chargerIdentite(): Identite {
+function chargerSession(): Session | null {
   try {
-    const brut = localStorage.getItem(STORAGE_KEY);
-    if (brut) return JSON.parse(brut) as Identite;
+    const brut = localStorage.getItem(STORAGE_KEY_SESSION);
+    if (brut) return JSON.parse(brut) as Session;
   } catch {
-    // localStorage indisponible ou contenu invalide, on repart des valeurs par défaut
+    // localStorage indisponible ou contenu invalide, on repart sans session
+    // (l'écran de connexion s'affichera).
   }
-  return { cabinetId: '', utilisateurId: '' };
+  return null;
 }
 
 function chargerDossier(): Dossier | null {
@@ -49,7 +48,7 @@ function chargerDossier(): Dossier | null {
 }
 
 export function App() {
-  const [identite, setIdentite] = useState<Identite>(chargerIdentite);
+  const [session, setSession] = useState<Session | null>(chargerSession);
   const [dossier, setDossier] = useState<Dossier | null>(chargerDossier);
   const [zone, setZone] = useState<Zone>('cycle');
   const [sousOngletConfiguration, setSousOngletConfiguration] = useState<SousOngletConfiguration>('comptes');
@@ -60,7 +59,49 @@ export function App() {
   const [suggestionsTauxClients, setSuggestionsTauxClients] = useState<CompteClientSansTauxAssigne[]>([]);
   const [suggestionsAutoliquidation, setSuggestionsAutoliquidation] = useState<CompteACategoriser[]>([]);
 
-  const { cabinetId, utilisateurId } = identite;
+  // Authentification (brief v25) — jeton donné à api.ts dès qu'une session
+  // existe (chargée depuis localStorage au premier rendu, ou fraîchement
+  // posée après connexion) ; surSessionExpiree branche un 401 SUR N'IMPORTE
+  // QUEL appel (jeton absent, invalide ou expiré) vers une déconnexion
+  // propre — un seul point d'écoute pour toute l'application.
+  useEffect(() => {
+    definirJeton(session?.jeton ?? null);
+  }, [session]);
+
+  useEffect(() => {
+    surSessionExpiree(() => deconnexion());
+    return () => surSessionExpiree(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function connexionReussie(nouvelleSession: Session) {
+    setSession(nouvelleSession);
+    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(nouvelleSession));
+  }
+
+  // Réinitialise aussi le dossier et l'état éphémère lié — sans ça, un
+  // autre utilisateur (éventuellement d'un cabinet différent) qui se
+  // connecte ensuite dans le même onglet verrait encore le dossier et les
+  // suggestions de la session précédente.
+  function deconnexion() {
+    setSession(null);
+    localStorage.removeItem(STORAGE_KEY_SESSION);
+    localStorage.removeItem(STORAGE_KEY_DOSSIER);
+    definirJeton(null);
+    setDossier(null);
+    setZone('cycle');
+    setPeriodeCycle(null);
+    setSuggestionsTauxComptes([]);
+    setSuggestionsTauxClients([]);
+    setSuggestionsAutoliquidation([]);
+  }
+
+  // cabinetId toujours calculé, jamais sous condition — comme avant
+  // l'authentification (identite.cabinetId pouvait déjà être vide avant
+  // saisie) : garde tous les hooks ci-dessous inconditionnels, le retour
+  // anticipé vers l'écran de connexion arrive après, cf. plus bas (règle
+  // des hooks React : jamais après un retour conditionnel).
+  const cabinetId = session?.utilisateur.cabinetId ?? '';
 
   useEffect(() => {
     if (!cabinetId || !dossier) {
@@ -78,11 +119,12 @@ export function App() {
     };
   }, [cabinetId, dossier]);
 
-  function mettreAJourIdentite(champ: keyof Identite, valeur: string) {
-    const suivante = { ...identite, [champ]: valeur };
-    setIdentite(suivante);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(suivante));
+  if (!session) {
+    return <LoginScreen onConnecte={connexionReussie} />;
   }
+
+  const { role } = session.utilisateur;
+  const utilisateurId = session.utilisateur.id;
 
   function selectionnerDossier(d: Dossier) {
     setDossier(d);
@@ -108,7 +150,6 @@ export function App() {
   // de /a-traiter ne portent pas la période/la clé complète — on la
   // retrouve via les listes déjà exposées.
   async function naviguerVersElement(el: ElementATraiter) {
-    const { cabinetId } = identite;
     if (!dossier) return;
 
     switch (el.type) {
@@ -152,24 +193,20 @@ export function App() {
     }
   }
 
-  const identiteComplete = Boolean(cabinetId && utilisateurId);
-
   return (
     <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
       <Sidebar
         cabinetId={cabinetId}
-        utilisateurId={utilisateurId}
-        onIdentiteChange={mettreAJourIdentite}
+        role={role}
         dossier={dossier}
         onSelectDossier={selectionnerDossier}
         zone={zone}
         onChangeZone={allerVersZone}
+        onDeconnexion={deconnexion}
       />
 
       <div className="app-content">
-        {!identiteComplete ? (
-          <p className="empty">Renseignez le cabinet et l'utilisateur dans le volet latéral pour commencer.</p>
-        ) : !dossier ? (
+        {!dossier ? (
           <p className="empty">Sélectionnez un dossier dans le volet latéral pour commencer.</p>
         ) : (
           <>
@@ -230,10 +267,12 @@ export function App() {
                   cabinetId={cabinetId}
                   dossierId={dossier.id}
                   utilisateurId={utilisateurId}
+                  role={role}
                   degradeActif={degrade}
                   onDegradeChange={setDegrade}
                 />
               )}
+              {zone === 'utilisateurs' && role === 'admin_cabinet' && <UtilisateursZone cabinetId={cabinetId} />}
             </main>
           </>
         )}

@@ -27,17 +27,19 @@ import {
   Tags,
   Undo2,
   UserPlus,
+  Users,
   UserX,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import type { TypeElementATraiter } from './types';
 
-export const ICONE_ZONE: Record<'cycle' | 'configuration' | 'historique' | 'parametres', LucideIcon> = {
+export const ICONE_ZONE: Record<'cycle' | 'configuration' | 'historique' | 'parametres' | 'utilisateurs', LucideIcon> = {
   cycle: RefreshCw,
   configuration: Settings2,
   historique: History,
   parametres: Settings,
+  utilisateurs: Users,
 };
 
 export const ICONE_ACTION = {
