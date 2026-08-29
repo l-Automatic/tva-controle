@@ -1361,6 +1361,17 @@ describe('listerAnomaliesTraiteesParTypeEtPiece', () => {
 });
 
 describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
+  // Périodes générées dynamiquement (année très éloignée + compteur), pas de
+  // dates fixes — cette base de test partagée a accumulé des dizaines de
+  // calculs 'valide' au fil de la session, une date fixe comme '2025-07-01'
+  // finit tôt ou tard par entrer en collision avec un test antérieur.
+  let compteurPeriode = 0;
+  function periodeUnique(): [string, string] {
+    compteurPeriode += 1;
+    const annee = 2600 + compteurPeriode; // jamais utilisée ailleurs dans ce fichier
+    return [`${annee}-01-01`, `${annee}-01-31`];
+  }
+
   async function creerCalculBrouillon(periodeDebut: string, periodeFin: string): Promise<string> {
     const resultat: ResultatCalculTva = {
       lignes: [{ categorie: 'collectee_20', montant: 1000, referencesPieces: [1] }],
@@ -1382,7 +1393,7 @@ describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
   }
 
   it('ajuste un montant sur un calcul en brouillon, trace l’audit', async () => {
-    const calculId = await creerCalculBrouillon('2025-07-01', '2025-07-31');
+    const calculId = await creerCalculBrouillon(...periodeUnique());
     const utilisateurId = await creerUtilisateurAjust();
 
     await avecClient((client) =>
@@ -1409,7 +1420,7 @@ describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
   });
 
   it('un ré-ajustement garde le montant_original du tout premier appel', async () => {
-    const calculId = await creerCalculBrouillon('2025-08-01', '2025-08-31');
+    const calculId = await creerCalculBrouillon(...periodeUnique());
     const utilisateurId = await creerUtilisateurAjust();
 
     await avecClient((client) =>
@@ -1429,7 +1440,7 @@ describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
   });
 
   it('refuse un ajustement sur un calcul déjà validé', async () => {
-    const calculId = await creerCalculBrouillon('2025-09-01', '2025-09-30');
+    const calculId = await creerCalculBrouillon(...periodeUnique());
     const utilisateurId = await creerUtilisateurAjust();
     await avecClient((client) => validerCalcul(client, calculId, utilisateurId));
 
@@ -1441,7 +1452,7 @@ describe('ajusterMontantCalcul et retirerAjustementCalcul', () => {
   });
 
   it('retire un ajustement existant, refuse aussi sur un calcul validé', async () => {
-    const calculId = await creerCalculBrouillon('2025-10-01', '2025-10-31');
+    const calculId = await creerCalculBrouillon(...periodeUnique());
     const utilisateurId = await creerUtilisateurAjust();
 
     await avecClient((client) =>
