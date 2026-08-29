@@ -51,12 +51,35 @@ import {
   listerParametresCabinet,
   listerParametresDossier,
   type AuditEvenementDb,
+  trouverUtilisateurPourConnexion,
+  definirMotDePasse,
+  hasherMotDePasse,
+  verifierMotDePasse,
+  creerJeton,
+  verifierJeton,
+  type PayloadJeton,
 } from '@tva-controle/orchestrateur-module9';
 
-// Pas d'authentification construite à ce stade — le cabinet est identifié
-// par un header explicite plutôt que deviné. Stand-in volontaire en
-// attendant une vraie couche d'auth (hors scope de ce module).
-const HEADER_CABINET = 'x-cabinet-id';
+// Authentification (10/08) — remplace l'ancien stand-in (header cabinet non
+// vérifié, jamais une vraie preuve d'identité). Décision explicite de Rami :
+// aller vite, sans dépendance externe, un secret HMAC suffit — pas de
+// bibliothèque JWT, cf. auth.ts (orchestrateur-module9).
+const JWT_SECRET = process.env.JWT_SECRET ?? 'CHANGE_ME_JWT_SECRET_EN_PRODUCTION';
+if (JWT_SECRET === 'CHANGE_ME_JWT_SECRET_EN_PRODUCTION') {
+  console.warn(
+    '[AVERTISSEMENT] JWT_SECRET non défini — secret par défaut utilisé, ' +
+      'à ne JAMAIS utiliser en production. Définir la variable d\'environnement JWT_SECRET.'
+  );
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    // Renseigné par le middleware d'authentification global (preHandler
+    // ci-dessous) une fois le jeton vérifié — jamais avant, jamais par le
+    // client lui-même.
+    utilisateur?: PayloadJeton;
+  }
+}
 
 // Échappement CSV minimal (RFC 4180) : entoure de guillemets et double les
 // guillemets internes dès qu'une valeur contient une virgule, un guillemet
@@ -91,13 +114,89 @@ function versCsv(evenements: AuditEvenementDb[]): string {
 export function buildApp(pool: Pool): FastifyInstance {
   const app = Fastify({ logger: false });
 
+  // Routes publiques : la connexion elle-même, et le contrôle de vie du
+  // service. Tout le reste exige un jeton valide.
+  const ROUTES_PUBLIQUES = new Set(['/health', '/auth/login']);
+
   app.addHook('preHandler', async (request, reply) => {
-    if (request.url === '/health') return;
-    const cabinetId = request.headers[HEADER_CABINET];
-    if (!cabinetId || typeof cabinetId !== 'string') {
-      return reply.code(400).send({ erreur: `Header ${HEADER_CABINET} requis` });
+    if (ROUTES_PUBLIQUES.has(request.url.split('?')[0]!)) return;
+
+    const enTete = request.headers['authorization'];
+    if (!enTete || !enTete.startsWith('Bearer ')) {
+      return reply.code(401).send({ erreur: 'Authentification requise (en-tête Authorization manquant).' });
     }
+
+    const jeton = enTete.slice('Bearer '.length);
+    const payload = verifierJeton(jeton, JWT_SECRET);
+    if (!payload) {
+      return reply.code(401).send({ erreur: 'Jeton invalide ou expiré.' });
+    }
+
+    request.utilisateur = payload;
   });
+
+  // --- Authentification ---
+  app.post<{ Body: { email: string; motDePasse: string } }>('/auth/login', async (request, reply) => {
+    const { email, motDePasse } = request.body;
+    if (!email || !motDePasse) {
+      return reply.code(400).send({ erreur: 'email et motDePasse requis' });
+    }
+
+    // Cabinet inconnu à ce stade (c'est justement ce qu'on cherche) —
+    // client obtenu directement, jamais via avecContexteCabinet.
+    const client = await pool.connect();
+    let utilisateur;
+    try {
+      utilisateur = await trouverUtilisateurPourConnexion(client, email);
+    } finally {
+      client.release();
+    }
+
+    // Même message d'erreur, que l'email soit inconnu, le mot de passe pas
+    // encore défini, le compte inactif, ou le mot de passe incorrect — ne
+    // jamais laisser un attaquant distinguer "email inconnu" de "mauvais
+    // mot de passe".
+    const messageEchec = 'Identifiants invalides.';
+    if (!utilisateur || !utilisateur.motDePasseHash || utilisateur.statut !== 'actif') {
+      return reply.code(401).send({ erreur: messageEchec });
+    }
+
+    const valide = await verifierMotDePasse(motDePasse, utilisateur.motDePasseHash);
+    if (!valide) {
+      return reply.code(401).send({ erreur: messageEchec });
+    }
+
+    const jeton = creerJeton(
+      { utilisateurId: utilisateur.id, cabinetId: utilisateur.cabinetId, role: utilisateur.role },
+      JWT_SECRET
+    );
+    reply.code(200).send({
+      jeton,
+      utilisateur: { id: utilisateur.id, cabinetId: utilisateur.cabinetId, role: utilisateur.role },
+    });
+  });
+
+  // Réservé aux admin_cabinet, restreint à leur propre cabinet (RLS sur
+  // utilisateurs, cf. definirMotDePasse) — pas de flux "mot de passe
+  // oublié" par email pour cette première version (décision explicite de
+  // Rami, éviter la brique email pour aller vite).
+  app.post<{ Params: { id: string }; Body: { motDePasse: string } }>(
+    '/utilisateurs/:id/mot-de-passe',
+    async (request, reply) => {
+      if (request.utilisateur?.role !== 'admin_cabinet') {
+        return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+      }
+      const { motDePasse } = request.body;
+      if (!motDePasse || motDePasse.length < 8) {
+        return reply.code(400).send({ erreur: 'Mot de passe requis (au moins 8 caractères).' });
+      }
+      const hash = await hasherMotDePasse(motDePasse);
+      await avecContexteCabinet(pool, request.utilisateur.cabinetId, (client) =>
+        definirMotDePasse(client, request.params.id, hash)
+      );
+      reply.code(204).send();
+    }
+  );
 
   app.get('/health', async () => ({ statut: 'ok' }));
 
@@ -105,7 +204,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string; periode?: string } }>(
     '/dossiers/:dossierId/anomalies',
     async (request) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       return avecContexteCabinet(pool, cabinetId, (client) =>
         listerAnomalies(client, request.params.dossierId, request.query)
       );
@@ -115,7 +214,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string; commentaire?: string } }>(
     '/anomalies/:id/resoudre',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         resoudreAnomalie(client, request.params.id, request.body.utilisateurId, request.body.commentaire)
       );
@@ -129,7 +228,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Body: { anomalieIds: string[]; utilisateurId: string; commentaire: string } }>(
     '/anomalies/resoudre-en-masse',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       const { anomalieIds, utilisateurId, commentaire } = request.body;
       if (!commentaire) {
         return reply.code(400).send({ erreur: 'commentaire requis pour une resolution en masse' });
@@ -144,7 +243,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string; commentaire: string } }>(
     '/anomalies/:id/justifier',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         justifierAnomalie(client, request.params.id, request.body.utilisateurId, request.body.commentaire)
       );
@@ -162,7 +261,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       | { decision: 'hors_vente'; motif: string }
     );
   }>('/anomalies/:id/qualifier', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { utilisateurId, ...qualification } = request.body;
     if (qualification.decision === 'vente' && typeof qualification.taux !== 'number') {
       return reply.code(400).send({ erreur: 'taux (nombre) requis pour une qualification "vente"' });
@@ -187,7 +286,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
     '/dossiers/:dossierId/conventions',
     async (request) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       return avecContexteCabinet(pool, cabinetId, (client) =>
         listerConventions(client, request.params.dossierId, request.query.statut)
       );
@@ -201,7 +300,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { dossierId: string }; Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
     '/dossiers/:dossierId/conventions',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       const { utilisateurId, cle, valeur } = request.body;
       if (!utilisateurId || !cle || valeur === undefined) {
         return reply.code(400).send({ erreur: 'utilisateurId, cle et valeur sont requis' });
@@ -216,7 +315,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/conventions/:id/confirmer',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         confirmerConvention(client, request.params.id, request.body.utilisateurId)
       );
@@ -227,7 +326,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/conventions/:id/rejeter',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         rejeterConvention(client, request.params.id, request.body.utilisateurId)
       );
@@ -242,7 +341,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Body: { dossierId: string; cle: string; compte: string; utilisateurId: string } }>(
     '/conventions/retirer-compte',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       const { dossierId, cle, compte, utilisateurId } = request.body;
       try {
         await avecContexteCabinet(pool, cabinetId, (client) =>
@@ -262,7 +361,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
     '/dossiers/:dossierId/taux-historique',
     async (request) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       return avecContexteCabinet(pool, cabinetId, (client) =>
         listerTauxHistorique(client, request.params.dossierId, request.query.statut)
       );
@@ -272,7 +371,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/taux-historique/:id/confirmer',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         confirmerTauxHistorique(client, request.params.id, request.body.utilisateurId)
       );
@@ -283,7 +382,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/taux-historique/:id/rejeter',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         rejeterTauxHistorique(client, request.params.id, request.body.utilisateurId)
       );
@@ -297,7 +396,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { dossierId: string }; Querystring: { statut?: string } }>(
     '/dossiers/:dossierId/taux-historique-tiers',
     async (request) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       return avecContexteCabinet(pool, cabinetId, (client) =>
         listerTauxHistoriqueTiers(client, request.params.dossierId, request.query.statut)
       );
@@ -307,7 +406,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/taux-historique-tiers/:id/confirmer',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         confirmerTauxHistoriqueTiers(client, request.params.id, request.body.utilisateurId)
       );
@@ -318,7 +417,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/taux-historique-tiers/:id/rejeter',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         rejeterTauxHistoriqueTiers(client, request.params.id, request.body.utilisateurId)
       );
@@ -330,7 +429,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   // --- Parc de véhicules (immobilisations) — table prête depuis le
   // schéma initial, aucune route n'existait jusqu'ici pour l'alimenter.
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/vehicules', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => listerVehicules(client, request.params.dossierId));
   });
 
@@ -338,7 +437,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Body: VehiculeManuel & { utilisateurId: string };
   }>('/dossiers/:dossierId/vehicules', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { utilisateurId, ...vehicule } = request.body;
     const id = await avecContexteCabinet(pool, cabinetId, (client) =>
       ajouterVehiculeManuel(client, request.params.dossierId, vehicule, utilisateurId)
@@ -349,7 +448,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/vehicules/:id/retirer',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
         retirerVehicule(client, request.params.id, request.body.utilisateurId)
       );
@@ -358,7 +457,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   );
 
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/tiers', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => listerTiersReference(client, request.params.dossierId));
   });
 
@@ -369,7 +468,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Body: { numeroCompteTiers: string; niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance'; utilisateurId: string };
   }>('/dossiers/:dossierId/tiers/corriger', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { numeroCompteTiers, niveauConfiance, utilisateurId } = request.body;
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
@@ -387,7 +486,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   // --- Taux assigné par compte (produit/charge) — assignation directe, une
   // fois pour toutes, cf. migration 010. Pas de workflow candidate/confirmed.
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/taux-assignes', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) =>
       listerTauxAssignes(client, request.params.dossierId)
     );
@@ -397,7 +496,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Body: { compte: string; taux: TauxAssigne; utilisateurId: string };
   }>('/dossiers/:dossierId/taux-assignes', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { compte, taux, utilisateurId } = request.body;
     await avecContexteCabinet(pool, cabinetId, (client) =>
       assignerTauxCompte(client, request.params.dossierId, compte, taux, utilisateurId)
@@ -412,7 +511,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Body: { numeroCompteTiers: string; tauxHabituel: number | 'mixte'; utilisateurId: string };
   }>('/dossiers/:dossierId/taux-historique-tiers/assigner', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { numeroCompteTiers, tauxHabituel, utilisateurId } = request.body;
     await avecContexteCabinet(pool, cabinetId, (client) =>
       assignerTauxHistoriqueTiersManuel(client, request.params.dossierId, numeroCompteTiers, tauxHabituel, utilisateurId)
@@ -422,14 +521,14 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   // --- Calculs ---
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/calculs', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => listerCalculs(client, request.params.dossierId));
   });
 
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
     '/calculs/:id/valider',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       try {
         await avecContexteCabinet(pool, cabinetId, (client) =>
           validerCalcul(client, request.params.id, request.body.utilisateurId)
@@ -447,7 +546,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.post<{ Params: { id: string }; Body: { utilisateurId: string; motif: string } }>(
     '/calculs/:id/rejeter',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       if (!request.body.motif) {
         return reply.code(400).send({ erreur: 'motif requis pour rejeter un calcul' });
       }
@@ -469,7 +568,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   // calculs encore 'brouillon', additif (jamais un remplacement, cf.
   // migration 012).
   app.get<{ Params: { id: string } }>('/calculs/:id/ajustements', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => listerAjustementsCalcul(client, request.params.id));
   });
 
@@ -483,7 +582,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       utilisateurId: string;
     };
   }>('/calculs/:id/ajustements', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { typeMontant, montantOriginal, montantAjuste, justification, utilisateurId } = request.body;
     if (!justification || justification.trim().length === 0) {
       return reply.code(400).send({ erreur: 'justification requise pour ajuster un montant' });
@@ -505,7 +604,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { id: string; typeMontant: 'collectee_totale' | 'deductible_totale' };
     Body: { utilisateurId: string };
   }>('/calculs/:id/ajustements/:typeMontant/retirer', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
         retirerAjustementCalcul(client, request.params.id, request.params.typeMontant, request.body.utilisateurId)
@@ -524,7 +623,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Querystring: { typeEvenement?: string; acteur?: string; depuis?: string; jusqua?: string; limite?: string };
   }>('/dossiers/:dossierId/audit', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { typeEvenement, acteur, depuis, jusqua, limite } = request.query;
     return avecContexteCabinet(pool, cabinetId, (client) =>
       listerAuditLog(client, request.params.dossierId, {
@@ -541,7 +640,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Querystring: { typeEvenement?: string; acteur?: string; depuis?: string; jusqua?: string };
   }>('/dossiers/:dossierId/audit/export', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { typeEvenement, acteur, depuis, jusqua } = request.query;
     const evenements = await avecContexteCabinet(pool, cabinetId, (client) =>
       listerAuditLogPourExport(client, request.params.dossierId, {
@@ -574,7 +673,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       comptesCarburant?: string[];
     };
   }>('/dossiers/:dossierId/cycles', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { periodeDebut, periodeFin, pennylaneToken, ...overrides } = request.body;
 
     if (!periodeDebut || !periodeFin || !pennylaneToken) {
@@ -617,7 +716,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     Params: { dossierId: string };
     Body: { pennylaneToken: string; periodeDebut: string; periodeFin: string; utilisateurId: string };
   }>('/dossiers/:dossierId/motif-numerotation/analyser', async (request, reply) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     const { pennylaneToken, periodeDebut, periodeFin, utilisateurId } = request.body;
 
     if (!pennylaneToken || !periodeDebut || !periodeFin) {
@@ -644,8 +743,14 @@ export function buildApp(pool: Pool): FastifyInstance {
   });
 
   // --- Paramétrage cabinet (ex: clé API Mistral — présence = LLM activé) ---
-  app.get('/parametres-cabinet', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+  // Réservé au rôle admin_cabinet (décision de Rami, 10/08) — un
+  // collaborateur voit les dossiers de son cabinet mais jamais les
+  // paramètres du cabinet lui-même.
+  app.get('/parametres-cabinet', async (request, reply) => {
+    if (request.utilisateur!.role !== 'admin_cabinet') {
+      return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+    }
+    const cabinetId = request.utilisateur!.cabinetId;
     // listerParametresCabinet masque déjà les valeurs secrètes (ex:
     // mistral_api_key) avant de sortir de la couche DB — jamais de valeur en
     // clair à masquer ici, la garantie vient d'une seule source.
@@ -655,7 +760,10 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.put<{ Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
     '/parametres-cabinet',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      if (request.utilisateur!.role !== 'admin_cabinet') {
+        return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+      }
+      const cabinetId = request.utilisateur!.cabinetId;
       const { utilisateurId, cle, valeur } = request.body;
       if (!cle) {
         return reply.code(400).send({ erreur: 'cle requise' });
@@ -669,7 +777,7 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   // --- Paramétrage dossier (ex: désactivation d'un contrôle pour ce dossier) ---
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/parametres', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) =>
       listerParametresDossier(client, request.params.dossierId)
     );
@@ -678,7 +786,7 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.put<{ Params: { dossierId: string }; Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
     '/dossiers/:dossierId/parametres',
     async (request, reply) => {
-      const cabinetId = request.headers[HEADER_CABINET] as string;
+      const cabinetId = request.utilisateur!.cabinetId;
       const { utilisateurId, cle, valeur } = request.body;
       if (!cle) {
         return reply.code(400).send({ erreur: 'cle requise' });
@@ -692,13 +800,13 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   // --- Liste/recherche de dossiers pour un cabinet ---
   app.get<{ Querystring: { q?: string } }>('/dossiers', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => listerDossiers(client, cabinetId, request.query.q));
   });
 
   // --- Tout ce qui attend une décision humaine sur ce dossier ---
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/a-traiter', async (request) => {
-    const cabinetId = request.headers[HEADER_CABINET] as string;
+    const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) =>
       listerElementsATraiter(client, request.params.dossierId)
     );
