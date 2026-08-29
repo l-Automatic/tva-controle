@@ -363,7 +363,7 @@ export interface ParametreDb {
 // — parametreCabinetValeur, elle, la retourne en clair : usage strictement
 // serveur (ex: résoudre la clé pour un appel LLM), jamais exposée par une
 // route qui renvoie son résultat tel quel au client.
-const CLES_SECRETES = new Set(['mistral_api_key']);
+const CLES_SECRETES = new Set(['mistral_api_key', 'pennylane_firm_api_key']);
 
 export async function listerParametresCabinet(client: PoolClient, cabinetId: string): Promise<ParametreDb[]> {
   const res = await client.query(`SELECT cle, valeur, updated_at FROM parametres_cabinet WHERE cabinet_id = $1`, [
