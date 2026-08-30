@@ -44,8 +44,14 @@ describe('detecterComptesTvaNonReconnus', () => {
     expect(anomalies[0]?.compte).toBe('4454');
   });
 
-  it('whitelist 44551 (TVA à décaisser) et 44567 (crédit reporté) sans les signaler', () => {
-    const ecritures = [ecriture('44551', 1), ecriture('44567', 2)];
+  it('whitelist 44551, 44567, 44583, 44586, 44587 sans les signaler', () => {
+    const ecritures = [
+      ecriture('44551', 1),
+      ecriture('44567', 2),
+      ecriture('44583', 3),
+      ecriture('44586', 4),
+      ecriture('44587', 5),
+    ];
     expect(detecterComptesTvaNonReconnus(ecritures, {})).toEqual([]);
   });
 
