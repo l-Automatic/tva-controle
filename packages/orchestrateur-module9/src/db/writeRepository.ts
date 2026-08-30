@@ -1297,3 +1297,41 @@ export async function synchroniserDossiersCabinet(
 
   return resultat;
 }
+
+// ============================================================================
+// CONFIGURATION D'UN DOSSIER NOUVELLEMENT DÉCOUVERT (Phase 2, 10/08)
+// ============================================================================
+
+export class DossierIntrouvableError extends Error {
+  constructor(dossierId: string) {
+    super(`Dossier ${dossierId} introuvable, ou hors du cabinet courant.`);
+    this.name = 'DossierIntrouvableError';
+  }
+}
+
+// Un dossier synchronisé depuis l'API Cabinet arrive avec regime_tva
+// forcé à 'reel_normal' par défaut (une hypothèse, jamais une vérité
+// fiscale) et statut='onboarding' — ce contrôle rapide confirme les vrais
+// choix humains et fait passer le dossier à 'actif', le rendant
+// utilisable pour un vrai cycle. Peut aussi être appelé sur un dossier
+// déjà actif pour corriger sa configuration — pas restreint aux seuls
+// dossiers en onboarding.
+export async function configurerDossierOnboarding(
+  client: PoolClient,
+  dossierId: string,
+  regimeTva: 'reel_normal' | 'reel_simplifie' | 'franchise',
+  periodiciteDeclaration: 'mensuelle' | 'trimestrielle',
+  tvaEncaissement: boolean
+): Promise<void> {
+  const res = await client.query(
+    `UPDATE dossiers
+     SET regime_tva = $2, periodicite_declaration = $3, tva_encaissement = $4,
+         statut = 'actif', date_onboarding = COALESCE(date_onboarding, now())
+     WHERE id = $1
+     RETURNING id`,
+    [dossierId, regimeTva, periodiciteDeclaration, tvaEncaissement]
+  );
+  if (res.rowCount === 0) {
+    throw new DossierIntrouvableError(dossierId);
+  }
+}
