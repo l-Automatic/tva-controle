@@ -1,4 +1,8 @@
-export { PennylaneClient, PennylaneApiError } from './connectors/pennylane/client.js';
+export {
+  PennylaneClient,
+  PennylaneApiError,
+  type IPennylaneApiClient,
+} from './connectors/pennylane/client.js';
 export {
   fetchTrialBalance,
   filterComptesParPrefixe,
