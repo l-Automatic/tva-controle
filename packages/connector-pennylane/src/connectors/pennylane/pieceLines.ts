@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 import type { PennylanePieceLineItem, PennylanePieceLinesResponse } from './types.js';
 import type { LigneEcritureBrute } from '@tva-controle/core';
 
@@ -35,7 +35,7 @@ function mapLignePiece(item: PennylanePieceLineItem): LignePiece {
 // /ledger_entry_lines. Pour connaître le lettrage d'une ligne trouvée ici,
 // il faut la rappeler via fetchLettrage() avec son id.
 export async function fetchLignesDePiece(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   ledgerEntryId: number
 ): Promise<LignePiece[]> {
   const lignes: LignePiece[] = [];
