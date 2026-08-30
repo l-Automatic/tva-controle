@@ -1837,10 +1837,13 @@ describe('enregistrerAnomaliesPartielles', () => {
     );
 
     const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode }));
-    const compteNonReconnu = liste.find((a) => a.typeAnomalie === 'compte_tva_non_reconnu');
+    const listeAvecObsoletes = await avecClient((client) =>
+      listerAnomalies(client, dossierId, { periode, statut: 'obsolete' })
+    );
+    const compteNonReconnu = listeAvecObsoletes.find((a) => a.typeAnomalie === 'compte_tva_non_reconnu');
     const nouveauTiers = liste.find((a) => a.typeAnomalie === 'nouveau_tiers_a_verifier');
 
-    expect(compteNonReconnu?.statut).toBe('obsolete'); // résolu, remplacé par rien (liste vide)
+    expect(compteNonReconnu?.statut).toBe('obsolete'); // résolu, remplacé par rien (liste vide) — exclu par défaut, demandé explicitement ici
     expect(nouveauTiers?.statut).toBe('ouvert'); // jamais touché, toujours valable
   });
 
