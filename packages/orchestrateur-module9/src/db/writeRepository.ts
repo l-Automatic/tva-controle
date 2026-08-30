@@ -1247,18 +1247,47 @@ export interface DossierSynchronise {
 export async function synchroniserDossiersCabinet(
   client: PoolClient,
   cabinetId: string,
-  dossiersDecouverts: { id: string; nom: string; siren: string | null }[]
+  dossiersDecouverts: {
+    id: string;
+    nom: string;
+    siren: string | null;
+    nomCommercial?: string | null;
+    adresse?: string | null;
+    ville?: string | null;
+    codePostal?: string | null;
+    codeNaf?: string | null;
+    codeClient?: string | null;
+  }[]
 ): Promise<DossierSynchronise[]> {
   const resultat: DossierSynchronise[] = [];
 
   for (const d of dossiersDecouverts) {
     const res = await client.query<{ id: string; xmax: string }>(
-      `INSERT INTO dossiers (cabinet_id, nom, siren, regime_tva, logiciel_source, external_company_id, tva_encaissement)
-       VALUES ($1, $2, $3, 'reel_normal', 'pennylane', $4, false)
+      `INSERT INTO dossiers (
+         cabinet_id, nom, siren, regime_tva, logiciel_source, external_company_id, tva_encaissement,
+         nom_commercial, adresse, ville, code_postal, code_naf, code_client_pennylane
+       )
+       VALUES ($1, $2, $3, 'reel_normal', 'pennylane', $4, false, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (cabinet_id, logiciel_source, external_company_id)
-       DO UPDATE SET nom = EXCLUDED.nom, siren = EXCLUDED.siren, updated_at = now()
+       DO UPDATE SET
+         nom = EXCLUDED.nom, siren = EXCLUDED.siren,
+         nom_commercial = EXCLUDED.nom_commercial, adresse = EXCLUDED.adresse,
+         ville = EXCLUDED.ville, code_postal = EXCLUDED.code_postal,
+         code_naf = EXCLUDED.code_naf, code_client_pennylane = EXCLUDED.code_client_pennylane,
+         updated_at = now()
        RETURNING id, xmax::text`,
-      [cabinetId, d.nom, d.siren, d.id]
+      [
+        cabinetId,
+        d.nom,
+        d.siren,
+        d.id,
+        d.nomCommercial ?? null,
+        d.adresse ?? null,
+        d.ville ?? null,
+        d.codePostal ?? null,
+        d.codeNaf ?? null,
+        d.codeClient ?? null,
+      ]
     );
     // xmax = '0' uniquement pour une ligne fraîchement insérée par CETTE
     // requête (jamais mise à jour) — distingue "nouveau" de "déjà connu,
