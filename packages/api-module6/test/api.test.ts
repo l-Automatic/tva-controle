@@ -757,7 +757,7 @@ describe('API Module 6 — POST /dossiers/:id/cycles — validation seulement', 
   // impossible à tester depuis ce bac à sable (réseau restreint). Seule la
   // validation des champs requis est testée ici — le chemin de succès doit
   // être vérifié en conditions réelles (VPS avec accès réseau + vrai token).
-  it('refuse sans periodeDebut/periodeFin/pennylaneToken', async () => {
+  it('refuse sans periodeDebut/periodeFin', async () => {
     const res = await app.inject({
       method: 'POST',
       url: `/dossiers/${dossierId}/cycles`,
