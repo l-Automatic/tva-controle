@@ -37,6 +37,8 @@ import {
   desactiverUtilisateurCabinet,
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
+  configurerDossierOnboarding,
+  DossierIntrouvableError,
 } from '../src/db/writeRepository.js';
 import {
   listerAnomalies,
@@ -1667,5 +1669,66 @@ describe('synchroniserDossiersCabinet', () => {
     );
     expect(resultat).toHaveLength(2);
     expect(resultat.every((r) => r.nouveau)).toBe(true);
+  });
+});
+
+describe('configurerDossierOnboarding', () => {
+  async function creerDossierOnboarding(nom: string): Promise<string> {
+    const res = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO dossiers (cabinet_id, nom, regime_tva, logiciel_source, external_company_id, tva_encaissement)
+         VALUES ($1, $2, 'reel_normal', 'pennylane', $3, false)
+         RETURNING id`,
+        [cabinetId, nom, `onboarding-test-${Date.now()}-${Math.random()}`]
+      )
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('configure un dossier onboarding et le passe à actif', async () => {
+    const dossierOnboardingId = await creerDossierOnboarding('Dossier Onboarding Test');
+
+    await avecClient((client) =>
+      configurerDossierOnboarding(client, dossierOnboardingId, 'reel_simplifie', 'trimestrielle', true)
+    );
+
+    const ligne = await avecClient((client) =>
+      client.query(
+        `SELECT statut, regime_tva, periodicite_declaration, tva_encaissement, date_onboarding FROM dossiers WHERE id = $1`,
+        [dossierOnboardingId]
+      )
+    );
+    expect(ligne.rows[0]?.statut).toBe('actif');
+    expect(ligne.rows[0]?.regime_tva).toBe('reel_simplifie');
+    expect(ligne.rows[0]?.periodicite_declaration).toBe('trimestrielle');
+    expect(ligne.rows[0]?.tva_encaissement).toBe(true);
+    expect(ligne.rows[0]?.date_onboarding).not.toBeNull();
+  });
+
+  it('échoue proprement pour un dossier inexistant', async () => {
+    await expect(
+      avecClient((client) =>
+        configurerDossierOnboarding(client, '00000000-0000-0000-0000-000000000000', 'reel_normal', 'mensuelle', false)
+      )
+    ).rejects.toThrow(DossierIntrouvableError);
+  });
+
+  it('peut aussi corriger un dossier déjà actif, sans écraser date_onboarding déjà fixée', async () => {
+    const dossierId2 = await creerDossierOnboarding('Dossier Deja Actif');
+    await avecClient((client) =>
+      configurerDossierOnboarding(client, dossierId2, 'reel_normal', 'mensuelle', false)
+    );
+    const premiereDate = (
+      await avecClient((client) => client.query(`SELECT date_onboarding FROM dossiers WHERE id = $1`, [dossierId2]))
+    ).rows[0]?.date_onboarding;
+
+    await avecClient((client) =>
+      configurerDossierOnboarding(client, dossierId2, 'franchise', 'mensuelle', false)
+    );
+    const ligne = await avecClient((client) =>
+      client.query(`SELECT regime_tva, date_onboarding FROM dossiers WHERE id = $1`, [dossierId2])
+    );
+    expect(ligne.rows[0]?.regime_tva).toBe('franchise');
+    expect(new Date(ligne.rows[0]?.date_onboarding).getTime()).toBe(new Date(premiereDate).getTime());
   });
 });
