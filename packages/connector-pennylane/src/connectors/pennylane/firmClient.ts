@@ -23,6 +23,8 @@
 // À VÉRIFIER EN CONDITIONS RÉELLES avec un vrai jeton cabinet — construit
 // à partir de documentation, jamais observé sur un vrai appel.
 
+import type { IPennylaneApiClient } from './client.js';
+
 const PREFIXE_COMPANY_API = '/api/external/v2/';
 
 export class FirmApiError extends Error {
@@ -44,7 +46,7 @@ export interface FirmApiClientConfig {
   maxRetries429?: number;
 }
 
-export class FirmApiClient {
+export class FirmApiClient implements IPennylaneApiClient {
   private readonly baseUrl: string;
   private readonly token: string;
   private readonly companyId: string;
