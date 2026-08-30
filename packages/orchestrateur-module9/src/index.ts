@@ -41,6 +41,8 @@ export {
   desactiverUtilisateurCabinet,
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
+  configurerDossierOnboarding,
+  DossierIntrouvableError,
   type DossierSynchronise,
   EmailDejaUtiliseError,
   qualifierEncaissementNonAffecte,
