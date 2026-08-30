@@ -17,7 +17,13 @@ const PREFIXES_RECONNUS = ['44571', '44566', '44562'];
 // période précédente, pas une donnée d'entrée pour le calcul en cours.
 // Whitelistés explicitement : sans ça, tout dossier qui paie sa TVA
 // déclencherait systématiquement l'alerte, noyant le signal utile.
-const COMPTES_HORS_PERIMETRE_CONNUS = ['44551', '44567'];
+const COMPTES_HORS_PERIMETRE_CONNUS = [
+  '44551', // TVA à décaisser
+  '44567', // crédit de TVA reporté
+  '44583', // remboursement de TVA demandé
+  '44586', // TVA sur factures non parvenues (FNP)
+  '44587', // TVA sur factures à établir (FAE)
+];
 
 // Gravité 'bloquant', pas 'signale' — décision volontaire. calculerTva
 // ignore déjà silencieusement tout compte qu'il ne reconnaît pas (voir son
