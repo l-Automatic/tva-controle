@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import {
+  PennylaneClient,
   FirmApiClient,
   fetchDossiersCabinet,
   type IPennylaneApiClient,
@@ -63,6 +64,7 @@ import {
   DernierAdminCabinetError,
   listerUtilisateursCabinet,
   parametreCabinetValeur,
+  parametreDossierValeur,
   synchroniserDossiersCabinet,
   hasherMotDePasse,
   verifierMotDePasse,
@@ -175,12 +177,23 @@ export function buildApp(pool: Pool): FastifyInstance {
       );
     }
 
+    // Priorité au jeton propre au dossier (Company API — un dossier isolé,
+    // hors du portefeuille cabinet, ou avant d'avoir un accès cabinet réel)
+    // (10/08). Sinon, retombe sur le jeton cabinet (Firm API), le chemin
+    // normal pour un dossier synchronisé automatiquement.
+    const jetonDossier = await avecContexteCabinet(pool, cabinetId, (client) =>
+      parametreDossierValeur(client, dossierId, 'pennylane_company_api_key')
+    );
+    if (typeof jetonDossier === 'string' && jetonDossier.length > 0) {
+      return new PennylaneClient({ token: jetonDossier });
+    }
+
     const jetonCabinet = await avecContexteCabinet(pool, cabinetId, (client) =>
       parametreCabinetValeur(client, cabinetId, 'pennylane_firm_api_key')
     );
     if (typeof jetonCabinet !== 'string' || jetonCabinet.length === 0) {
       throw new JetonCabinetManquantError(
-        "Aucun jeton d'API Cabinet Pennylane configuré pour ce cabinet — définir la clé pennylane_firm_api_key dans les paramètres du cabinet."
+        "Aucun jeton Pennylane configuré pour ce dossier ni pour ce cabinet — définir soit pennylane_company_api_key sur le dossier, soit pennylane_firm_api_key sur le cabinet."
       );
     }
 
