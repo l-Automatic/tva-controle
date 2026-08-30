@@ -21,6 +21,7 @@ export interface DossierListe {
   siren: string | null;
   statut: 'onboarding' | 'actif' | 'inactif';
   regimeTva: string;
+  motifDesactivation: string | null;
 }
 
 // Recherche simple par nom (ILIKE) — pas de pagination pour l'instant, un
@@ -44,7 +45,7 @@ export async function listerDossiers(
   }
 
   const res = await client.query(
-    `SELECT id, nom, siren, statut, regime_tva FROM dossiers WHERE ${condition} ORDER BY nom ASC`,
+    `SELECT id, nom, siren, statut, regime_tva, motif_desactivation FROM dossiers WHERE ${condition} ORDER BY nom ASC`,
     params
   );
 
@@ -54,6 +55,7 @@ export async function listerDossiers(
     siren: r.siren,
     statut: r.statut,
     regimeTva: r.regime_tva,
+    motifDesactivation: r.motif_desactivation,
   }));
 }
 
@@ -79,6 +81,77 @@ export async function chargerDossier(client: PoolClient, dossierId: string): Pro
     tvaEncaissement: row.tva_encaissement,
     logicielSource: row.logiciel_source,
     externalCompanyId: row.external_company_id,
+  };
+}
+
+export interface DossierComplet {
+  id: string;
+  nom: string;
+  nomCommercial: string | null;
+  siren: string | null;
+  siret: string | null;
+  formeJuridique: string | null;
+  fiscalite: 'is' | 'ir' | null;
+  comptabilite: 'engagement' | 'tresorerie' | null;
+  dateDebutExercice: string | null;
+  dateFinExercice: string | null;
+  regimeTva: string;
+  periodiciteDeclaration: string;
+  tvaEncaissement: boolean;
+  numeroTvaIntracom: string | null;
+  adresse: string | null;
+  ville: string | null;
+  codePostal: string | null;
+  codeNaf: string | null;
+  emailContact: string | null;
+  contactNom: string | null;
+  contactTelephone: string | null;
+  logicielSource: string;
+  statut: 'onboarding' | 'actif' | 'inactif';
+  motifDesactivation: string | null;
+}
+
+// Vue complète d'un dossier — toutes les infos d'identité (10/08), utilisée
+// par l'écran de détail/édition dossier. Distincte de chargerDossier
+// ci-dessus (champs minimaux, pour la résolution du client Pennylane
+// uniquement) et de listerDossiers (champs minimaux pour l'affichage en
+// liste) — trois besoins différents, trois formes différentes.
+export async function chargerDossierComplet(client: PoolClient, dossierId: string): Promise<DossierComplet | null> {
+  const res = await client.query(
+    `SELECT id, nom, nom_commercial, siren, siret, forme_juridique, fiscalite, comptabilite,
+            date_debut_exercice, date_fin_exercice, regime_tva, periodicite_declaration,
+            tva_encaissement, numero_tva_intracom, adresse, ville, code_postal, code_naf,
+            email_contact, contact_nom, contact_telephone, logiciel_source, statut, motif_desactivation
+     FROM dossiers WHERE id = $1`,
+    [dossierId]
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    nom: r.nom,
+    nomCommercial: r.nom_commercial,
+    siren: r.siren,
+    siret: r.siret,
+    formeJuridique: r.forme_juridique,
+    fiscalite: r.fiscalite,
+    comptabilite: r.comptabilite,
+    dateDebutExercice: r.date_debut_exercice,
+    dateFinExercice: r.date_fin_exercice,
+    regimeTva: r.regime_tva,
+    periodiciteDeclaration: r.periodicite_declaration,
+    tvaEncaissement: r.tva_encaissement,
+    numeroTvaIntracom: r.numero_tva_intracom,
+    adresse: r.adresse,
+    ville: r.ville,
+    codePostal: r.code_postal,
+    codeNaf: r.code_naf,
+    emailContact: r.email_contact,
+    contactNom: r.contact_nom,
+    contactTelephone: r.contact_telephone,
+    logicielSource: r.logiciel_source,
+    statut: r.statut,
+    motifDesactivation: r.motif_desactivation,
   };
 }
 
