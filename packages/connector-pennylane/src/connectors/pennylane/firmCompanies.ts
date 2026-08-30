@@ -9,28 +9,64 @@
 // réécriture de chemin — un appel direct et isolé, jamais répété dans le
 // cycle régulier (seulement lors d'une synchronisation).
 //
-// Forme de la réponse À VÉRIFIER EN CONDITIONS RÉELLES — construite à
-// partir de la documentation (id + name confirmés comme présents sur toute
-// ressource "company" Pennylane par cohérence avec le reste de l'API),
-// jamais observée sur un vrai appel avec un vrai jeton cabinet.
+// Schéma de réponse CONFIRMÉ (10/08) via le schéma OpenAPI officiel complet
+// de l'endpoint (firm-pennylane.readme.io/reference/companies-1) — plus une
+// simple supposition. Pagination PAR PAGE (page/per_page/total_pages), pas
+// par curseur — corrige une première version de ce fichier qui supposait
+// à tort une pagination par curseur.
+//
+// Pas de champ de régime de TVA dans cette réponse (vérifié aussi sur
+// l'endpoint détail "Show company", identique) — la configuration fiscale
+// d'un dossier nouvellement découvert reste une étape humaine séparée
+// (Phase 2 du chantier), pas quelque chose de récupérable ici.
 
 export interface DossierCabinet {
   id: string;
-  nom: string;
+  nom: string; // name (raison sociale)
+  nomCommercial: string | null; // billing_company_name
   siren: string | null;
+  adresse: string | null;
+  ville: string | null;
+  codePostal: string | null;
+  codeNaf: string | null; // activity_code
+  externalId: string | null; // distinct de id — identifiant externe propre à Pennylane
+  codeClient: string | null; // client_code — référence assignée par le cabinet lui-même dans Pennylane, utile pour le rapprochement
 }
 
 interface PennylaneCompanyItem {
-  id: number | string;
+  id: number;
   name: string;
+  billing_company_name?: string | null;
   siren?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  activity_code?: string | null;
+  external_id?: string | null;
+  client_code?: string | null;
 }
 
 interface PennylaneCompaniesResponse {
-  items?: PennylaneCompanyItem[];
-  data?: PennylaneCompanyItem[]; // forme alternative possible, à vérifier
-  has_more?: boolean;
-  next_cursor?: string | null;
+  items: PennylaneCompanyItem[];
+  total_pages: number;
+  current_page: number;
+  total_items: number;
+  per_page: number;
+}
+
+function mapper(item: PennylaneCompanyItem): DossierCabinet {
+  return {
+    id: String(item.id),
+    nom: item.name,
+    nomCommercial: item.billing_company_name ?? null,
+    siren: item.siren ?? null,
+    adresse: item.address ?? null,
+    ville: item.city ?? null,
+    codePostal: item.postal_code ?? null,
+    codeNaf: item.activity_code ?? null,
+    externalId: item.external_id ?? null,
+    codeClient: item.client_code ?? null,
+  };
 }
 
 export async function fetchDossiersCabinet(
@@ -39,12 +75,12 @@ export async function fetchDossiersCabinet(
   baseUrl = 'https://app.pennylane.com'
 ): Promise<DossierCabinet[]> {
   const resultat: DossierCabinet[] = [];
-  let cursor: string | undefined;
+  let page = 1;
 
-  do {
+  for (;;) {
     const url = new URL('/api/external/firm/v1/companies', baseUrl);
-    url.searchParams.set('limit', '100');
-    if (cursor) url.searchParams.set('cursor', cursor);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('per_page', '100');
 
     const response = await fetchImpl(url.toString(), {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -56,14 +92,11 @@ export async function fetchDossiersCabinet(
     }
 
     const payload = (await response.json()) as PennylaneCompaniesResponse;
-    const items = payload.items ?? payload.data ?? [];
+    resultat.push(...payload.items.map(mapper));
 
-    for (const item of items) {
-      resultat.push({ id: String(item.id), nom: item.name, siren: item.siren ?? null });
-    }
-
-    cursor = payload.has_more ? (payload.next_cursor ?? undefined) : undefined;
-  } while (cursor);
+    if (page >= payload.total_pages) break;
+    page += 1;
+  }
 
   return resultat;
 }
