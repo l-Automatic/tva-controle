@@ -16,9 +16,14 @@ export {
   type ParametresAnalyseMotifNumerotation,
 } from './analyserMotifNumerotation.js';
 export {
+  verifierComptesNonReconnus,
+  type ParametresVerificationComptesNonReconnus,
+} from './verifierComptesNonReconnus.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
+  enregistrerAnomaliesPartielles,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   justifierAnomalie,
