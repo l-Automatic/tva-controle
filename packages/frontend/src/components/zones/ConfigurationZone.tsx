@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AnalyseMotifNumerotationPanel, RECOMMANDATION_PERIODE, formatMotifNumerotation } from '../AnalyseMotifNumerotationPanel';
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
+import { IdentiteDossierPanel } from '../IdentiteDossierPanel';
 import { MotifNumerotationCandidatPanel } from '../MotifNumerotationCandidatPanel';
 import { PropositionsPanel } from '../PropositionsPanel';
 import { SuggestionsAutoliquidationPanel } from '../SuggestionsAutoliquidationPanel';
@@ -19,7 +20,7 @@ import {
   type Proposition,
 } from '../../types';
 
-export type SousOngletConfiguration = 'comptes' | 'generiques' | 'taux' | 'tauxAssigne' | 'vehicules';
+export type SousOngletConfiguration = 'identite' | 'comptes' | 'generiques' | 'taux' | 'tauxAssigne' | 'vehicules';
 
 interface ConfigurationZoneProps {
   cabinetId: string;
@@ -36,6 +37,12 @@ interface ConfigurationZoneProps {
 }
 
 const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: string }[] = [
+  {
+    id: 'identite',
+    libelle: 'Identité',
+    description:
+      "Informations d'identité du dossier — celles synchronisées depuis Pennylane sont en lecture seule, le reste se complète manuellement.",
+  },
   {
     id: 'comptes',
     libelle: 'Conventions de comptes',
@@ -124,6 +131,7 @@ export function ConfigurationZone({
       {ongletActif && <p className="sous-onglet-description">{ongletActif.description}</p>}
 
       <div key={sousOnglet} className="sous-onglet-contenu">
+      {sousOnglet === 'identite' && <IdentiteDossierPanel cabinetId={cabinetId} dossierId={dossierId} />}
       {sousOnglet === 'comptes' && (
         <ConventionsComptesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}

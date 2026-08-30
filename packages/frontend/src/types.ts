@@ -198,6 +198,64 @@ export interface Dossier {
   regimeTva: string;
 }
 
+// --- Identité complète d'un dossier (brief v29) — champs synchronisés
+// depuis Pennylane (nom, nomCommercial, siren, adresse, ville, codePostal,
+// codeNaf) + champs saisis manuellement, en lecture/écriture via
+// PUT /dossiers/:dossierId/identite.
+
+export type Fiscalite = 'is' | 'ir';
+export const LIBELLE_FISCALITE: Record<Fiscalite, string> = { is: 'IS', ir: 'IR' };
+
+export type Comptabilite = 'engagement' | 'tresorerie';
+export const LIBELLE_COMPTABILITE: Record<Comptabilite, string> = {
+  engagement: 'Engagement',
+  tresorerie: 'Trésorerie',
+};
+
+export const FORMES_JURIDIQUES_COURANTES = ['EI', 'EURL', 'SARL', 'SAS', 'SASU', 'SA'] as const;
+
+export interface DossierComplet {
+  id: string;
+  nom: string;
+  nomCommercial: string | null;
+  siren: string | null;
+  siret: string | null;
+  formeJuridique: string | null;
+  fiscalite: Fiscalite | null;
+  comptabilite: Comptabilite | null;
+  dateDebutExercice: string | null;
+  dateFinExercice: string | null;
+  regimeTva: string;
+  periodiciteDeclaration: string;
+  tvaEncaissement: boolean;
+  numeroTvaIntracom: string | null;
+  adresse: string | null;
+  ville: string | null;
+  codePostal: string | null;
+  codeNaf: string | null;
+  emailContact: string | null;
+  contactNom: string | null;
+  contactTelephone: string | null;
+  logicielSource: string;
+  statut: StatutDossier;
+  motifDesactivation: string | null;
+}
+
+// Sous-ensemble éditable via le formulaire d'identité — seuls les champs
+// présents dans le body sont modifiés côté backend (mise à jour partielle).
+export interface InfosIdentiteDossier {
+  siret?: string | null;
+  formeJuridique?: string | null;
+  fiscalite?: Fiscalite | null;
+  comptabilite?: Comptabilite | null;
+  dateDebutExercice?: string | null;
+  dateFinExercice?: string | null;
+  emailContact?: string | null;
+  contactNom?: string | null;
+  contactTelephone?: string | null;
+  numeroTvaIntracom?: string | null;
+}
+
 // --- Point d'entrée "à traiter" ---
 
 export type TypeElementATraiter =

@@ -5,7 +5,9 @@ import type {
   Calcul,
   ConfigurationOnboarding,
   Dossier,
+  DossierComplet,
   ElementATraiter,
+  InfosIdentiteDossier,
   MotifNumerotation,
   NiveauConfianceTiers,
   Parametre,
@@ -41,7 +43,23 @@ export class ApiError extends Error {
 // vient désormais du jeton côté serveur. Module-level plutôt que passé en
 // paramètre partout : évite de faire remonter le jeton jusqu'à chacun des
 // ~60 appels existants pour un mécanisme purement transverse.
-let jetonActuel: string | null = null;
+//
+// Initialisé directement depuis localStorage (pas juste par App.tsx via
+// definirJeton) — bug réel trouvé en vérifiant v29 : App.tsx ne pose le
+// jeton que dans un useEffect, qui s'exécute APRÈS les effects des
+// composants enfants déjà montés (dossier + zone restaurés depuis
+// localStorage dès le premier rendu après un rechargement). N'importe quel
+// panneau qui fetch au montage partait donc avec jetonActuel=null,
+// provoquant un vrai crash de toute l'app (401 non rattrapé) à chaque
+// rechargement de page avec un dossier déjà sélectionné.
+let jetonActuel: string | null = (() => {
+  try {
+    const brut = localStorage.getItem('module6.session');
+    return brut ? ((JSON.parse(brut) as { jeton?: string }).jeton ?? null) : null;
+  } catch {
+    return null;
+  }
+})();
 let gestionnaireNonAutorise: (() => void) | null = null;
 
 export function definirJeton(jeton: string | null): void {
@@ -538,6 +556,40 @@ export function configurerDossierOnboarding(
   return request<void>(`/dossiers/${dossierId}/configurer-onboarding`, cabinetId, {
     method: 'POST',
     body: JSON.stringify(configuration),
+  });
+}
+
+// --- Identité complète d'un dossier (brief v29) ---
+
+export function fetchDossierComplet(cabinetId: string, dossierId: string): Promise<DossierComplet> {
+  return request<DossierComplet>(`/dossiers/${dossierId}/complet`, cabinetId);
+}
+
+// Mise à jour partielle — seuls les champs présents dans infos sont
+// envoyés/modifiés.
+export function mettreAJourIdentiteDossier(
+  cabinetId: string,
+  dossierId: string,
+  infos: InfosIdentiteDossier
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/identite`, cabinetId, {
+    method: 'PUT',
+    body: JSON.stringify(infos),
+  });
+}
+
+// Activation/désactivation d'un dossier, réservé admin_cabinet côté
+// backend — motifDesactivation ignoré/effacé automatiquement si statut
+// repasse à 'actif'.
+export function definirStatutDossier(
+  cabinetId: string,
+  dossierId: string,
+  statut: 'actif' | 'inactif',
+  motifDesactivation?: string
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/statut`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ statut, motifDesactivation }),
   });
 }
 

@@ -11,6 +11,7 @@ import {
 import { ICONE_ACTION, iconeTypeAnomalie } from '../icons';
 import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
+import { Accordion } from './Accordion';
 import { BadgeStatut } from './BadgeStatut';
 
 // 16 des 20 types du catalogue ont un libellé dédié ici — cf.
@@ -307,81 +308,87 @@ function AnomalieRow({
 
   return (
     <li className={`card anomalie gravite-${anomalie.gravite}`}>
-      <div className="card-header">
-        <BadgeStatut statut={anomalie.statut} libelle={LIBELLE_STATUT[anomalie.statut]} />
-        <span className={`badge gravite-badge-${anomalie.gravite}`}>{LIBELLE_GRAVITE[anomalie.gravite]}</span>
-        <span className="type-anomalie">
-          {(() => {
-            const Icone = iconeTypeAnomalie(anomalie.typeAnomalie);
-            return <Icone size={13} aria-hidden="true" />;
-          })()}
-          {LIBELLE_TYPE_ANOMALIE[anomalie.typeAnomalie] ?? anomalie.typeAnomalie}
-        </span>
-        <span className="periode">{anomalie.periode}</span>
-      </div>
-      <p className="description">{anomalie.description}</p>
-      {estEncaissement && montantTTC !== null && (
-        <p className="label">
-          Montant TTC : <strong>{montantTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
-        </p>
-      )}
-
-      {/* Le libellé de la pièce est la référence principale — l'ID technique
-          Pennylane passe en information secondaire (cf. brief v5). */}
-      {libelles.length > 0 ? (
-        <>
-          {libelles.length === 1 ? (
-            <p className="label piece-libelle">{libelles[0]}</p>
-          ) : (
-            <ul className="piece-libelles-liste">
-              {libelles.map((l, i) => (
-                <li key={i}>{l}</li>
-              ))}
-            </ul>
-          )}
-          <p className="reference piece-technique">
-            (pièce {anomalie.referencePiece ?? '—'}
-            {date ? ` — ${date}` : ''})
+      <Accordion
+        defaultOpen={estOuverte}
+        titre={
+          <span className="card-header">
+            <BadgeStatut statut={anomalie.statut} libelle={LIBELLE_STATUT[anomalie.statut]} />
+            <span className={`badge gravite-badge-${anomalie.gravite}`}>{LIBELLE_GRAVITE[anomalie.gravite]}</span>
+            <span className="type-anomalie">
+              {(() => {
+                const Icone = iconeTypeAnomalie(anomalie.typeAnomalie);
+                return <Icone size={13} aria-hidden="true" />;
+              })()}
+              {LIBELLE_TYPE_ANOMALIE[anomalie.typeAnomalie] ?? anomalie.typeAnomalie}
+            </span>
+          </span>
+        }
+        meta={<span className="periode">{anomalie.periode}</span>}
+      >
+        <p className="description">{anomalie.description}</p>
+        {estEncaissement && montantTTC !== null && (
+          <p className="label">
+            Montant TTC : <strong>{montantTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
           </p>
-        </>
-      ) : (
-        <p className="reference">
-          {date ? `${date} — ` : ''}
-          {anomalie.referencePiece ? `Pièce : ${anomalie.referencePiece}` : 'Pièce inconnue'}
-        </p>
-      )}
+        )}
 
-      {anomalie.compte && <p className="reference">Compte : {anomalie.compte}</p>}
-      {detailsRestants && <p className="reference details">{detailsRestants}</p>}
-
-      {estOuverte &&
-        (estEncaissement ? (
-          <EncaissementQualification
-            anomalie={anomalie}
-            cabinetId={cabinetId}
-            utilisateurId={utilisateurId}
-            onChanged={onChanged}
-          />
+        {/* Le libellé de la pièce est la référence principale — l'ID technique
+            Pennylane passe en information secondaire (cf. brief v5). */}
+        {libelles.length > 0 ? (
+          <>
+            {libelles.length === 1 ? (
+              <p className="label piece-libelle">{libelles[0]}</p>
+            ) : (
+              <ul className="piece-libelles-liste">
+                {libelles.map((l, i) => (
+                  <li key={i}>{l}</li>
+                ))}
+              </ul>
+            )}
+            <p className="reference piece-technique">
+              (pièce {anomalie.referencePiece ?? '—'}
+              {date ? ` — ${date}` : ''})
+            </p>
+          </>
         ) : (
-          <div className="actions">
-            <input
-              type="text"
-              placeholder="Commentaire (requis pour justifier)"
-              value={commentaire}
-              onChange={(e) => setCommentaire(e.target.value)}
-              disabled={submitting !== null}
+          <p className="reference">
+            {date ? `${date} — ` : ''}
+            {anomalie.referencePiece ? `Pièce : ${anomalie.referencePiece}` : 'Pièce inconnue'}
+          </p>
+        )}
+
+        {anomalie.compte && <p className="reference">Compte : {anomalie.compte}</p>}
+        {detailsRestants && <p className="reference details">{detailsRestants}</p>}
+
+        {estOuverte &&
+          (estEncaissement ? (
+            <EncaissementQualification
+              anomalie={anomalie}
+              cabinetId={cabinetId}
+              utilisateurId={utilisateurId}
+              onChanged={onChanged}
             />
-            <button onClick={handleResoudre} disabled={submitting !== null}>
-              <ICONE_ACTION.resoudre size={14} aria-hidden="true" />
-              {submitting === 'resoudre' ? '…' : 'Résoudre'}
-            </button>
-            <button onClick={handleJustifier} disabled={submitting !== null} className="secondary">
-              <ICONE_ACTION.justifier size={14} aria-hidden="true" />
-              {submitting === 'justifier' ? '…' : 'Justifier'}
-            </button>
-          </div>
-        ))}
-      {estOuverte && !estEncaissement && error && <p className="error">{error}</p>}
+          ) : (
+            <div className="actions">
+              <input
+                type="text"
+                placeholder="Commentaire (requis pour justifier)"
+                value={commentaire}
+                onChange={(e) => setCommentaire(e.target.value)}
+                disabled={submitting !== null}
+              />
+              <button onClick={handleResoudre} disabled={submitting !== null}>
+                <ICONE_ACTION.resoudre size={14} aria-hidden="true" />
+                {submitting === 'resoudre' ? '…' : 'Résoudre'}
+              </button>
+              <button onClick={handleJustifier} disabled={submitting !== null} className="secondary">
+                <ICONE_ACTION.justifier size={14} aria-hidden="true" />
+                {submitting === 'justifier' ? '…' : 'Justifier'}
+              </button>
+            </div>
+          ))}
+        {estOuverte && !estEncaissement && error && <p className="error">{error}</p>}
+      </Accordion>
     </li>
   );
 }

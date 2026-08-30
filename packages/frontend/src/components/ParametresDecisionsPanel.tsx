@@ -20,6 +20,7 @@ import {
   type Proposition,
   type TiersReference,
 } from '../types';
+import { Accordion } from './Accordion';
 
 interface SectionProps {
   cabinetId: string;
@@ -72,10 +73,7 @@ function TiersConfianceSection({ cabinetId, dossierId, utilisateurId }: SectionP
   }
 
   return (
-    <div className="panel-section">
-      <div className="panel-header">
-        <h3>Confiance des tiers</h3>
-      </div>
+    <Accordion titre="Confiance des tiers" meta={<span className="reference">{tiers.length}</span>}>
       {error && <p className="error">{error}</p>}
       {!loading && tiers.length === 0 && <p className="empty">Aucun tiers suivi pour ce dossier.</p>}
       <ul className="card-list">
@@ -107,7 +105,7 @@ function TiersConfianceSection({ cabinetId, dossierId, utilisateurId }: SectionP
           </li>
         ))}
       </ul>
-    </div>
+    </Accordion>
   );
 }
 
@@ -154,10 +152,7 @@ function ConventionsComptesRetraitSection({ cabinetId, dossierId, utilisateurId 
   const tousVides = conventions.every((c) => !Array.isArray(c.valeur) || c.valeur.length === 0);
 
   return (
-    <div className="panel-section">
-      <div className="panel-header">
-        <h3>Conventions de comptes</h3>
-      </div>
+    <Accordion titre="Conventions de comptes">
       {error && <p className="error">{error}</p>}
       {!loading && (conventions.length === 0 || tousVides) && (
         <p className="empty">Aucun compte confirmé pour l’instant.</p>
@@ -188,7 +183,7 @@ function ConventionsComptesRetraitSection({ cabinetId, dossierId, utilisateurId 
           );
         })}
       </div>
-    </div>
+    </Accordion>
   );
 }
 
@@ -243,10 +238,7 @@ function TauxConfirmesSection({ cabinetId, dossierId, utilisateurId }: SectionPr
   ];
 
   return (
-    <div className="panel-section">
-      <div className="panel-header">
-        <h3>Taux historique confirmés</h3>
-      </div>
+    <Accordion titre="Taux historique confirmés" meta={<span className="reference">{toutes.length}</span>}>
       {error && <p className="error">{error}</p>}
       {!loading && toutes.length === 0 && <p className="empty">Aucun taux confirmé pour l’instant.</p>}
       <ul className="card-list">
@@ -270,7 +262,7 @@ function TauxConfirmesSection({ cabinetId, dossierId, utilisateurId }: SectionPr
           </li>
         ))}
       </ul>
-    </div>
+    </Accordion>
   );
 }
 
@@ -284,9 +276,7 @@ export function ParametresDecisionsPanel({ cabinetId, dossierId, utilisateurId }
         <h2>Décisions validées — vue et correction</h2>
       </div>
       <TiersConfianceSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      <div className="panel-separateur" />
       <ConventionsComptesRetraitSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      <div className="panel-separateur" />
       <TauxConfirmesSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
     </section>
   );

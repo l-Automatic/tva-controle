@@ -267,6 +267,7 @@ p {
 .sidebar-nav-item {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.6rem;
   background: transparent;
   border: 1px solid transparent;
@@ -955,6 +956,112 @@ button:focus-visible {
 
 .cycle-form-warning {
   margin-top: 0.5rem;
+}
+
+/* Identité dossier (brief v29) — champs synchronisés Pennylane, lecture seule */
+.identite-lecture-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.identite-champ-lecture {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.identite-champ-lecture-libelle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.identite-champ-lecture-valeur {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Accordéon générique (brief v29 §3) */
+.accordion {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.accordion + .accordion {
+  margin-top: 0.6rem;
+}
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-raised);
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  justify-content: flex-start;
+}
+
+.accordion-header:hover {
+  background: var(--neutral-soft-bg);
+}
+
+.accordion-titre {
+  flex: 1;
+  text-align: left;
+}
+
+.accordion-chevron {
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.accordion-chevron.ouvert {
+  transform: rotate(180deg);
+}
+
+.accordion-corps {
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Un .card a déjà sa propre bordure/fond — évite la double boîte quand un
+   accordéon sert à replier le contenu d'une carte (ex : AnomalieRow). */
+.card > .accordion {
+  border: none;
+  border-radius: 0;
+}
+
+.card > .accordion .accordion-header {
+  background: transparent;
+  padding: 0;
+  font-weight: 400;
+}
+
+.card > .accordion .accordion-header:hover {
+  background: transparent;
+}
+
+.card > .accordion .accordion-corps {
+  padding: 0.5rem 0 0;
+  border-top: none;
+}
+
+/* Activation/désactivation des dossiers (brief v29) */
+.dossier-activation-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
 }
 
 .error-409 {

@@ -5,12 +5,15 @@ import {
   configurerDossierOnboarding,
   definirParametreCabinet,
   definirParametreDossier,
+  definirStatutDossier,
+  fetchDossierComplet,
   fetchDossiers,
   fetchParametresCabinet,
   fetchParametresDossier,
   synchroniserDossiers,
 } from '../api';
 import { useToast } from '../toast';
+import { Accordion } from './Accordion';
 import {
   CLE_PENNYLANE_FIRM_API_KEY,
   CLE_REGIME_TVA_ENCAISSEMENT,
@@ -386,6 +389,182 @@ function DossiersOnboardingSection({
   );
 }
 
+const LIBELLE_STATUT_DOSSIER: Record<Dossier['statut'], string> = {
+  onboarding: 'Onboarding',
+  actif: 'Actif',
+  inactif: 'Inactif',
+};
+
+const CLASSE_STATUT_DOSSIER: Record<Dossier['statut'], string> = {
+  onboarding: 'statut-candidate',
+  actif: 'statut-confirmed',
+  inactif: 'statut-rejete',
+};
+
+// Réservé à admin_cabinet côté route backend — activer/désactiver un
+// dossier, avec motif en texte libre à la désactivation (brief v29 §2).
+function DossierActivationRow({
+  cabinetId,
+  dossier,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossier: Dossier;
+  onChanged: () => void;
+}) {
+  const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const [motif, setMotif] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [motifAffiche, setMotifAffiche] = useState<string | null | undefined>(undefined);
+  const [chargementMotif, setChargementMotif] = useState(false);
+  const notifier = useToast();
+
+  async function handleDesactiver() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await definirStatutDossier(cabinetId, dossier.id, 'inactif', motif.trim() || undefined);
+      notifier(`${dossier.nom} désactivé`);
+      setFormulaireOuvert(false);
+      setMotif('');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la désactivation');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReactiver() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await definirStatutDossier(cabinetId, dossier.id, 'actif');
+      notifier(`${dossier.nom} réactivé`);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la réactivation');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function toggleMotif() {
+    if (motifAffiche !== undefined) {
+      setMotifAffiche(undefined);
+      return;
+    }
+    setChargementMotif(true);
+    try {
+      const complet = await fetchDossierComplet(cabinetId, dossier.id);
+      setMotifAffiche(complet.motifDesactivation);
+    } catch {
+      setMotifAffiche(null);
+    } finally {
+      setChargementMotif(false);
+    }
+  }
+
+  return (
+    <li className="card">
+      <div className="dossier-activation-ligne">
+        <p className="label">{dossier.nom}</p>
+        <span className={`badge ${CLASSE_STATUT_DOSSIER[dossier.statut]}`}>{LIBELLE_STATUT_DOSSIER[dossier.statut]}</span>
+      </div>
+      {dossier.statut === 'inactif' ? (
+        <>
+          <div className="cycle-form">
+            <button onClick={() => void handleReactiver()} disabled={submitting}>
+              {submitting ? '…' : 'Réactiver'}
+            </button>
+            <button onClick={() => void toggleMotif()} disabled={chargementMotif}>
+              {motifAffiche !== undefined ? 'Masquer le motif' : 'Voir le motif'}
+            </button>
+          </div>
+          {motifAffiche !== undefined && (
+            <p className="reference">{motifAffiche || 'Aucun motif renseigné.'}</p>
+          )}
+        </>
+      ) : !formulaireOuvert ? (
+        <div className="cycle-form">
+          <button onClick={() => setFormulaireOuvert(true)}>Désactiver</button>
+        </div>
+      ) : (
+        <div className="cycle-form">
+          <label className="cycle-form-token">
+            Motif (facultatif)
+            <input
+              type="text"
+              placeholder="Pourquoi désactiver ce dossier ?"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              disabled={submitting}
+            />
+          </label>
+          <button onClick={() => void handleDesactiver()} disabled={submitting}>
+            {submitting ? '…' : 'Confirmer la désactivation'}
+          </button>
+          <button
+            className="secondary"
+            onClick={() => {
+              setFormulaireOuvert(false);
+              setMotif('');
+            }}
+            disabled={submitting}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
+    </li>
+  );
+}
+
+function DossiersActivationSection({ cabinetId }: { cabinetId: string }) {
+  const [dossiers, setDossiers] = useState<Dossier[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function charger() {
+    setLoading(true);
+    setError(null);
+    try {
+      setDossiers(await fetchDossiers(cabinetId));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger les dossiers');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (cabinetId) void charger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId]);
+
+  return (
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Activation des dossiers</h2>
+      </div>
+      <p className="reference">Désactive un dossier hors périmètre TVA ou volontairement écarté, avec un motif.</p>
+      {error && <p className="error">{error}</p>}
+      {!loading && dossiers.length === 0 && <p className="empty">Aucun dossier pour ce cabinet.</p>}
+      {dossiers.length > 0 && (
+        <Accordion titre="Dossiers du cabinet" meta={<span className="reference">{dossiers.length}</span>}>
+          <ul className="card-list">
+            {dossiers.map((d) => (
+              <DossierActivationRow key={d.id} cabinetId={cabinetId} dossier={d} onChanged={() => void charger()} />
+            ))}
+          </ul>
+        </Accordion>
+      )}
+    </section>
+  );
+}
+
 function DegradeSection({
   cabinetId,
   dossierId,
@@ -649,6 +828,7 @@ export function ParametresPanel({
         />
       )}
       <DossiersOnboardingSection cabinetId={cabinetId} refreshKey={dossiersRefreshKey} />
+      {role === 'admin_cabinet' && <DossiersActivationSection cabinetId={cabinetId} />}
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <DegradeSection
