@@ -3,6 +3,7 @@ import type {
   Anomalie,
   AuditEvenement,
   Calcul,
+  ConfigurationOnboarding,
   Dossier,
   ElementATraiter,
   MotifNumerotation,
@@ -519,9 +520,25 @@ export function definirParametreCabinet(
 
 // --- Dossiers (sélection) ---
 
-export function fetchDossiers(cabinetId: string, q?: string): Promise<Dossier[]> {
-  const query = q ? `?q=${encodeURIComponent(q)}` : '';
+export function fetchDossiers(cabinetId: string, q?: string, statut?: string): Promise<Dossier[]> {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (statut) params.set('statut', statut);
+  const query = params.toString() ? `?${params.toString()}` : '';
   return request<Dossier[]>(`/dossiers${query}`, cabinetId);
+}
+
+// Confirmation de la configuration fiscale d'un dossier nouvellement
+// découvert (brief v28) — fait passer statut='onboarding' à 'actif'.
+export function configurerDossierOnboarding(
+  cabinetId: string,
+  dossierId: string,
+  configuration: ConfigurationOnboarding
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/configurer-onboarding`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(configuration),
+  });
 }
 
 // --- Point d'entrée "à traiter" ---

@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 import {
   ApiError,
+  configurerDossierOnboarding,
   definirParametreCabinet,
   definirParametreDossier,
+  fetchDossiers,
   fetchParametresCabinet,
   fetchParametresDossier,
   synchroniserDossiers,
@@ -14,9 +16,16 @@ import {
   CLE_REGIME_TVA_ENCAISSEMENT,
   CLE_THEME_DEGRADE,
   DEGRADES_SIDEBAR,
+  LIBELLE_PERIODICITE_DECLARATION,
+  LIBELLE_REGIME_TVA,
   LIBELLE_REGIME_TVA_ENCAISSEMENT,
+  VALEURS_PERIODICITE_DECLARATION,
+  VALEURS_REGIME_TVA,
   VALEURS_REGIME_TVA_ENCAISSEMENT,
+  type Dossier,
   type Parametre,
+  type PeriodiciteDeclaration,
+  type RegimeTva,
   type RegimeTvaEncaissement,
   type Role,
 } from '../types';
@@ -33,6 +42,9 @@ interface ParametresPanelProps {
   // liste des dossiers affichée dans le volet latéral (Sidebar.tsx) se
   // rafraîchisse et montre les nouveaux dossiers immédiatement.
   onDossiersSynchronises?: () => void;
+  // Bumpé par le même événement (App.tsx) — sert ici à redéclencher la
+  // liste des dossiers à configurer (brief v28) après une synchronisation.
+  dossiersRefreshKey?: number;
 }
 
 const CLE_MISTRAL = 'mistral_api_key';
@@ -233,6 +245,143 @@ function CabinetSection({
       </p>
       <div className="panel-separateur" />
       <SynchronisationDossiers cabinetId={cabinetId} onSynchronise={onDossiersSynchronises} />
+    </section>
+  );
+}
+
+// Formulaire de confirmation rapide d'un dossier nouvellement découvert
+// (brief v28) — regimeTva/periodiciteDeclaration sont des hypothèses
+// posées par la synchronisation (v27), jamais une vérité fiscale, tant
+// que ce formulaire n'a pas été validé une fois pour ce dossier.
+function DossierOnboardingCard({
+  cabinetId,
+  dossier,
+  onConfigure,
+}: {
+  cabinetId: string;
+  dossier: Dossier;
+  onConfigure: () => void;
+}) {
+  const [regimeTva, setRegimeTva] = useState<RegimeTva>('reel_normal');
+  const [periodiciteDeclaration, setPeriodiciteDeclaration] = useState<PeriodiciteDeclaration>('mensuelle');
+  const [tvaEncaissement, setTvaEncaissement] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleConfirmer() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await configurerDossierOnboarding(cabinetId, dossier.id, { regimeTva, periodiciteDeclaration, tvaEncaissement });
+      notifier(`${dossier.nom} configuré`);
+      onConfigure();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la configuration du dossier');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <li className="card">
+      <p className="label">{dossier.nom}</p>
+      <div className="cycle-form">
+        <label>
+          Régime de TVA
+          <select value={regimeTva} onChange={(e) => setRegimeTva(e.target.value as RegimeTva)} disabled={submitting}>
+            {VALEURS_REGIME_TVA.map((v) => (
+              <option key={v} value={v}>
+                {LIBELLE_REGIME_TVA[v]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Périodicité de déclaration
+          <select
+            value={periodiciteDeclaration}
+            onChange={(e) => setPeriodiciteDeclaration(e.target.value as PeriodiciteDeclaration)}
+            disabled={submitting}
+          >
+            {VALEURS_PERIODICITE_DECLARATION.map((v) => (
+              <option key={v} value={v}>
+                {LIBELLE_PERIODICITE_DECLARATION[v]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={tvaEncaissement}
+            onChange={(e) => setTvaEncaissement(e.target.checked)}
+            disabled={submitting}
+          />
+          TVA sur encaissement (prestataire de services)
+        </label>
+        <button onClick={() => void handleConfirmer()} disabled={submitting}>
+          {submitting ? '…' : 'Confirmer'}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </li>
+  );
+}
+
+// Accessible aux deux rôles (contrairement à CabinetSection) : c'est de la
+// configuration dossier, pas cabinet — cf. brief v28 section 3. Affichée
+// juste après la section cabinet pour rester visible à côté du bouton
+// "Synchroniser les dossiers" qui en est la source la plus fréquente.
+function DossiersOnboardingSection({
+  cabinetId,
+  refreshKey = 0,
+}: {
+  cabinetId: string;
+  refreshKey?: number;
+}) {
+  const [dossiers, setDossiers] = useState<Dossier[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function charger() {
+    setLoading(true);
+    setError(null);
+    try {
+      setDossiers(await fetchDossiers(cabinetId, undefined, 'onboarding'));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger les dossiers en attente de configuration');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (cabinetId) void charger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId, refreshKey]);
+
+  return (
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Dossiers à configurer</h2>
+      </div>
+      <p className="reference">
+        Dossiers découverts via la synchronisation, avec un régime fiscal par défaut ("réel normal") — à confirmer
+        avant utilisation normale.
+      </p>
+      {error && <p className="error">{error}</p>}
+      {!loading && dossiers.length === 0 && <p className="empty">Aucun dossier en attente de configuration.</p>}
+      <ul className="card-list">
+        {dossiers.map((d) => (
+          <DossierOnboardingCard
+            key={d.id}
+            cabinetId={cabinetId}
+            dossier={d}
+            onConfigure={() => void charger()}
+          />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -488,6 +637,7 @@ export function ParametresPanel({
   degradeActif,
   onDegradeChange,
   onDossiersSynchronises = () => {},
+  dossiersRefreshKey = 0,
 }: ParametresPanelProps) {
   return (
     <>
@@ -498,6 +648,7 @@ export function ParametresPanel({
           onDossiersSynchronises={onDossiersSynchronises}
         />
       )}
+      <DossiersOnboardingSection cabinetId={cabinetId} refreshKey={dossiersRefreshKey} />
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <DegradeSection

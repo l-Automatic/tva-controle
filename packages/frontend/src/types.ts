@@ -426,3 +426,30 @@ export interface ResultatSynchronisationDossiers {
   nouveaux: number;
   dossiers: DossierSynchronise[];
 }
+
+// --- Configuration des dossiers nouvellement découverts (brief v28) ---
+// regimeTva et periodiciteDeclaration ici concernent la configuration
+// fiscale du dossier lui-même (statut onboarding → actif), à ne pas
+// confondre avec RegimeTvaEncaissement ci-dessus qui classe un
+// encaissement sans facture rapprochée.
+
+export const VALEURS_REGIME_TVA = ['reel_normal', 'reel_simplifie', 'franchise'] as const;
+export type RegimeTva = (typeof VALEURS_REGIME_TVA)[number];
+export const LIBELLE_REGIME_TVA: Record<RegimeTva, string> = {
+  reel_normal: 'Réel normal',
+  reel_simplifie: 'Réel simplifié',
+  franchise: 'Franchise en base',
+};
+
+export const VALEURS_PERIODICITE_DECLARATION = ['mensuelle', 'trimestrielle'] as const;
+export type PeriodiciteDeclaration = (typeof VALEURS_PERIODICITE_DECLARATION)[number];
+export const LIBELLE_PERIODICITE_DECLARATION: Record<PeriodiciteDeclaration, string> = {
+  mensuelle: 'Mensuelle',
+  trimestrielle: 'Trimestrielle',
+};
+
+export interface ConfigurationOnboarding {
+  regimeTva: RegimeTva;
+  periodiciteDeclaration: PeriodiciteDeclaration;
+  tvaEncaissement: boolean;
+}

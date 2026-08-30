@@ -277,6 +277,7 @@ export function App() {
                   degradeActif={degrade}
                   onDegradeChange={setDegrade}
                   onDossiersSynchronises={() => setDossiersRefreshKey((k) => k + 1)}
+                  dossiersRefreshKey={dossiersRefreshKey}
                 />
               )}
               {zone === 'utilisateurs' && role === 'admin_cabinet' && <UtilisateursZone cabinetId={cabinetId} />}
