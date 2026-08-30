@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 import { resolveLedgerAccounts, resolveLedgerAccountsByIds } from './ledgerAccounts.js';
 import { fetchLignesParCompte } from './tvaLedgerLines.js';
 import { fetchLignesDePiece, type LignePiece } from './pieceLines.js';
@@ -26,7 +26,7 @@ export interface FetchEcrituresTvaComptletesParams {
 // de la période — c'est le goulot d'étranglement à surveiller si un dossier
 // a beaucoup d'activité.
 export async function fetchEcrituresTvaCompletes(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   params: FetchEcrituresTvaComptletesParams
 ): Promise<EcritureTvaComplete[]> {
   // 1. Résoudre les comptes TVA vers leurs id
