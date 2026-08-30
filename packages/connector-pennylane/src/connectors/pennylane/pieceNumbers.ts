@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 
 const LEDGER_ENTRIES_PATH = '/api/external/v2/ledger_entries';
 
@@ -33,7 +33,7 @@ interface PennylaneLedgerEntriesResponse {
 // 'in' — on récupère donc les écritures déjà identifiées par ailleurs
 // (ledgerEntryId), pas une recherche large.
 export async function fetchPieceNumbers(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   ledgerEntryIds: number[]
 ): Promise<Map<number, string | null>> {
   const resultat = new Map<number, string | null>();
