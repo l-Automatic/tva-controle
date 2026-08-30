@@ -11,6 +11,7 @@ import {
   executerCycleTva,
   analyserMotifNumerotationFacture,
   ClefMistralAbsenteError,
+  verifierComptesNonReconnus,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   justifierAnomalie,
@@ -935,6 +936,44 @@ export function buildApp(pool: Pool): FastifyInstance {
       }
       throw err;
     }
+  });
+
+  // --- Vérification ciblée et légère : comptes TVA non reconnus (10/08) ---
+  // Premier exemple d'un mécanisme voué à se généraliser à d'autres
+  // anomalies : recalcule UNE anomalie précise sans repasser par un cycle
+  // complet — pas de lettrage, pas d'IA, pas les 19 autres contrôles. Le
+  // cas typique : un compte d'autoliquidation vient d'être confirmé dans
+  // Conventions génériques, cette vérification confirme que l'anomalie a
+  // bien disparu sans attendre un nouveau cycle complet.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string };
+  }>('/dossiers/:dossierId/verifier-comptes-non-reconnus', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin } = request.body;
+
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierComptesNonReconnus(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
   });
 
   // --- Paramétrage cabinet (ex: clé API Mistral — présence = LLM activé) ---
