@@ -1,6 +1,8 @@
 export { creerPool, avecContexteCabinet } from './db/pool.js';
 export {
   chargerDossier,
+  chargerDossierComplet,
+  type DossierComplet,
   chargerContexteDossier,
   conventionValeur,
   listerDossiers,
