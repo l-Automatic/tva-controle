@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 import type { PennylaneLedgerEntryLineItem, PennylaneLedgerEntryLinesResponse } from './types.js';
 import type { LigneEcritureAvecLettrage } from '@tva-controle/core';
 
@@ -38,7 +38,7 @@ function mapLigne(item: PennylaneLedgerEntryLineItem): LigneEcritureAvecLettrage
 // Récupère toutes les lignes d'écriture touchant les comptes donnés sur la période.
 // Suit la pagination cursor jusqu'à épuisement.
 export async function fetchLignesParCompte(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   params: FetchLignesParCompteParams
 ): Promise<LigneEcritureAvecLettrage[]> {
   const lignes: LigneEcritureAvecLettrage[] = [];
