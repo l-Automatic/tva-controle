@@ -1,6 +1,10 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { PennylaneClient, fetchDossiersCabinet } from '@tva-controle/connector-pennylane';
+import {
+  FirmApiClient,
+  fetchDossiersCabinet,
+  type IPennylaneApiClient,
+} from '@tva-controle/connector-pennylane';
 import {
   avecContexteCabinet,
   executerCycleTva,
@@ -65,6 +69,7 @@ import {
   creerJeton,
   verifierJeton,
   type PayloadJeton,
+  chargerDossier,
 } from '@tva-controle/orchestrateur-module9';
 
 // Authentification (10/08) — remplace l'ancien stand-in (header cabinet non
@@ -141,6 +146,42 @@ export function buildApp(pool: Pool): FastifyInstance {
 
     request.utilisateur = payload;
   });
+
+  // --- Résolution du client Pennylane pour un dossier (10/08) ---
+  // Cœur du chantier API Cabinet : le jeton n'est plus jamais fourni
+  // manuellement dans une requête — il vient du paramètre cabinet
+  // (pennylane_firm_api_key), et le dossier ciblé de son propre
+  // external_company_id. Grâce à IPennylaneApiClient (interface partagée),
+  // le FirmApiClient retourné ici fonctionne dans exactement les mêmes
+  // fonctions connecteur que l'ancien PennylaneClient, sans aucune
+  // adaptation nécessaire côté pipeline.ts.
+  class LogicielSourceNonPrisEnChargeError extends Error {}
+  class JetonCabinetManquantError extends Error {}
+  class DossierIntrouvableError extends Error {}
+
+  async function resoudreClientPennylane(cabinetId: string, dossierId: string): Promise<IPennylaneApiClient> {
+    const dossier = await avecContexteCabinet(pool, cabinetId, (client) => chargerDossier(client, dossierId));
+    if (!dossier) {
+      throw new DossierIntrouvableError(`Dossier ${dossierId} introuvable, ou hors du cabinet courant.`);
+    }
+
+    if (dossier.logicielSource !== 'pennylane') {
+      throw new LogicielSourceNonPrisEnChargeError(
+        `Logiciel source '${dossier.logicielSource}' non pris en charge pour l'instant — seul Pennylane l'est aujourd'hui.`
+      );
+    }
+
+    const jetonCabinet = await avecContexteCabinet(pool, cabinetId, (client) =>
+      parametreCabinetValeur(client, cabinetId, 'pennylane_firm_api_key')
+    );
+    if (typeof jetonCabinet !== 'string' || jetonCabinet.length === 0) {
+      throw new JetonCabinetManquantError(
+        "Aucun jeton d'API Cabinet Pennylane configuré pour ce cabinet — définir la clé pennylane_firm_api_key dans les paramètres du cabinet."
+      );
+    }
+
+    return new FirmApiClient({ token: jetonCabinet, companyId: dossier.externalCompanyId });
+  }
 
   // --- Authentification ---
   app.post<{ Body: { email: string; motDePasse: string } }>('/auth/login', async (request, reply) => {
@@ -772,7 +813,6 @@ export function buildApp(pool: Pool): FastifyInstance {
     Body: {
       periodeDebut: string;
       periodeFin: string;
-      pennylaneToken: string;
       comptesVenteService?: string[];
       comptesChargeService?: string[];
       comptesEquipement?: string[];
@@ -780,16 +820,25 @@ export function buildApp(pool: Pool): FastifyInstance {
     };
   }>('/dossiers/:dossierId/cycles', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, pennylaneToken, ...overrides } = request.body;
+    const { periodeDebut, periodeFin, ...overrides } = request.body;
 
-    if (!periodeDebut || !periodeFin || !pennylaneToken) {
-      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et pennylaneToken sont requis' });
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
     if (periodeFin < periodeDebut) {
       return reply.code(400).send({ erreur: 'periodeFin ne peut pas être antérieure à periodeDebut' });
     }
 
-    const pennylaneClient = new PennylaneClient({ token: pennylaneToken });
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
 
     try {
       const resultat = await executerCycleTva(pool, {
@@ -797,7 +846,7 @@ export function buildApp(pool: Pool): FastifyInstance {
         dossierId: request.params.dossierId,
         periodeDebut,
         periodeFin,
-        client: pennylaneClient,
+        client,
         ...(overrides.comptesVenteService ? { comptesVenteServiceOverride: overrides.comptesVenteService } : {}),
         ...(overrides.comptesChargeService
           ? { comptesChargeServiceOverride: overrides.comptesChargeService }
@@ -820,22 +869,31 @@ export function buildApp(pool: Pool): FastifyInstance {
   // chaque cycle — cf. analyserMotifNumerotation.ts pour le raisonnement.
   app.post<{
     Params: { dossierId: string };
-    Body: { pennylaneToken: string; periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
   }>('/dossiers/:dossierId/motif-numerotation/analyser', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { pennylaneToken, periodeDebut, periodeFin, utilisateurId } = request.body;
+    const { periodeDebut, periodeFin, utilisateurId } = request.body;
 
-    if (!pennylaneToken || !periodeDebut || !periodeFin) {
-      return reply.code(400).send({ erreur: 'pennylaneToken, periodeDebut et periodeFin sont requis' });
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
 
-    const pennylaneClient = new PennylaneClient({ token: pennylaneToken });
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
 
     try {
       return await analyserMotifNumerotationFacture(pool, {
         cabinetId,
         dossierId: request.params.dossierId,
-        client: pennylaneClient,
+        client,
         periodeDebut,
         periodeFin,
         utilisateurId,
