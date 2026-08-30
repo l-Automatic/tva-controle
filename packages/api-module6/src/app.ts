@@ -74,6 +74,10 @@ import {
   chargerDossier,
   DossierIntrouvableError,
   configurerDossierOnboarding,
+  chargerDossierComplet,
+  mettreAJourInfosDossier,
+  type InfosIdentiteDossier,
+  definirStatutDossier,
 } from '@tva-controle/orchestrateur-module9';
 
 // Authentification (10/08) — remplace l'ancien stand-in (header cabinet non
@@ -1023,6 +1027,65 @@ export function buildApp(pool: Pool): FastifyInstance {
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
         configurerDossierOnboarding(client, request.params.dossierId, regimeTva, periodiciteDeclaration, tvaEncaissement)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) {
+        return reply.code(404).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // --- Identité complète d'un dossier (10/08) — accessible aux deux rôles,
+  // c'est du niveau dossier, pas cabinet.
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/complet', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const dossier = await avecContexteCabinet(pool, cabinetId, (client) =>
+      chargerDossierComplet(client, request.params.dossierId)
+    );
+    if (!dossier) {
+      return reply.code(404).send({ erreur: `Dossier ${request.params.dossierId} introuvable.` });
+    }
+    return dossier;
+  });
+
+  app.put<{ Params: { dossierId: string }; Body: InfosIdentiteDossier }>(
+    '/dossiers/:dossierId/identite',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      try {
+        await avecContexteCabinet(pool, cabinetId, (client) =>
+          mettreAJourInfosDossier(client, request.params.dossierId, request.body)
+        );
+        reply.code(204).send();
+      } catch (err) {
+        if (err instanceof DossierIntrouvableError) {
+          return reply.code(404).send({ erreur: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  // Réservé aux admin_cabinet — activer/désactiver un dossier, deux raisons
+  // distinctes possibles (hors périmètre TVA découvert à l'import, ou
+  // volontairement écarté), le motif garde la trace de laquelle.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { statut: 'actif' | 'inactif'; motifDesactivation?: string };
+  }>('/dossiers/:dossierId/statut', async (request, reply) => {
+    if (request.utilisateur!.role !== 'admin_cabinet') {
+      return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
+    }
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { statut, motifDesactivation } = request.body;
+    if (statut !== 'actif' && statut !== 'inactif') {
+      return reply.code(400).send({ erreur: "statut doit être 'actif' ou 'inactif'" });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        definirStatutDossier(client, request.params.dossierId, statut, motifDesactivation)
       );
       reply.code(204).send();
     } catch (err) {
