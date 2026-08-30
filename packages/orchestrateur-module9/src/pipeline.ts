@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import {
-  PennylaneClient,
+  type IPennylaneApiClient,
   fetchEcrituresTvaCompletes,
   fetchTrialBalance,
   filterComptesParPrefixe,
@@ -71,7 +71,7 @@ export interface ParametresCycleTva {
   dossierId: string;
   periodeDebut: string;
   periodeFin: string;
-  client: PennylaneClient;
+  client: IPennylaneApiClient;
   // Découvert automatiquement (comptes 445* ayant un vrai mouvement sur la
   // période, via la balance) si non fourni — override possible pour les
   // tests ou un besoin ponctuel de restreindre le périmètre.
