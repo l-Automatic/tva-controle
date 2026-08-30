@@ -4,6 +4,18 @@
 // de pagination et de mapping sans jamais faire d'appel réseau réel dans
 // les tests unitaires.
 
+// Interface partagée (10/08) — extraite pour que toutes les fonctions
+// connecteur déjà écrites (fetchLignesParCompte, fetchLettrage, etc.)
+// acceptent indifféremment un PennylaneClient (jeton par dossier) ou un
+// FirmApiClient (jeton cabinet, API Cabinet) sans aucune modification de
+// leur propre code. Une classe TypeScript ordinaire ne suffit pas ici : deux
+// classes avec des champs privés distincts (même identiques par le nom) ne
+// sont jamais mutuellement assignables, même si leur forme publique est
+// strictement la même — d'où cette interface, purement structurelle.
+export interface IPennylaneApiClient {
+  get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T>;
+}
+
 export class PennylaneApiError extends Error {
   constructor(
     public readonly status: number,
@@ -25,7 +37,7 @@ export interface PennylaneClientConfig {
 // Limite documentée : 25 requêtes / 5 secondes par token (rate-limiting-1.md).
 // Gérée ici, au niveau le plus bas, pour qu'aucun appelant n'ait à s'en
 // soucier ni ne puisse l'oublier.
-export class PennylaneClient {
+export class PennylaneClient implements IPennylaneApiClient {
   private readonly baseUrl: string;
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
