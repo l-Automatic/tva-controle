@@ -38,6 +38,8 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  definirStatutDossier,
+  mettreAJourInfosDossier,
   DossierIntrouvableError,
 } from '../src/db/writeRepository.js';
 import {
@@ -1730,5 +1732,83 @@ describe('configurerDossierOnboarding', () => {
     );
     expect(ligne.rows[0]?.regime_tva).toBe('franchise');
     expect(new Date(ligne.rows[0]?.date_onboarding).getTime()).toBe(new Date(premiereDate).getTime());
+  });
+});
+
+describe('definirStatutDossier', () => {
+  it('désactive un dossier avec un motif', async () => {
+    await avecClient((client) =>
+      definirStatutDossier(client, dossierId, 'inactif', 'Régime spécial, hors périmètre TVA Contrôle')
+    );
+    const ligne = await avecClient((client) =>
+      client.query(`SELECT statut, motif_desactivation FROM dossiers WHERE id = $1`, [dossierId])
+    );
+    expect(ligne.rows[0]?.statut).toBe('inactif');
+    expect(ligne.rows[0]?.motif_desactivation).toBe('Régime spécial, hors périmètre TVA Contrôle');
+
+    // Remet dans l'état d'avant pour ne pas casser les autres tests du fichier
+    await avecClient((client) => definirStatutDossier(client, dossierId, 'actif'));
+  });
+
+  it('réactiver efface le motif de désactivation', async () => {
+    await avecClient((client) => definirStatutDossier(client, dossierId, 'inactif', 'Test temporaire'));
+    await avecClient((client) => definirStatutDossier(client, dossierId, 'actif'));
+
+    const ligne = await avecClient((client) =>
+      client.query(`SELECT statut, motif_desactivation FROM dossiers WHERE id = $1`, [dossierId])
+    );
+    expect(ligne.rows[0]?.statut).toBe('actif');
+    expect(ligne.rows[0]?.motif_desactivation).toBeNull();
+  });
+
+  it('échoue proprement pour un dossier inexistant', async () => {
+    await expect(
+      avecClient((client) =>
+        definirStatutDossier(client, '00000000-0000-0000-0000-000000000000', 'inactif')
+      )
+    ).rejects.toThrow(DossierIntrouvableError);
+  });
+});
+
+describe('mettreAJourInfosDossier', () => {
+  it('met à jour uniquement les champs fournis, sans effacer le reste', async () => {
+    await avecClient((client) =>
+      mettreAJourInfosDossier(client, dossierId, {
+        siret: '36252187900012',
+        formeJuridique: 'SASU',
+        fiscalite: 'is',
+      })
+    );
+
+    let ligne = await avecClient((client) =>
+      client.query(`SELECT siret, forme_juridique, fiscalite, comptabilite FROM dossiers WHERE id = $1`, [
+        dossierId,
+      ])
+    );
+    expect(ligne.rows[0]?.siret).toBe('36252187900012');
+    expect(ligne.rows[0]?.forme_juridique).toBe('SASU');
+    expect(ligne.rows[0]?.fiscalite).toBe('is');
+    expect(ligne.rows[0]?.comptabilite).toBeNull();
+
+    // Deuxième appel, un seul champ différent : le reste doit rester intact
+    await avecClient((client) => mettreAJourInfosDossier(client, dossierId, { comptabilite: 'engagement' }));
+
+    ligne = await avecClient((client) =>
+      client.query(`SELECT siret, forme_juridique, comptabilite FROM dossiers WHERE id = $1`, [dossierId])
+    );
+    expect(ligne.rows[0]?.siret).toBe('36252187900012'); // toujours là
+    expect(ligne.rows[0]?.comptabilite).toBe('engagement');
+  });
+
+  it('ne fait rien (jamais une erreur) si aucun champ fourni', async () => {
+    await expect(avecClient((client) => mettreAJourInfosDossier(client, dossierId, {}))).resolves.not.toThrow();
+  });
+
+  it('échoue proprement pour un dossier inexistant', async () => {
+    await expect(
+      avecClient((client) =>
+        mettreAJourInfosDossier(client, '00000000-0000-0000-0000-000000000000', { siret: 'x' })
+      )
+    ).rejects.toThrow(DossierIntrouvableError);
   });
 });
