@@ -155,6 +155,25 @@ describe('listerDossiers', () => {
     const resultats = await avecContexteCabinet(pool, cabinetId, (client) => listerDossiers(client, cabinetId));
     expect(resultats.some((d) => d.id === dossierId)).toBe(true);
   });
+
+  it('filtre par statut', async () => {
+    const resultatsActifs = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerDossiers(client, cabinetId, undefined, 'actif')
+    );
+    expect(resultatsActifs.every((d) => d.statut === 'actif')).toBe(true);
+
+    const resultatsOnboarding = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerDossiers(client, cabinetId, undefined, 'onboarding')
+    );
+    expect(resultatsOnboarding.every((d) => d.statut === 'onboarding')).toBe(true);
+  });
+
+  it('combine recherche et statut', async () => {
+    const resultats = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerDossiers(client, cabinetId, 'Electricien', 'onboarding')
+    );
+    expect(resultats.some((d) => d.id === dossierId)).toBe(true);
+  });
 });
 
 describe('chargerContexteDossier — taux "mixte" (NULL) filtré, 10/08', () => {
