@@ -407,3 +407,22 @@ export interface UtilisateurCabinet {
   statut: string;
   aUnMotDePasse: boolean;
 }
+
+// --- Chantier API Cabinet (brief v27) — le jeton Pennylane vient
+// maintenant d'un paramètre cabinet (pennylane_firm_api_key), le dossier
+// ciblé de son propre external_company_id. Plus rien à fournir
+// manuellement pour lancer un cycle. ---
+
+export const CLE_PENNYLANE_FIRM_API_KEY = 'pennylane_firm_api_key';
+
+export interface DossierSynchronise {
+  id: string;
+  nom: string;
+  nouveau: boolean;
+}
+
+export interface ResultatSynchronisationDossiers {
+  total: number;
+  nouveaux: number;
+  dossiers: DossierSynchronise[];
+}

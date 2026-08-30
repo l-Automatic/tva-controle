@@ -54,6 +54,11 @@ export function App() {
   const [sousOngletConfiguration, setSousOngletConfiguration] = useState<SousOngletConfiguration>('comptes');
   const [periodeCycle, setPeriodeCycle] = useState<{ debut: string; fin: string } | null>(null);
   const [aTraiterRefreshKey, setATraiterRefreshKey] = useState(0);
+  // Brief v27 : bumpé après "Synchroniser les dossiers" pour que la
+  // recherche de dossiers du volet latéral (Sidebar.tsx) reflète
+  // immédiatement les nouveaux dossiers, sans attendre une nouvelle
+  // frappe dans le champ de recherche.
+  const [dossiersRefreshKey, setDossiersRefreshKey] = useState(0);
   const [degrade, setDegrade] = useState<string>(DEGRADE_PAR_DEFAUT);
   const [suggestionsTauxComptes, setSuggestionsTauxComptes] = useState<CompteSansTauxAssigne[]>([]);
   const [suggestionsTauxClients, setSuggestionsTauxClients] = useState<CompteClientSansTauxAssigne[]>([]);
@@ -203,6 +208,7 @@ export function App() {
         zone={zone}
         onChangeZone={allerVersZone}
         onDeconnexion={deconnexion}
+        dossiersRefreshKey={dossiersRefreshKey}
       />
 
       <div className="app-content">
@@ -270,6 +276,7 @@ export function App() {
                   role={role}
                   degradeActif={degrade}
                   onDegradeChange={setDegrade}
+                  onDossiersSynchronises={() => setDossiersRefreshKey((k) => k + 1)}
                 />
               )}
               {zone === 'utilisateurs' && role === 'admin_cabinet' && <UtilisateursZone cabinetId={cabinetId} />}

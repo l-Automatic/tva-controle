@@ -53,27 +53,26 @@ export function AnalyseMotifNumerotationPanel({
 }: AnalyseMotifNumerotationPanelProps) {
   const [periodeDebut, setPeriodeDebut] = useState(premierJourExerciceEnCours);
   const [periodeFin, setPeriodeFin] = useState(dernierJourExerciceEnCours);
-  const [pennylaneToken, setPennylaneToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [motifPropose, setMotifPropose] = useState<MotifNumerotation | null | undefined>(undefined);
   const notifier = useToast();
 
   async function handleAnalyser() {
-    if (!periodeDebut || !periodeFin || !pennylaneToken) {
-      setError('Période de début, période de fin et token Pennylane sont requis');
+    if (!periodeDebut || !periodeFin) {
+      setError('Période de début et période de fin sont requises');
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
+      // pennylaneToken retiré (brief v27) — le backend résout maintenant
+      // lui-même le client Pennylane depuis le jeton cabinet configuré.
       const { motifPropose: resultat } = await analyserMotifNumerotation(cabinetId, dossierId, {
-        pennylaneToken,
         periodeDebut,
         periodeFin,
         utilisateurId,
       });
-      setPennylaneToken('');
       setMotifPropose(resultat);
       if (resultat) {
         notifier('Motif de numérotation proposé — à confirmer dans Conventions génériques');
@@ -105,17 +104,6 @@ export function AnalyseMotifNumerotationPanel({
         <label>
           Période — fin
           <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
-        </label>
-        <label className="cycle-form-token">
-          Token Pennylane
-          <input
-            type="password"
-            placeholder="Token à usage unique — régénérez-le après ce test"
-            value={pennylaneToken}
-            onChange={(e) => setPennylaneToken(e.target.value)}
-            disabled={submitting}
-            autoComplete="off"
-          />
         </label>
         <button onClick={() => void handleAnalyser()} disabled={submitting}>
           {submitting ? 'Analyse en cours…' : 'Analyser le motif de numérotation'}

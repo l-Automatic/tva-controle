@@ -48,14 +48,20 @@ interface SidebarProps {
   zone: Zone;
   onChangeZone: (z: Zone) => void;
   onDeconnexion: () => void;
+  // Brief v27 : bumpé après "Synchroniser les dossiers" (Paramètres
+  // cabinet) pour que les nouveaux dossiers apparaissent ici sans attendre
+  // une nouvelle frappe dans le champ de recherche.
+  dossiersRefreshKey?: number;
 }
 
 function RechercheDossier({
   cabinetId,
   onSelect,
+  refreshKey,
 }: {
   cabinetId: string;
   onSelect: (d: Dossier) => void;
+  refreshKey?: number;
 }) {
   const [recherche, setRecherche] = useState('');
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
@@ -76,7 +82,7 @@ function RechercheDossier({
       }
     }, 250);
     return () => clearTimeout(id);
-  }, [cabinetId, recherche]);
+  }, [cabinetId, recherche, refreshKey]);
 
   return (
     <div className="sidebar-recherche">
@@ -118,6 +124,7 @@ export function Sidebar({
   zone,
   onChangeZone,
   onDeconnexion,
+  dossiersRefreshKey = 0,
 }: SidebarProps) {
   const [rechercheOuverte, setRechercheOuverte] = useState(!dossier);
   const zonesVisibles = ZONES.filter((z) => !z.roles || z.roles.includes(role));
@@ -142,7 +149,7 @@ export function Sidebar({
             <ChevronDown size={15} aria-hidden="true" />
           </button>
         ) : (
-          <RechercheDossier cabinetId={cabinetId} onSelect={handleSelect} />
+          <RechercheDossier cabinetId={cabinetId} onSelect={handleSelect} refreshKey={dossiersRefreshKey} />
         )}
       </div>
 

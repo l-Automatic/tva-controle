@@ -346,7 +346,6 @@ export function CycleForm({
 }: CycleFormProps) {
   const [periodeDebut, setPeriodeDebut] = useState('');
   const [periodeFin, setPeriodeFin] = useState('');
-  const [pennylaneToken, setPennylaneToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dejaValide, setDejaValide] = useState(false);
@@ -356,8 +355,8 @@ export function CycleForm({
   const notifier = useToast();
 
   async function handleLancer() {
-    if (!periodeDebut || !periodeFin || !pennylaneToken) {
-      setError('Période de début, période de fin et token Pennylane sont requis');
+    if (!periodeDebut || !periodeFin) {
+      setError('Période de début et période de fin sont requises');
       return;
     }
     setSubmitting(true);
@@ -366,9 +365,10 @@ export function CycleForm({
     setDejaValide(false);
     setResultat(null);
     try {
-      const res = await lancerCycle(cabinetId, dossierId, { periodeDebut, periodeFin, pennylaneToken });
+      // pennylaneToken retiré (brief v27) — le backend résout maintenant
+      // lui-même le client Pennylane depuis le jeton cabinet configuré.
+      const res = await lancerCycle(cabinetId, dossierId, { periodeDebut, periodeFin });
       setResultat(res);
-      setPennylaneToken('');
       const message = res.statut === 'bloque' ? 'Cycle bloqué — anomalies à traiter' : 'Cycle calculé';
       notifier(message);
       setMessageSucces(message);
@@ -405,24 +405,10 @@ export function CycleForm({
           Période — fin
           <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} />
         </label>
-        <label className="cycle-form-token">
-          Token Pennylane
-          <input
-            type="password"
-            placeholder="Token à usage unique — régénérez-le après ce test"
-            value={pennylaneToken}
-            onChange={(e) => setPennylaneToken(e.target.value)}
-            autoComplete="off"
-          />
-        </label>
         <button onClick={() => void handleLancer()} disabled={submitting}>
           {submitting ? 'Cycle en cours…' : 'Lancer le cycle'}
         </button>
       </div>
-      <p className="reference cycle-form-warning">
-        Le token est transmis en clair au serveur (pas de gestion de secrets à ce stade) — ne réutilisez jamais un
-        token déjà collé ailleurs, régénérez-le avant chaque test.
-      </p>
 
       {error && <p className={dejaValide ? 'error error-409' : 'error'}>{error}</p>}
       {resultat && (

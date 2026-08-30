@@ -6,9 +6,11 @@ import {
   definirParametreDossier,
   fetchParametresCabinet,
   fetchParametresDossier,
+  synchroniserDossiers,
 } from '../api';
 import { useToast } from '../toast';
 import {
+  CLE_PENNYLANE_FIRM_API_KEY,
   CLE_REGIME_TVA_ENCAISSEMENT,
   CLE_THEME_DEGRADE,
   DEGRADES_SIDEBAR,
@@ -27,6 +29,10 @@ interface ParametresPanelProps {
   role: Role;
   degradeActif: string;
   onDegradeChange: (degrade: string) => void;
+  // Appelé après une synchronisation réussie (brief v27), pour que la
+  // liste des dossiers affichée dans le volet latéral (Sidebar.tsx) se
+  // rafraîchisse et montre les nouveaux dossiers immédiatement.
+  onDossiersSynchronises?: () => void;
 }
 
 const CLE_MISTRAL = 'mistral_api_key';
@@ -39,13 +45,139 @@ function formatDate(iso: string): string {
   }
 }
 
-function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utilisateurId: string }) {
-  const [parametres, setParametres] = useState<Parametre[]>([]);
-  const [nouvelleCle, setNouvelleCle] = useState('');
-  const [loading, setLoading] = useState(false);
+// Un champ par clé secrète cabinet (clé Mistral, jeton API Cabinet
+// Pennylane — brief v27) — jamais réaffichée en clair une fois enregistrée,
+// le backend la masque déjà ('••••••••'), affichée telle quelle sans
+// tentative de déchiffrement côté client.
+function ChampSecretCabinet({
+  cabinetId,
+  utilisateurId,
+  cle,
+  libelle,
+  placeholder,
+  parametres,
+  loading,
+  onDefini,
+}: {
+  cabinetId: string;
+  utilisateurId: string;
+  cle: string;
+  libelle: string;
+  placeholder: string;
+  parametres: Parametre[];
+  loading: boolean;
+  onDefini: () => void;
+}) {
+  const [nouvelleValeur, setNouvelleValeur] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const notifier = useToast();
+
+  const parametre = parametres.find((p) => p.cle === cle);
+  const valeurAffichee = parametre ? String(parametre.valeur) : null;
+
+  async function handleDefinir() {
+    if (!nouvelleValeur.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await definirParametreCabinet(cabinetId, utilisateurId, cle, nouvelleValeur.trim());
+      setNouvelleValeur('');
+      notifier(`${libelle} enregistrée`);
+      onDefini();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="parametre-secret-cabinet">
+      <p className="reference">
+        {libelle} : <strong>{loading ? '…' : (valeurAffichee ?? 'Non définie')}</strong>
+        {parametre && ` — dernière mise à jour ${formatDate(parametre.updatedAt)}`}
+      </p>
+      <div className="cycle-form">
+        <label className="cycle-form-token">
+          Nouvelle valeur
+          <input
+            type="password"
+            placeholder={placeholder}
+            value={nouvelleValeur}
+            onChange={(e) => setNouvelleValeur(e.target.value)}
+            disabled={submitting}
+            autoComplete="off"
+          />
+        </label>
+        <button onClick={() => void handleDefinir()} disabled={submitting || !nouvelleValeur.trim()}>
+          {submitting ? '…' : parametre ? 'Redéfinir' : 'Définir'}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+// Auto-découverte des dossiers déjà gérés sous Pennylane (chantier API
+// Cabinet, brief v27) — 400 si le jeton cabinet n'est pas encore
+// configuré, message backend déjà clair sur quoi faire, affiché tel quel.
+function SynchronisationDossiers({
+  cabinetId,
+  onSynchronise = () => {},
+}: {
+  cabinetId: string;
+  onSynchronise?: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [resume, setResume] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleSynchroniser() {
+    setSubmitting(true);
+    setError(null);
+    setResume(null);
+    try {
+      const resultat = await synchroniserDossiers(cabinetId);
+      const texte = `${resultat.total} dossier${resultat.total > 1 ? 's' : ''} synchronisé${resultat.total > 1 ? 's' : ''}, ${resultat.nouveaux} nouveau${resultat.nouveaux > 1 ? 'x' : ''}`;
+      setResume(texte);
+      notifier(texte);
+      onSynchronise?.();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la synchronisation des dossiers');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="parametre-secret-cabinet">
+      <p className="reference">
+        Découvre automatiquement les dossiers déjà gérés sous Pennylane pour ce cabinet, à partir du jeton API
+        Cabinet ci-dessus.
+      </p>
+      <button onClick={() => void handleSynchroniser()} disabled={submitting}>
+        {submitting ? 'Synchronisation…' : 'Synchroniser les dossiers'}
+      </button>
+      {resume && <p className="reference">{resume}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+function CabinetSection({
+  cabinetId,
+  utilisateurId,
+  onDossiersSynchronises = () => {},
+}: {
+  cabinetId: string;
+  utilisateurId: string;
+  onDossiersSynchronises?: () => void;
+}) {
+  const [parametres, setParametres] = useState<Parametre[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function charger() {
     setLoading(true);
@@ -65,56 +197,42 @@ function CabinetSection({ cabinetId, utilisateurId }: { cabinetId: string; utili
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId]);
 
-  async function handleDefinir() {
-    if (!nouvelleCle.trim()) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await definirParametreCabinet(cabinetId, utilisateurId, CLE_MISTRAL, nouvelleCle.trim());
-      setNouvelleCle('');
-      notifier('Paramètre cabinet enregistré');
-      await charger();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const mistral = parametres.find((p) => p.cle === CLE_MISTRAL);
-  // La valeur est déjà masquée par l'API ('••••••••') si définie — affichée
-  // telle quelle, jamais recalculée ni déchiffrée côté client.
-  const valeurAffichee = mistral ? String(mistral.valeur) : null;
-
   return (
     <section className="panel panel-full">
       <div className="panel-header">
         <h2>Paramètres cabinet</h2>
       </div>
-      <p className="reference">
-        Clé API Mistral : <strong>{loading ? '…' : (valeurAffichee ?? 'Non définie')}</strong>
-        {mistral && ` — dernière mise à jour ${formatDate(mistral.updatedAt)}`}
-      </p>
-      <div className="cycle-form">
-        <label className="cycle-form-token">
-          Nouvelle clé
-          <input
-            type="password"
-            placeholder="Coller la nouvelle clé Mistral"
-            value={nouvelleCle}
-            onChange={(e) => setNouvelleCle(e.target.value)}
-            disabled={submitting}
-            autoComplete="off"
-          />
-        </label>
-        <button onClick={() => void handleDefinir()} disabled={submitting || !nouvelleCle.trim()}>
-          {submitting ? '…' : mistral ? 'Redéfinir' : 'Définir'}
-        </button>
-      </div>
+      {error && <p className="error">{error}</p>}
+      <ChampSecretCabinet
+        cabinetId={cabinetId}
+        utilisateurId={utilisateurId}
+        cle={CLE_MISTRAL}
+        libelle="Clé API Mistral"
+        placeholder="Coller la nouvelle clé Mistral"
+        parametres={parametres}
+        loading={loading}
+        onDefini={() => void charger()}
+      />
       <p className="reference cycle-form-warning">
         Stockée en clair côté serveur pour l'instant (pas encore chiffrée).
       </p>
-      {error && <p className="error">{error}</p>}
+      <div className="panel-separateur" />
+      <ChampSecretCabinet
+        cabinetId={cabinetId}
+        utilisateurId={utilisateurId}
+        cle={CLE_PENNYLANE_FIRM_API_KEY}
+        libelle="Jeton API Cabinet Pennylane"
+        placeholder="Coller le jeton d'API Cabinet Pennylane"
+        parametres={parametres}
+        loading={loading}
+        onDefini={() => void charger()}
+      />
+      <p className="reference cycle-form-warning">
+        Remplace la saisie manuelle d'un token à chaque cycle — un seul jeton pour tout le cabinet, résolu
+        automatiquement pour chaque dossier Pennylane.
+      </p>
+      <div className="panel-separateur" />
+      <SynchronisationDossiers cabinetId={cabinetId} onSynchronise={onDossiersSynchronises} />
     </section>
   );
 }
@@ -369,10 +487,17 @@ export function ParametresPanel({
   role,
   degradeActif,
   onDegradeChange,
+  onDossiersSynchronises = () => {},
 }: ParametresPanelProps) {
   return (
     <>
-      {role === 'admin_cabinet' && <CabinetSection cabinetId={cabinetId} utilisateurId={utilisateurId} />}
+      {role === 'admin_cabinet' && (
+        <CabinetSection
+          cabinetId={cabinetId}
+          utilisateurId={utilisateurId}
+          onDossiersSynchronises={onDossiersSynchronises}
+        />
+      )}
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <DegradeSection

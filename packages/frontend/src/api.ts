@@ -11,6 +11,7 @@ import type {
   Proposition,
   QualificationEncaissement,
   ResultatCycle,
+  ResultatSynchronisationDossiers,
   Role,
   Session,
   TauxAssigne,
@@ -384,10 +385,13 @@ export function assignerTauxHistoriqueTiersManuel(
   });
 }
 
+// pennylaneToken retiré (brief v27, chantier API Cabinet) — le backend
+// résout maintenant lui-même le client Pennylane à partir du paramètre
+// cabinet pennylane_firm_api_key et de l'external_company_id du dossier,
+// plus rien à fournir manuellement ici.
 export interface ParametresCycle {
   periodeDebut: string;
   periodeFin: string;
-  pennylaneToken: string;
   comptesVenteService?: string[];
   comptesChargeService?: string[];
   comptesEquipement?: string[];
@@ -396,6 +400,8 @@ export interface ParametresCycle {
 
 // 409 (ApiError.status) si un calcul déjà validé/déclaré existe sur cette
 // période — géré par l'appelant, pas ici (message déjà porté par ApiError).
+// 400 si aucun jeton cabinet Pennylane n'est configuré (message backend
+// déjà clair, affiché tel quel par l'appelant).
 export function lancerCycle(
   cabinetId: string,
   dossierId: string,
@@ -414,12 +420,20 @@ export function lancerCycle(
 export function analyserMotifNumerotation(
   cabinetId: string,
   dossierId: string,
-  parametres: { pennylaneToken: string; periodeDebut: string; periodeFin: string; utilisateurId: string }
+  parametres: { periodeDebut: string; periodeFin: string; utilisateurId: string }
 ): Promise<{ motifPropose: MotifNumerotation | null }> {
   return request<{ motifPropose: MotifNumerotation | null }>(`/dossiers/${dossierId}/motif-numerotation/analyser`, cabinetId, {
     method: 'POST',
     body: JSON.stringify(parametres),
   });
+}
+
+// Auto-découverte des dossiers déjà gérés sous Pennylane (chantier API
+// Cabinet, brief v27) — réservée à admin_cabinet côté backend (403 sinon).
+// 400 si aucun jeton cabinet Pennylane n'est configuré, 502 si l'appel à
+// l'API Cabinet Pennylane échoue — les deux portent déjà un message clair.
+export function synchroniserDossiers(cabinetId: string): Promise<ResultatSynchronisationDossiers> {
+  return request<ResultatSynchronisationDossiers>('/synchroniser-dossiers', cabinetId, { method: 'POST' });
 }
 
 export function fetchCalculs(cabinetId: string, dossierId: string): Promise<Calcul[]> {
