@@ -229,6 +229,22 @@ export function qualifierEncaissement(
   });
 }
 
+// Recalcule uniquement compte_tva_non_reconnu sur la période donnée — pas
+// de cycle complet (pas de lettrage, pas d'IA, pas les 19 autres
+// contrôles), cf. brief v30. Si la convention a entre-temps été confirmée,
+// l'anomalie est marquée obsolète côté backend et disparaît au prochain
+// chargement de la liste.
+export function verifierComptesNonReconnus(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string }
+): Promise<{ anomalies: number }> {
+  return request<{ anomalies: number }>(`/dossiers/${dossierId}/verifier-comptes-non-reconnus`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,

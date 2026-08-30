@@ -5,7 +5,7 @@ import { AnomaliesPanel } from '../AnomaliesPanel';
 import { CalculRow } from '../CalculsPanel';
 import { CategorisationPopup } from '../CategorisationPopup';
 import { CycleForm } from '../CycleForm';
-import type { Calcul, CompteACategoriser, CompteClientSansTauxAssigne, CompteSansTauxAssigne } from '../../types';
+import type { Anomalie, Calcul, CompteACategoriser, CompteClientSansTauxAssigne, CompteSansTauxAssigne } from '../../types';
 
 interface CycleZoneProps {
   cabinetId: string;
@@ -15,6 +15,7 @@ interface CycleZoneProps {
   onPeriodeChange: (periode: { debut: string; fin: string } | null) => void;
   onSuggestionsTaux: (comptes: CompteSansTauxAssigne[], clients: CompteClientSansTauxAssigne[]) => void;
   onSuggestionsAutoliquidation: (comptes: CompteACategoriser[]) => void;
+  onCompteNonReconnuClic?: (anomalie: Anomalie) => void;
 }
 
 function CalculsDuCycle({
@@ -90,6 +91,7 @@ export function CycleZone({
   onPeriodeChange,
   onSuggestionsTaux,
   onSuggestionsAutoliquidation,
+  onCompteNonReconnuClic,
 }: CycleZoneProps) {
   const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
   // Bug réel (brief v14) : relancer un cycle sur EXACTEMENT la même période
@@ -140,7 +142,9 @@ export function CycleZone({
             utilisateurId={utilisateurId}
             variant="cycle"
             periode={periode.debut}
+            periodeFin={periode.fin}
             refreshKey={cycleRefreshKey}
+            onCompteNonReconnuClic={onCompteNonReconnuClic}
           />
           <div className="panel-separateur" />
           <CalculsDuCycle

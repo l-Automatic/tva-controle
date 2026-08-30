@@ -7,12 +7,20 @@ import {
   qualifierEncaissement,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
+  verifierComptesNonReconnus,
 } from '../api';
+import { toDateOnly } from '../dateUtils';
 import { ICONE_ACTION, iconeTypeAnomalie } from '../icons';
 import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
 import { Accordion } from './Accordion';
 import { BadgeStatut } from './BadgeStatut';
+
+// Cas le plus fréquent en pratique : un compte de TVA non reconnu se
+// résout en confirmant une convention d'autoliquidation, pas via
+// Résoudre/Justifier — d'où le lien direct vers Conventions génériques et
+// la vérification ciblée, sans repasser par un cycle complet (brief v30).
+const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 
 // 16 des 20 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
@@ -48,6 +56,10 @@ interface AnomaliesPanelProps {
   // filtrables par type et statut — cf. brief refonte, zones Cycle/Historique.
   variant?: 'cycle' | 'historique';
   periode?: string | null;
+  // Bornes exactes du cycle en cours (variant='cycle' uniquement) — sert de
+  // valeur par défaut pour "Vérifier à nouveau" (brief v30), pour ne pas
+  // redemander une période déjà connue du contexte.
+  periodeFin?: string | null;
   // Optionnel : incrémenté par le parent pour forcer un rechargement après
   // un nouveau cycle (brief v14) — sans lui, relancer un cycle sur EXACTEMENT
   // la même période ne change pas la valeur de `periode` (une simple
@@ -55,6 +67,10 @@ interface AnomaliesPanelProps {
   // anomalies persistées entre les deux cycles restent invisibles jusqu'à
   // un clic manuel sur "Rafraîchir". Même pattern que PropositionsPanel.
   refreshKey?: number;
+  // Amène l'utilisateur vers Conventions génériques pour une anomalie
+  // compte_tva_non_reconnu (brief v30) — non fourni si l'appelant ne gère
+  // pas la navigation entre zones (aucun bouton affiché dans ce cas).
+  onCompteNonReconnuClic?: ((anomalie: Anomalie) => void) | undefined;
 }
 
 const LIBELLE_STATUT: Record<StatutAnomalie, string> = {
@@ -252,15 +268,94 @@ function EncaissementQualification({
   );
 }
 
+// Vérification ciblée, sans cycle complet (brief v30) — periodeFin par
+// défaut vient du contexte cycle quand connu, sinon repli sur la seule date
+// que porte l'anomalie (periodeDebut du cycle qui l'a générée), modifiable.
+function VerificationComptesNonReconnus({
+  cabinetId,
+  dossierId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomalies } = await verifierComptesNonReconnus(cabinetId, dossierId, { periodeDebut, periodeFin });
+      notifier(
+        anomalies === 0
+          ? 'Aucun compte non reconnu sur cette période — anomalie levée'
+          : `${anomalies} compte(s) toujours non reconnu(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
+  dossierId,
   utilisateurId,
+  periodeFinContexte = null,
+  onCompteNonReconnuClic,
   onChanged,
 }: {
   anomalie: Anomalie;
   cabinetId: string;
+  dossierId: string;
   utilisateurId: string;
+  periodeFinContexte?: string | null;
+  onCompteNonReconnuClic?: ((anomalie: Anomalie) => void) | undefined;
   onChanged: () => void;
 }) {
   const [commentaire, setCommentaire] = useState('');
@@ -302,6 +397,7 @@ function AnomalieRow({
 
   const estOuverte = anomalie.statut === 'ouvert';
   const estEncaissement = anomalie.typeAnomalie === 'encaissement_non_affecte';
+  const estCompteNonReconnu = anomalie.typeAnomalie === TYPE_COMPTE_TVA_NON_RECONNU;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -359,6 +455,23 @@ function AnomalieRow({
 
         {anomalie.compte && <p className="reference">Compte : {anomalie.compte}</p>}
         {detailsRestants && <p className="reference details">{detailsRestants}</p>}
+
+        {estOuverte && estCompteNonReconnu && (
+          <div className="actions">
+            {onCompteNonReconnuClic && (
+              <button onClick={() => onCompteNonReconnuClic(anomalie)}>
+                Configurer la convention d'autoliquidation
+              </button>
+            )}
+            <VerificationComptesNonReconnus
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
 
         {estOuverte &&
           (estEncaissement ? (
@@ -468,7 +581,9 @@ export function AnomaliesPanel({
   utilisateurId,
   variant = 'historique',
   periode = null,
+  periodeFin = null,
   refreshKey,
+  onCompteNonReconnuClic,
 }: AnomaliesPanelProps) {
   const [anomalies, setAnomalies] = useState<Anomalie[]>([]);
   const [loading, setLoading] = useState(false);
@@ -566,7 +681,10 @@ export function AnomaliesPanel({
             key={a.id}
             anomalie={a}
             cabinetId={cabinetId}
+            dossierId={dossierId}
             utilisateurId={utilisateurId}
+            periodeFinContexte={periodeFin}
+            onCompteNonReconnuClic={onCompteNonReconnuClic}
             onChanged={() => void charger()}
           />
         ))}

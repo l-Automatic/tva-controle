@@ -198,6 +198,14 @@ export function App() {
     }
   }
 
+  // Une anomalie compte_tva_non_reconnu se résout le plus souvent en
+  // confirmant une convention d'autoliquidation — amène directement sur
+  // Conventions génériques plutôt que de laisser chercher (brief v30).
+  function allerVersConventionsGeneriques() {
+    setSousOngletConfiguration('generiques');
+    setZone('configuration');
+  }
+
   return (
     <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
       <Sidebar
@@ -242,6 +250,7 @@ export function App() {
                     setSuggestionsTauxClients(clients);
                   }}
                   onSuggestionsAutoliquidation={setSuggestionsAutoliquidation}
+                  onCompteNonReconnuClic={allerVersConventionsGeneriques}
                 />
               )}
               {zone === 'configuration' && (
@@ -266,7 +275,12 @@ export function App() {
                 />
               )}
               {zone === 'historique' && (
-                <HistoriqueZone cabinetId={cabinetId} dossierId={dossier.id} utilisateurId={utilisateurId} />
+                <HistoriqueZone
+                  cabinetId={cabinetId}
+                  dossierId={dossier.id}
+                  utilisateurId={utilisateurId}
+                  onCompteNonReconnuClic={allerVersConventionsGeneriques}
+                />
               )}
               {zone === 'parametres' && (
                 <ParametresPanel
