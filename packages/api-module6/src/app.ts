@@ -278,7 +278,17 @@ export function buildApp(pool: Pool): FastifyInstance {
       synchroniserDossiersCabinet(
         client,
         cabinetId,
-        dossiersDecouverts.map((d) => ({ id: d.id, nom: d.nom, siren: d.siren }))
+        dossiersDecouverts.map((d) => ({
+          id: d.id,
+          nom: d.nom,
+          siren: d.siren,
+          nomCommercial: d.nomCommercial,
+          adresse: d.adresse,
+          ville: d.ville,
+          codePostal: d.codePostal,
+          codeNaf: d.codeNaf,
+          codeClient: d.codeClient,
+        }))
       )
     );
 
