@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 import type { PennylaneLedgerAccountItem, PennylaneLedgerAccountsResponse } from './types.js';
 
 const LEDGER_ACCOUNTS_PATH = '/api/external/v2/ledger_accounts';
@@ -22,7 +22,7 @@ export interface CompteResolu {
 // aucune erreur visible — exactement le genre de bug qu'on ne veut jamais
 // laisser passer silencieusement.
 export async function resolveLedgerAccounts(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   numeros: string[]
 ): Promise<Map<string, CompteResolu>> {
   const resultat = new Map<string, CompteResolu>();
@@ -65,7 +65,7 @@ function mapCompte(item: PennylaneLedgerAccountItem): CompteResolu {
 // Paginé, contrairement aux deux fonctions ci-dessus : une recherche par
 // préfixe peut légitimement remonter beaucoup de comptes.
 export async function decouvrirComptesParPrefixe(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   prefixe: string
 ): Promise<CompteResolu[]> {
   const comptes: CompteResolu[] = [];
@@ -100,7 +100,7 @@ export async function decouvrirComptesParPrefixe(
 // lieu de lignesTiers, et la base HT du calcul se retrouvait faussée —
 // donnant des taux implicites de 100% sur des écritures pourtant correctes.
 export async function resolveLedgerAccountsByIds(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   ids: number[]
 ): Promise<Map<number, CompteResolu>> {
   const resultat = new Map<number, CompteResolu>();
