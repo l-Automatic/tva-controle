@@ -1335,3 +1335,81 @@ export async function configurerDossierOnboarding(
     throw new DossierIntrouvableError(dossierId);
   }
 }
+
+// ============================================================================
+// ACTIVATION / DÉSACTIVATION D'UN DOSSIER, AVEC MOTIF (10/08)
+// ============================================================================
+
+// Réservé à admin_cabinet côté route (pas vérifié ici, c'est à l'appelant
+// de le faire) — deux raisons distinctes identifiées par Rami : un dossier
+// découvert par erreur lors d'un import en masse (hors périmètre TVA), ou
+// un dossier volontairement écarté (trop complexe, régime spécial). Le
+// motif garde la trace de laquelle s'applique, en texte libre.
+export async function definirStatutDossier(
+  client: PoolClient,
+  dossierId: string,
+  statut: 'actif' | 'inactif',
+  motifDesactivation?: string | null
+): Promise<void> {
+  const res = await client.query(
+    `UPDATE dossiers SET statut = $2, motif_desactivation = $3 WHERE id = $1 RETURNING id`,
+    [dossierId, statut, statut === 'inactif' ? (motifDesactivation ?? null) : null]
+  );
+  if (res.rowCount === 0) {
+    throw new DossierIntrouvableError(dossierId);
+  }
+}
+
+// ============================================================================
+// INFORMATIONS D'IDENTITÉ D'UN DOSSIER (10/08)
+// ============================================================================
+
+export interface InfosIdentiteDossier {
+  siret?: string | null;
+  formeJuridique?: string | null;
+  fiscalite?: 'is' | 'ir' | null;
+  comptabilite?: 'engagement' | 'tresorerie' | null;
+  dateDebutExercice?: string | null; // 'YYYY-MM-DD'
+  dateFinExercice?: string | null;
+  emailContact?: string | null;
+  contactNom?: string | null;
+  contactTelephone?: string | null;
+  numeroTvaIntracom?: string | null;
+}
+
+// Mise à jour partielle — seuls les champs présents dans infos sont
+// modifiés, undefined laisse la valeur existante intacte (distinct de
+// null, qui efface explicitement). Accessible aux deux rôles (dossier,
+// pas cabinet), contrairement à definirStatutDossier.
+export async function mettreAJourInfosDossier(
+  client: PoolClient,
+  dossierId: string,
+  infos: InfosIdentiteDossier
+): Promise<void> {
+  const colonnes: Record<keyof InfosIdentiteDossier, string> = {
+    siret: 'siret',
+    formeJuridique: 'forme_juridique',
+    fiscalite: 'fiscalite',
+    comptabilite: 'comptabilite',
+    dateDebutExercice: 'date_debut_exercice',
+    dateFinExercice: 'date_fin_exercice',
+    emailContact: 'email_contact',
+    contactNom: 'contact_nom',
+    contactTelephone: 'contact_telephone',
+    numeroTvaIntracom: 'numero_tva_intracom',
+  };
+
+  const cles = (Object.keys(infos) as (keyof InfosIdentiteDossier)[]).filter((k) => infos[k] !== undefined);
+  if (cles.length === 0) return; // rien à faire, jamais une erreur
+
+  const affectations = cles.map((k, i) => `${colonnes[k]} = $${i + 2}`).join(', ');
+  const valeurs = cles.map((k) => infos[k]);
+
+  const res = await client.query(`UPDATE dossiers SET ${affectations} WHERE id = $1 RETURNING id`, [
+    dossierId,
+    ...valeurs,
+  ]);
+  if (res.rowCount === 0) {
+    throw new DossierIntrouvableError(dossierId);
+  }
+}
