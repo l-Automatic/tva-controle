@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 import type { PennylaneTrialBalanceItem, PennylaneTrialBalanceResponse } from './types.js';
 import type { BalanceComptable, CompteSolde } from '@tva-controle/core';
 
@@ -32,7 +32,7 @@ function mapItem(item: PennylaneTrialBalanceItem): CompteSolde {
 }
 
 export async function fetchTrialBalance(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   params: FetchTrialBalanceParams
 ): Promise<BalanceComptable> {
   const comptes: CompteSolde[] = [];
