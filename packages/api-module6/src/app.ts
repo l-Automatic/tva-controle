@@ -70,6 +70,8 @@ import {
   verifierJeton,
   type PayloadJeton,
   chargerDossier,
+  DossierIntrouvableError,
+  configurerDossierOnboarding,
 } from '@tva-controle/orchestrateur-module9';
 
 // Authentification (10/08) — remplace l'ancien stand-in (header cabinet non
@@ -157,12 +159,14 @@ export function buildApp(pool: Pool): FastifyInstance {
   // adaptation nécessaire côté pipeline.ts.
   class LogicielSourceNonPrisEnChargeError extends Error {}
   class JetonCabinetManquantError extends Error {}
-  class DossierIntrouvableError extends Error {}
+  // DossierIntrouvableError vient maintenant de orchestrateur-module9 —
+  // même erreur exactement utilisée par configurerDossierOnboarding
+  // (Phase 2, 10/08), plus de classe locale dupliquée.
 
   async function resoudreClientPennylane(cabinetId: string, dossierId: string): Promise<IPennylaneApiClient> {
     const dossier = await avecContexteCabinet(pool, cabinetId, (client) => chargerDossier(client, dossierId));
     if (!dossier) {
-      throw new DossierIntrouvableError(`Dossier ${dossierId} introuvable, ou hors du cabinet courant.`);
+      throw new DossierIntrouvableError(dossierId);
     }
 
     if (dossier.logicielSource !== 'pennylane') {
@@ -973,9 +977,47 @@ export function buildApp(pool: Pool): FastifyInstance {
   );
 
   // --- Liste/recherche de dossiers pour un cabinet ---
-  app.get<{ Querystring: { q?: string } }>('/dossiers', async (request) => {
+  app.get<{ Querystring: { q?: string; statut?: string } }>('/dossiers', async (request) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    return avecContexteCabinet(pool, cabinetId, (client) => listerDossiers(client, cabinetId, request.query.q));
+    return avecContexteCabinet(pool, cabinetId, (client) =>
+      listerDossiers(client, cabinetId, request.query.q, request.query.statut)
+    );
+  });
+
+  // --- Configuration d'un dossier nouvellement découvert (Phase 2, 10/08) ---
+  // Un dossier synchronisé depuis l'API Cabinet a un régime fiscal par
+  // défaut (une hypothèse, jamais une vérité) et reste statut='onboarding'
+  // tant que ce contrôle rapide n'a pas été fait — accessible aux deux
+  // rôles (dossier, pas paramètre cabinet), contrairement aux routes
+  // /parametres-cabinet et /synchroniser-dossiers.
+  app.post<{
+    Params: { dossierId: string };
+    Body: {
+      regimeTva: 'reel_normal' | 'reel_simplifie' | 'franchise';
+      periodiciteDeclaration: 'mensuelle' | 'trimestrielle';
+      tvaEncaissement: boolean;
+    };
+  }>('/dossiers/:dossierId/configurer-onboarding', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { regimeTva, periodiciteDeclaration, tvaEncaissement } = request.body;
+
+    if (!regimeTva || !periodiciteDeclaration || typeof tvaEncaissement !== 'boolean') {
+      return reply
+        .code(400)
+        .send({ erreur: 'regimeTva, periodiciteDeclaration et tvaEncaissement (booléen) sont requis' });
+    }
+
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        configurerDossierOnboarding(client, request.params.dossierId, regimeTva, periodiciteDeclaration, tvaEncaissement)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) {
+        return reply.code(404).send({ erreur: err.message });
+      }
+      throw err;
+    }
   });
 
   // --- Tout ce qui attend une décision humaine sur ce dossier ---
