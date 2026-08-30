@@ -4,6 +4,7 @@ import type { Anomalie } from '@tva-controle/core';
 import type { ResultatCalculTva } from '@tva-controle/calcul-module7';
 import {
   enregistrerAnomalies,
+  enregistrerAnomaliesPartielles,
   enregistrerEvenementAudit,
   enregistrerPropositionsConventions,
   ajouterConventionManuelle,
@@ -1810,5 +1811,71 @@ describe('mettreAJourInfosDossier', () => {
         mettreAJourInfosDossier(client, '00000000-0000-0000-0000-000000000000', { siret: 'x' })
       )
     ).rejects.toThrow(DossierIntrouvableError);
+  });
+});
+
+describe('enregistrerAnomaliesPartielles', () => {
+  it('ne touche JAMAIS les anomalies ouvertes d’un autre type — le vrai risque à couvrir', async () => {
+    const periode = '2025-06-01';
+    // Simule un cycle complet initial avec deux types d'anomalies différents
+    const lotComplet: Anomalie[] = [
+      { type: 'compte_tva_non_reconnu', gravite: 'bloquant', ledgerEntryId: 200, compte: '4452', description: 'x' },
+      {
+        type: 'nouveau_tiers_a_verifier',
+        gravite: 'signale',
+        ledgerEntryId: 201,
+        compte: '411AUTRE',
+        description: 'jamais réexaminé par la vérification ciblée',
+      },
+    ];
+    await avecClient((client) => enregistrerAnomalies(client, dossierId, periode, lotComplet));
+
+    // Vérification ciblée : le compte 4452 est maintenant reconnu (0
+    // nouvelle anomalie de ce type), mais on ne réexamine QUE ce type.
+    await avecClient((client) =>
+      enregistrerAnomaliesPartielles(client, dossierId, periode, ['compte_tva_non_reconnu'], [])
+    );
+
+    const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode }));
+    const compteNonReconnu = liste.find((a) => a.typeAnomalie === 'compte_tva_non_reconnu');
+    const nouveauTiers = liste.find((a) => a.typeAnomalie === 'nouveau_tiers_a_verifier');
+
+    expect(compteNonReconnu?.statut).toBe('obsolete'); // résolu, remplacé par rien (liste vide)
+    expect(nouveauTiers?.statut).toBe('ouvert'); // jamais touché, toujours valable
+  });
+
+  it('insère les nouvelles anomalies du type vérifié normalement', async () => {
+    const periode = '2025-06-02';
+    const nouvellesAnomalies: Anomalie[] = [
+      { type: 'compte_tva_non_reconnu', gravite: 'bloquant', ledgerEntryId: 300, compte: '4453', description: 'z' },
+    ];
+
+    const inserees = await avecClient((client) =>
+      enregistrerAnomaliesPartielles(client, dossierId, periode, ['compte_tva_non_reconnu'], nouvellesAnomalies)
+    );
+
+    expect(inserees).toHaveLength(1);
+    const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode }));
+    expect(liste.some((a) => a.typeAnomalie === 'compte_tva_non_reconnu' && a.statut === 'ouvert')).toBe(true);
+  });
+
+  it('préserve une anomalie déjà résolue/justifiée du même type, comme enregistrerAnomalies', async () => {
+    const periode = '2025-06-03';
+    const premierLot: Anomalie[] = [
+      { type: 'compte_tva_non_reconnu', gravite: 'bloquant', ledgerEntryId: 400, compte: '4454', description: 'a' },
+    ];
+    const inserees = await avecClient((client) =>
+      enregistrerAnomaliesPartielles(client, dossierId, periode, ['compte_tva_non_reconnu'], premierLot)
+    );
+    await avecClient((client) =>
+      client.query(`UPDATE anomalies SET statut = 'resolu' WHERE id = $1`, [inserees[0]!.id])
+    );
+
+    await avecClient((client) =>
+      enregistrerAnomaliesPartielles(client, dossierId, periode, ['compte_tva_non_reconnu'], [])
+    );
+
+    const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode }));
+    expect(liste.find((a) => a.id === inserees[0]!.id)?.statut).toBe('resolu'); // jamais repassée a obsolete
   });
 });
