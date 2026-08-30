@@ -1,4 +1,4 @@
-import { PennylaneClient } from './client.js';
+import type { IPennylaneApiClient } from './client.js';
 import type { PennylaneLedgerEntryLineItem, PennylaneLedgerEntryLinesResponse } from './types.js';
 import type { Lettrage, LigneGroupeLettrage } from '@tva-controle/core';
 
@@ -18,7 +18,7 @@ function parseMontant(value: string): number {
 // TVA) via l'endpoint général, filtré par id — batchable en un seul appel
 // plutôt qu'un appel par pièce.
 export async function fetchLettrage(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   ligneIds: number[]
 ): Promise<Map<number, Lettrage>> {
   const resultat = new Map<number, Lettrage>();
@@ -61,7 +61,7 @@ function mapLettrage(item: PennylaneLedgerEntryLineItem): Lettrage {
 // fetchLettrage, projection plus riche du même item — appeler cette
 // fonction avec les groupeIds obtenus via fetchLettrage, pas l'inverse.
 export async function fetchLignesGroupeLettrage(
-  client: PennylaneClient,
+  client: IPennylaneApiClient,
   ligneIds: number[]
 ): Promise<LigneGroupeLettrage[]> {
   if (ligneIds.length === 0) {
