@@ -29,13 +29,18 @@ export interface DossierListe {
 export async function listerDossiers(
   client: PoolClient,
   cabinetId: string,
-  recherche?: string
+  recherche?: string,
+  statut?: string
 ): Promise<DossierListe[]> {
   const params: unknown[] = [cabinetId];
   let condition = 'cabinet_id = $1';
   if (recherche) {
     params.push(`%${recherche}%`);
-    condition += ` AND nom ILIKE $2`;
+    condition += ` AND nom ILIKE $${params.length}`;
+  }
+  if (statut) {
+    params.push(statut);
+    condition += ` AND statut = $${params.length}`;
   }
 
   const res = await client.query(
