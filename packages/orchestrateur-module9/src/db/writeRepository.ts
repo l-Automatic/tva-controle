@@ -91,6 +91,49 @@ export async function enregistrerAnomalies(
   return inserees;
 }
 
+// Symétrique de enregistrerAnomalies, mais scopée à un sous-ensemble de
+// types (10/08) — pour une vérification ciblée et légère (ex: "ce compte
+// est-il maintenant reconnu ?"), sans repasser par un cycle complet qui
+// réexaminerait tout. Marque obsolete UNIQUEMENT les anomalies ouvertes
+// dont le type fait partie de typesVerifies — jamais les autres, qui
+// n'ont pas été réexaminées par cet appel précis et doivent rester
+// intactes. Réutilisable pour n'importe quelle future vérification ciblée
+// du même genre, pas seulement compte_tva_non_reconnu.
+export async function enregistrerAnomaliesPartielles(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  typesVerifies: string[],
+  anomalies: Anomalie[]
+): Promise<{ id: string; type: string; gravite: string }[]> {
+  await client.query(
+    `UPDATE anomalies SET statut = 'obsolete'
+     WHERE dossier_id = $1 AND periode = $2 AND statut = 'ouvert' AND type_anomalie = ANY($3)`,
+    [dossierId, periode, typesVerifies]
+  );
+
+  const inserees: { id: string; type: string; gravite: string }[] = [];
+  for (const a of anomalies) {
+    const res = await client.query<{ id: string }>(
+      `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, details, compte, statut)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ouvert')
+       RETURNING id`,
+      [
+        dossierId,
+        periode,
+        a.type,
+        a.gravite,
+        String(a.ledgerEntryId),
+        a.description,
+        a.details ? JSON.stringify(a.details) : null,
+        a.compte,
+      ]
+    );
+    inserees.push({ id: res.rows[0]!.id, type: a.type, gravite: a.gravite });
+  }
+  return inserees;
+}
+
 export async function resoudreAnomalie(
   client: PoolClient,
   anomalieId: string,
