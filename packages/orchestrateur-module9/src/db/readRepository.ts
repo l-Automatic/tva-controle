@@ -242,12 +242,19 @@ export interface CalculDb {
   statut: 'brouillon' | 'valide' | 'declare' | 'rejete';
   tvaNette: number;
   sens: 'a_decaisser' | 'credit';
+  // Compte en direct (10/08), pas figé au moment du cycle — un brouillon
+  // affiché plus tard doit refléter l'état ACTUEL des anomalies, pas celui
+  // du cycle qui l'a produit (une anomalie a pu être résolue depuis).
+  anomaliesBloquantesOuvertes: number;
 }
 
 export async function listerCalculs(client: PoolClient, dossierId: string): Promise<CalculDb[]> {
   const res = await client.query(
-    `SELECT id, periode_debut, periode_fin, statut, tva_nette, sens
-     FROM calculs_tva WHERE dossier_id = $1 ORDER BY periode_debut DESC`,
+    `SELECT c.id, c.periode_debut, c.periode_fin, c.statut, c.tva_nette, c.sens,
+            (SELECT count(*) FROM anomalies a
+             WHERE a.dossier_id = c.dossier_id AND a.periode = c.periode_debut
+               AND a.statut = 'ouvert' AND a.gravite = 'bloquant') AS anomalies_bloquantes_ouvertes
+     FROM calculs_tva c WHERE c.dossier_id = $1 ORDER BY c.periode_debut DESC`,
     [dossierId]
   );
   return res.rows.map((r) => ({
@@ -257,6 +264,7 @@ export async function listerCalculs(client: PoolClient, dossierId: string): Prom
     statut: r.statut,
     tvaNette: Number.parseFloat(r.tva_nette),
     sens: r.sens,
+    anomaliesBloquantesOuvertes: Number.parseInt(r.anomalies_bloquantes_ouvertes, 10),
   }));
 }
 
