@@ -50,6 +50,7 @@ import {
   listerAjustementsCalcul,
   CalculPlusEnBrouillonError,
   CalculPasEnBrouillonError,
+  AnomaliesBloquantesNonResoluesError,
   definirParametreCabinet,
   definirParametreDossier,
   listerDossiers,
@@ -716,6 +717,9 @@ export function buildApp(pool: Pool): FastifyInstance {
       } catch (err) {
         if (err instanceof CalculPasEnBrouillonError) {
           return reply.code(409).send({ erreur: err.message });
+        }
+        if (err instanceof AnomaliesBloquantesNonResoluesError) {
+          return reply.code(409).send({ erreur: err.message, nombreAnomaliesBloquantes: err.nombre });
         }
         throw err;
       }
