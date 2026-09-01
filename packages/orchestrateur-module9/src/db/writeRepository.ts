@@ -206,6 +206,28 @@ export class AnomalieNonQualifiableError extends Error {
   }
 }
 
+// Somme brute des lignes de calcul pour la catégorie "collectée" — inclut
+// autoliquidation_due (définition fiscalement correcte, une ligne CA3
+// "TVA collectée" inclut la TVA due autoliquidée) — À VÉRIFIER que cette
+// définition correspond bien à ce que le frontend affiche déjà comme
+// "TVA collectée totale" (calculée côté frontend depuis les lignes brutes,
+// jamais vérifié directement contre cette définition backend).
+async function calculerCollecteeTotaleActuelle(client: PoolClient, calculId: string): Promise<number> {
+  const ajustementExistant = await client.query<{ montant_ajuste: string }>(
+    `SELECT montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = 'collectee_totale'`,
+    [calculId]
+  );
+  if (ajustementExistant.rows.length > 0) {
+    return Number.parseFloat(ajustementExistant.rows[0]!.montant_ajuste);
+  }
+  const sommeBrute = await client.query<{ total: string | null }>(
+    `SELECT SUM(montant) AS total FROM calculs_tva_lignes
+     WHERE calcul_id = $1 AND categorie IN ('collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due')`,
+    [calculId]
+  );
+  return sommeBrute.rows[0]?.total ? Number.parseFloat(sommeBrute.rows[0].total) : 0;
+}
+
 export async function qualifierEncaissementNonAffecte(
   client: PoolClient,
   anomalieId: string,
@@ -219,11 +241,15 @@ export async function qualifierEncaissementNonAffecte(
       : qualification.motif;
   const resolution = qualification.decision === 'vente' ? { taux: qualification.taux } : null;
 
-  const res = await client.query<{ dossier_id: string }>(
+  const res = await client.query<{
+    dossier_id: string;
+    periode: string;
+    details: { montantTTC?: number } | null;
+  }>(
     `UPDATE anomalies SET statut = $2, traite_par = $3, date_traitement = now(),
        commentaire_traitement = $4, resolution = $5
      WHERE id = $1 AND type_anomalie = 'encaissement_non_affecte' AND statut = 'ouvert'
-     RETURNING dossier_id`,
+     RETURNING dossier_id, periode, details`,
     [anomalieId, statut, utilisateurId, commentaire, resolution ? JSON.stringify(resolution) : null]
   );
   const ligne = res.rows[0];
@@ -238,6 +264,38 @@ export async function qualifierEncaissementNonAffecte(
     acteurUtilisateurId: utilisateurId,
     details: { anomalieId, ...qualification },
   });
+
+  // Ajustement automatique (10/08, décision de Rami — option A) : si un
+  // calcul brouillon existe déjà pour la période de cette anomalie,
+  // applique immédiatement la TVA correspondante, sans attendre un
+  // nouveau cycle complet. Réutilise exactement le même mécanisme que
+  // l'ajustement manuel (ajusterMontantCalcul) — apparaît côté interface
+  // comme un ajustement ordinaire, avec une justification générée
+  // automatiquement. Si aucun calcul brouillon n'existe encore pour cette
+  // période, ne fait rien de plus ici : le mécanisme existant
+  // (listerRegularisationsAIntegrer, au moment d'un futur cycle) prendra
+  // le relais normalement, comme avant cette extension.
+  if (qualification.decision === 'vente' && ligne.details && typeof ligne.details.montantTTC === 'number') {
+    const calculRes = await client.query<{ id: string }>(
+      `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+      [ligne.dossier_id, ligne.periode]
+    );
+    const calculId = calculRes.rows[0]?.id;
+    if (calculId) {
+      const montantTva = ligne.details.montantTTC - ligne.details.montantTTC / (1 + qualification.taux / 100);
+      const collecteeActuelle = await calculerCollecteeTotaleActuelle(client, calculId);
+      await ajusterMontantCalcul(
+        client,
+        calculId,
+        'collectee_totale',
+        collecteeActuelle,
+        collecteeActuelle + montantTva,
+        `Encaissement du compte d'attente qualifié comme vente au taux de ${qualification.taux}% ` +
+          `(${montantTva.toFixed(2)} € de TVA sur ${ligne.details.montantTTC.toFixed(2)} € TTC).`,
+        utilisateurId
+      );
+    }
+  }
 }
 
 // ============================================================================
