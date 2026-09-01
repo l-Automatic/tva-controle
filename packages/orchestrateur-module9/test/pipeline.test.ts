@@ -383,13 +383,13 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
       comptesEquipementOverride: ['6063'],
     });
 
-    expect(resultat.statut).toBe('bloque');
-    if (resultat.statut !== 'bloque') throw new Error('assertion');
+    expect(resultat.statut).toBe('calcule');
+    expect(resultat.anomaliesBloquantesOuvertes).toBeGreaterThan(0);
     expect(resultat.anomalies.some((a) => a.type === 'taux_incoherent' && a.gravite === 'bloquant')).toBe(true);
 
-    // Même sur le chemin bloqué, les anomalies doivent être en base — c'est
-    // ce qui permet à Module 6 de les voir et de les traiter, sans quoi le
-    // blocage serait invisible pour le collaborateur.
+    // Même avec une anomalie bloquante, les anomalies doivent être en base
+    // — c'est ce qui permet à Module 6 de les voir et de les traiter, sans
+    // quoi le blocage serait invisible pour le collaborateur.
     const clientVerif = await pool.connect();
     try {
       await clientVerif.query('BEGIN');
@@ -401,29 +401,27 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
       expect(res.rows.length).toBeGreaterThan(0);
       expect(res.rows[0].statut).toBe('ouvert');
 
-      // Module 10 : le blocage lui-même doit être tracé, avec les ids réels
-      // des anomalies bloquantes (pas juste un décompte) — c'est la preuve
-      // exploitable en cas de contrôle : "le calcul a refusé de tourner à
-      // cause de CES anomalies précises".
-      const auditBloque = await clientVerif.query(
-        `SELECT * FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'calcul_bloque'`,
+      // Module 10 : la présence d'anomalies bloquantes ouvertes doit être
+      // tracée, avec les ids réels des anomalies concernées (10/08 —
+      // renommé, ne bloque plus la production du calcul, seulement sa
+      // validation, cf. validerCalcul).
+      const auditBloquantes = await clientVerif.query(
+        `SELECT * FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'anomalies_bloquantes_ouvertes'`,
         [DOSSIER_ID]
       );
-      expect(auditBloque.rows).toHaveLength(1);
-      expect(auditBloque.rows[0].acteur).toBe('systeme');
-      const anomalieIdsTracees: string[] = auditBloque.rows[0].details.anomalieIds;
+      expect(auditBloquantes.rows).toHaveLength(1);
+      expect(auditBloquantes.rows[0].acteur).toBe('systeme');
+      const anomalieIdsTracees: string[] = auditBloquantes.rows[0].details.anomalieIds;
       expect(anomalieIdsTracees).toContain(res.rows[0].id);
 
-      // Le calcul n'ayant jamais tourné DANS CE TEST, aucun NOUVEL événement
-      // calcul_genere ne doit être apparu depuis le comptage fait avant
-      // l'appel — comparaison relative, pas absence absolue, car ce dossier
-      // est partagé avec d'autres tests de ce fichier qui, eux, génèrent
-      // légitimement des calculs sur la même période.
+      // 10/08 — le calcul est désormais produit MÊME avec une anomalie
+      // bloquante ouverte : exactement UN nouvel événement calcul_genere
+      // doit être apparu depuis le comptage fait avant l'appel.
       const auditCalcule = await clientVerif.query(
         `SELECT COUNT(*)::int AS n FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'calcul_genere'`,
         [DOSSIER_ID]
       );
-      expect(auditCalcule.rows[0].n).toBe(nbCalculGenereAvant);
+      expect(auditCalcule.rows[0].n).toBe(nbCalculGenereAvant + 1);
 
       await clientVerif.query('COMMIT');
     } finally {
