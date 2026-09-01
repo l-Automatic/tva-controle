@@ -114,30 +114,27 @@ export interface CompteACategoriserAvecSuggestion extends CompteACategoriser {
   suggestionIA?: SuggestionClassificationCompte;
 }
 
-export type ResultatCycleTva =
-  | {
-      statut: 'bloque';
-      anomalies: Anomalie[];
-      comptesACategoriser: CompteACategoriserAvecSuggestion[];
-      comptesSansTauxAssigne: CompteSansTauxAssigne[];
-      comptesClientSansTaux: CompteClientSansTauxAssigne[];
-      comptesAutoliquidationSuggeres: CompteACategoriserAvecSuggestion[];
-    }
-  | {
-      statut: 'calcule';
-      anomalies: Anomalie[];
-      resultat: ResultatCalculTva;
-      calculId: string;
-      comptesACategoriser: CompteACategoriserAvecSuggestion[];
-      comptesSansTauxAssigne: CompteSansTauxAssigne[];
-      comptesClientSansTaux: CompteClientSansTauxAssigne[];
-      comptesAutoliquidationSuggeres: CompteACategoriserAvecSuggestion[];
-    };
+export interface ResultatCycleTva {
+  statut: 'calcule';
+  anomalies: Anomalie[];
+  resultat: ResultatCalculTva;
+  calculId: string;
+  // Nombre d'anomalies bloquantes encore ouvertes sur cette période (10/08)
+  // — 0 = calcul complet, validable. > 0 = calcul produit mais incomplet
+  // ou incertain sur ce point précis ; la validation reste impossible tant
+  // que ce nombre n'est pas à 0 (cf. validerCalcul, writeRepository.ts).
+  anomaliesBloquantesOuvertes: number;
+  comptesACategoriser: CompteACategoriserAvecSuggestion[];
+  comptesSansTauxAssigne: CompteSansTauxAssigne[];
+  comptesClientSansTaux: CompteClientSansTauxAssigne[];
+  comptesAutoliquidationSuggeres: CompteACategoriserAvecSuggestion[];
+}
 
 // Enchaîne : charge le contexte dossier (Module 2) -> récupère les écritures
 // (Module 1) -> exécute tous les contrôles (Module 4) -> persiste les
-// anomalies -> s'arrête si une anomalie bloquante existe -> sinon calcule
-// (Module 7) et persiste le résultat.
+// anomalies -> calcule (Module 7) et persiste le résultat, même si des
+// anomalies bloquantes restent ouvertes (10/08 — seule la validation reste
+// bloquée dans ce cas, jamais la production du brouillon).
 //
 // Les anomalies sont TOUJOURS persistées, même en cas de blocage — c'est
 // justement ce qui permet à Module 6 (validation humaine) de les voir et de
@@ -818,12 +815,22 @@ export async function executerCycleTva(
     return inserees;
   });
 
+  // 10/08 — changement de fond, décidé avec Rami : une anomalie bloquante
+  // ne bloque plus la PRODUCTION du calcul, seulement sa VALIDATION
+  // (cf. validerCalcul, writeRepository.ts). Le calcul se produit toujours,
+  // même incomplet (un compte non reconnu par exemple représente un
+  // montant dont on ne connaît pas la taille) — mais reste en brouillon,
+  // affiché avec le nombre d'anomalies bloquantes encore ouvertes, jusqu'à
+  // ce qu'elles soient résolues. Objectif : un brouillon existe dès le
+  // premier cycle, et se met à jour à la résolution de chaque anomalie
+  // (cf. option A, qualifierEncaissementNonAffecte) sans jamais avoir
+  // besoin de relancer un cycle complet pour ça.
   const anomaliesBloquantes = anomaliesInserees.filter((a) => a.gravite === 'bloquant');
   if (anomaliesBloquantes.length > 0) {
     await avecContexteCabinet(pool, params.cabinetId, (client) =>
       enregistrerEvenementAudit(client, {
         dossierId: params.dossierId,
-        typeEvenement: 'calcul_bloque',
+        typeEvenement: 'anomalies_bloquantes_ouvertes',
         moduleSource: 'module9_orchestrateur',
         acteur: 'systeme',
         details: {
@@ -833,14 +840,6 @@ export async function executerCycleTva(
         },
       })
     );
-    return {
-      statut: 'bloque',
-      anomalies: toutesAnomalies,
-      comptesACategoriser: comptesACategoriserEnrichi,
-      comptesSansTauxAssigne,
-      comptesClientSansTaux,
-      comptesAutoliquidationSuggeres: comptesAutoliquidationEnrichi,
-    };
   }
 
   if (process.env.DEBUG_CYCLE) {
@@ -920,6 +919,7 @@ export async function executerCycleTva(
     anomalies: toutesAnomalies,
     resultat,
     calculId,
+    anomaliesBloquantesOuvertes: anomaliesBloquantes.length,
     comptesACategoriser: comptesACategoriserEnrichi,
     comptesSansTauxAssigne,
     comptesClientSansTaux,
