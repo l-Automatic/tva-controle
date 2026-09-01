@@ -439,6 +439,39 @@ describe('enregistrerCalcul et validerCalcul', () => {
     expect(calculs.find((c) => c.id === calculId)?.statut).toBe('valide');
   });
 
+  it('listerCalculs reflète en direct le nombre d’anomalies bloquantes ouvertes, se met à jour à la résolution (10/08)', async () => {
+    const periode = '2025-06-05';
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 400, referencesPieces: [1] }],
+      tvaNette: 400,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) => enregistrerCalcul(client, dossierId, periode, '2025-06-30', resultat));
+
+    const inserees = await avecClient((client) =>
+      enregistrerAnomalies(client, dossierId, periode, [
+        {
+          type: 'compte_tva_non_reconnu',
+          gravite: 'bloquant',
+          ledgerEntryId: 9003,
+          compte: '4459',
+          description: 'compte pour verifier le compte en direct',
+        },
+      ])
+    );
+
+    let calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    expect(calculs.find((c) => c.id === calculId)?.anomaliesBloquantesOuvertes).toBe(1);
+
+    await avecClient((client) => client.query(`UPDATE anomalies SET statut = 'resolu' WHERE id = $1`, [inserees[0]!.id]));
+
+    // Même listerCalculs, sans avoir touché au calcul lui-même — le compte
+    // doit refléter la résolution qui vient de se produire.
+    calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    expect(calculs.find((c) => c.id === calculId)?.anomaliesBloquantesOuvertes).toBe(0);
+  });
+
   it('relancer un cycle sur un calcul encore en brouillon le remplace au lieu de violer la contrainte unique', async () => {
     const premier: ResultatCalculTva = {
       lignes: [{ categorie: 'collectee_20', montant: 100, referencesPieces: [1] }],
