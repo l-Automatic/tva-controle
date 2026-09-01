@@ -147,6 +147,7 @@ export function CycleZone({
               periodeFin={periode.fin}
               refreshKey={cycleRefreshKey}
               onCompteNonReconnuClic={onCompteNonReconnuClic}
+              onAnomalieChangee={() => setCycleRefreshKey((k) => k + 1)}
             />
           </>
         )}

@@ -71,6 +71,13 @@ interface AnomaliesPanelProps {
   // compte_tva_non_reconnu (brief v30) — non fourni si l'appelant ne gère
   // pas la navigation entre zones (aucun bouton affiché dans ce cas).
   onCompteNonReconnuClic?: ((anomalie: Anomalie) => void) | undefined;
+  // Bug réel (brief v32) : Résoudre/Justifier/qualifier ne rafraîchissaient
+  // que cette liste elle-même, jamais le panneau "Calcul de la période"
+  // (v31, sticky) — composant séparé avec son propre refreshKey, sans
+  // lien avec celui-ci. Même famille de problème que v14/v21. Optionnel :
+  // seul le variant='cycle' de CycleZone.tsx a un panneau Calcul à
+  // notifier.
+  onAnomalieChangee?: (() => void) | undefined;
 }
 
 const LIBELLE_STATUT: Record<StatutAnomalie, string> = {
@@ -584,6 +591,7 @@ export function AnomaliesPanel({
   periodeFin = null,
   refreshKey,
   onCompteNonReconnuClic,
+  onAnomalieChangee,
 }: AnomaliesPanelProps) {
   const [anomalies, setAnomalies] = useState<Anomalie[]>([]);
   const [loading, setLoading] = useState(false);
@@ -685,7 +693,10 @@ export function AnomaliesPanel({
             utilisateurId={utilisateurId}
             periodeFinContexte={periodeFin}
             onCompteNonReconnuClic={onCompteNonReconnuClic}
-            onChanged={() => void charger()}
+            onChanged={() => {
+              void charger();
+              onAnomalieChangee?.();
+            }}
           />
         ))}
       </ul>
