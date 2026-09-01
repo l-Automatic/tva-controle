@@ -726,13 +726,45 @@ export class CalculPasEnBrouillonError extends Error {
   }
 }
 
+export class AnomaliesBloquantesNonResoluesError extends Error {
+  constructor(public readonly nombre: number) {
+    super(
+      `Impossible de valider : ${nombre} anomalie(s) bloquante(s) encore ouverte(s) sur cette période. ` +
+        `Résolvez-les d'abord dans le panneau Anomalies.`
+    );
+    this.name = 'AnomaliesBloquantesNonResoluesError';
+  }
+}
+
 // Passe le calcul en 'valide' — le trigger d'immuabilité (002) garantit que
-// plus rien ne peut modifier son montant après ce point.
+// plus rien ne peut modifier son montant après ce point. Depuis le 10/08,
+// c'est ICI que vit le vrai blocage des anomalies bloquantes — plus à la
+// production du brouillon (cf. pipeline.ts), qui se produit désormais
+// toujours. Jamais un chiffre incertain ne devient officiel/déclarable
+// sans que les anomalies critiques de la période soient résolues.
 export async function validerCalcul(
   client: PoolClient,
   calculId: string,
   utilisateurId: string
 ): Promise<void> {
+  const calcul = await client.query<{ dossier_id: string; periode_debut: string }>(
+    `SELECT dossier_id, periode_debut FROM calculs_tva WHERE id = $1`,
+    [calculId]
+  );
+  if (calcul.rows.length === 0) {
+    throw new CalculPasEnBrouillonError(calculId);
+  }
+  const { dossier_id: dossierId, periode_debut: periodeDebut } = calcul.rows[0]!;
+
+  const bloquantes = await client.query<{ count: string }>(
+    `SELECT count(*) FROM anomalies WHERE dossier_id = $1 AND periode = $2 AND statut = 'ouvert' AND gravite = 'bloquant'`,
+    [dossierId, periodeDebut]
+  );
+  const nombreBloquantes = Number.parseInt(bloquantes.rows[0]!.count, 10);
+  if (nombreBloquantes > 0) {
+    throw new AnomaliesBloquantesNonResoluesError(nombreBloquantes);
+  }
+
   const res = await client.query<{ dossier_id: string; tva_nette: string; sens: string }>(
     `UPDATE calculs_tva SET statut = 'valide', valide_par = $2, date_validation = now()
      WHERE id = $1 AND statut = 'brouillon'
