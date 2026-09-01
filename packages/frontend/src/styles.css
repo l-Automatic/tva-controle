@@ -353,6 +353,38 @@ p {
   animation: contenu-entree 0.22s ease;
 }
 
+/* Refonte du panneau de calcul (brief v31) — colonne latérale sticky, à
+   part du flux principal (formulaire de cycle + anomalies), pour que le
+   montant reste visible pendant qu'on traite les anomalies plus bas. */
+.cycle-zone-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.cycle-zone-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cycle-zone-calcul {
+  flex: 0 0 340px;
+  width: 340px;
+  position: sticky;
+  top: 1.5rem;
+}
+
+@media (max-width: 860px) {
+  .cycle-zone-layout {
+    flex-direction: column;
+  }
+
+  .cycle-zone-calcul {
+    width: 100%;
+    position: static;
+  }
+}
+
 .sous-onglet-contenu {
   animation: contenu-entree 0.2s ease;
 }
@@ -811,6 +843,17 @@ button:focus-visible {
   font-size: 0.9rem;
 }
 
+/* Panneau de calcul de la période (brief v31) — le montant final est
+   l'information la plus importante de l'écran, doit se voir immédiatement. */
+.montant-principal {
+  font-size: 1.5rem;
+  margin: 0.6rem 0;
+}
+
+.montant-principal strong {
+  font-weight: 800;
+}
+
 .reference {
   margin: 0.2rem 0;
   font-size: 0.8rem;
@@ -1083,8 +1126,14 @@ button:focus-visible {
   margin: 0 0 0.5rem;
 }
 
-.resultat-bloque .resultat-titre {
-  color: var(--danger);
+/* Calcul produit mais incomplet (brief v31) — visible, pas alarmiste :
+   même ton que error-409, jamais aussi appuyé qu'une vraie erreur. */
+.avertissement {
+  color: var(--warning);
+  background: var(--warning-soft-bg);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  margin: 0.5rem 0;
 }
 
 /* Ajustement manuel des montants de TVA (brief v23) */

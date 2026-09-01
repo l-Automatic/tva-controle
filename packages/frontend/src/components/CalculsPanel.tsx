@@ -24,12 +24,26 @@ export function formatMontant(montant: number): string {
   return `${montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`;
 }
 
+// Le calcul se produit toujours, même incomplet (brief v31) — ce message
+// remplace l'ancien écran plein "Cycle bloqué" : visible à côté du montant,
+// pas alarmiste au point de le cacher, mais clair sur le fait que la
+// validation reste impossible tant que ces anomalies sont ouvertes.
+export function MessageCalculIncomplet({ nombre }: { nombre: number }) {
+  return (
+    <p className="avertissement">
+      Ce calcul n'est pas définitif — {nombre} anomalie{nombre > 1 ? 's' : ''} critique{nombre > 1 ? 's' : ''} à
+      résoudre avant validation.
+    </p>
+  );
+}
+
 export function CalculRow({
   calcul,
   cabinetId,
   utilisateurId,
   onChanged,
   refreshKey,
+  montantEnGrand = false,
 }: {
   calcul: Calcul;
   cabinetId: string;
@@ -39,6 +53,11 @@ export function CalculRow({
   // ajustements après une action ailleurs (ex : CycleForm.tsx, sibling —
   // brief v23), même pattern que AnomaliesPanel/PropositionsPanel.
   refreshKey?: number;
+  // Panneau de calcul de la période (Cycle zone, brief v31) : LE montant à
+  // voir en premier — plus grand, en gras. Pas appliqué dans la liste
+  // Historique, où plusieurs calculs s'empilent (surdimensionner chaque
+  // ligne y nuirait à la lisibilité plutôt que d'aider).
+  montantEnGrand?: boolean;
 }) {
   const [motif, setMotif] = useState('');
   const [submitting, setSubmitting] = useState<'valider' | 'rejeter' | null>(null);
@@ -117,6 +136,7 @@ export function CalculRow({
   }
 
   const estBrouillon = calcul.statut === 'brouillon';
+  const estIncomplet = calcul.anomaliesBloquantesOuvertes > 0;
 
   const ajustementCollectee = ajustements.find((a) => a.typeMontant === 'collectee_totale');
   const ajustementDeductible = ajustements.find((a) => a.typeMontant === 'deductible_totale');
@@ -136,11 +156,12 @@ export function CalculRow({
           {formatDate(calcul.periodeDebut)} — {formatDate(calcul.periodeFin)}
         </span>
       </div>
-      <p className="label">
+      <p className={montantEnGrand ? 'label montant-principal' : 'label'}>
         {sensAffiche === 'a_decaisser' ? 'TVA à décaisser' : 'Crédit de TVA'} :{' '}
         <strong>{formatMontant(tvaNetteAffichee)}</strong>
         {aUnAjustementActif && <span className="reference"> (montants ajustés manuellement)</span>}
       </p>
+      {estBrouillon && estIncomplet && <MessageCalculIncomplet nombre={calcul.anomaliesBloquantesOuvertes} />}
 
       {estBrouillon ? (
         <div className="actions">
@@ -151,7 +172,11 @@ export function CalculRow({
             onChange={(e) => setMotif(e.target.value)}
             disabled={submitting !== null}
           />
-          <button onClick={() => void handleValider()} disabled={submitting !== null}>
+          <button
+            onClick={() => void handleValider()}
+            disabled={submitting !== null || estIncomplet}
+            title={estIncomplet ? 'Anomalies bloquantes encore ouvertes — résolvez-les avant de valider' : undefined}
+          >
             <ICONE_ACTION.valider size={14} aria-hidden="true" />
             {submitting === 'valider' ? '…' : 'Valider'}
           </button>

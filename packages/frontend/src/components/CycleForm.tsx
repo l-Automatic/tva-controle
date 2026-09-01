@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ApiError, ajusterMontantCalcul, fetchAjustementsCalcul, lancerCycle, retirerAjustementCalcul } from '../api';
 import { useToast } from '../toast';
 import type { AjustementCalcul, LigneCalcul, ResultatCycle, TypeMontantAjustement } from '../types';
+import { MessageCalculIncomplet } from './CalculsPanel';
 import { CycleLoadingPopup } from './CycleLoadingPopup';
 import { InfoTooltip } from './InfoTooltip';
 
@@ -202,7 +203,7 @@ function ResultatCycleView({
   onAjustementChange?: () => void;
 }) {
   const [ajustements, setAjustements] = useState<AjustementCalcul[]>([]);
-  const calculId = resultat.statut === 'calcule' ? resultat.calculId : null;
+  const calculId = resultat.calculId;
 
   async function chargerAjustements(id: string) {
     try {
@@ -219,25 +220,7 @@ function ResultatCycleView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calculId]);
 
-  if (resultat.statut === 'bloque') {
-    // Pas de liste détaillée ici : le panneau « Anomalies » juste en dessous
-    // (variant="cycle") affiche déjà ces mêmes anomalies, en mieux — libellé
-    // lisible, actions Résoudre/Justifier/Qualifier. Les redupliquer ici en
-    // lecture seule n'ajoutait rien, juste un doublon moins bien formaté
-    // (cf. brief v5, vérification de non-redondance).
-    return (
-      <div className="resultat-cycle resultat-bloque">
-        <p className="resultat-titre">
-          Cycle bloqué — {resultat.anomalies.filter((a) => a.gravite === 'bloquant').length} anomalie(s) bloquante(s)
-        </p>
-        <p className="reference">
-          Traitez ces anomalies dans le panneau « Anomalies » ci-dessous, puis relancez le cycle.
-        </p>
-      </div>
-    );
-  }
-
-  const { resultat: calcul, calculId: id, anomalies } = resultat;
+  const { resultat: calcul, calculId: id, anomalies, anomaliesBloquantesOuvertes } = resultat;
 
   // Totaux produits par le moteur, dérivés des lignes de CE calcul — seul
   // endroit où ils sont connus côté frontend (cf. types.ts, brief v23).
@@ -262,6 +245,7 @@ function ResultatCycleView({
         <strong>{formatMontant(tvaNetteAffichee)}</strong>
         {aUnAjustementActif && <span className="reference"> (recalculée à partir des montants ajustés)</span>}
       </p>
+      {anomaliesBloquantesOuvertes > 0 && <MessageCalculIncomplet nombre={anomaliesBloquantesOuvertes} />}
       <p className="reference">Calcul {id} (brouillon — à valider dans le panneau « Calculs »)</p>
 
       <ul className="card-list">
@@ -369,7 +353,10 @@ export function CycleForm({
       // lui-même le client Pennylane depuis le jeton cabinet configuré.
       const res = await lancerCycle(cabinetId, dossierId, { periodeDebut, periodeFin });
       setResultat(res);
-      const message = res.statut === 'bloque' ? 'Cycle bloqué — anomalies à traiter' : 'Cycle calculé';
+      const message =
+        res.anomaliesBloquantesOuvertes > 0
+          ? `Cycle calculé — ${res.anomaliesBloquantesOuvertes} anomalie(s) bloquante(s) à traiter`
+          : 'Cycle calculé';
       notifier(message);
       setMessageSucces(message);
       setPhasePopup('succes');

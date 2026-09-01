@@ -145,25 +145,23 @@ export interface CompteClientSansTauxAssigne {
   nomTiers: string | null;
 }
 
-export type ResultatCycle =
-  | {
-      statut: 'bloque';
-      anomalies: AnomalieCycle[];
-      comptesACategoriser: CompteACategoriser[];
-      comptesSansTauxAssigne: CompteSansTauxAssigne[];
-      comptesClientSansTaux: CompteClientSansTauxAssigne[];
-      comptesAutoliquidationSuggeres: CompteACategoriser[];
-    }
-  | {
-      statut: 'calcule';
-      anomalies: AnomalieCycle[];
-      resultat: ResultatCalculCycle;
-      calculId: string;
-      comptesACategoriser: CompteACategoriser[];
-      comptesSansTauxAssigne: CompteSansTauxAssigne[];
-      comptesClientSansTaux: CompteClientSansTauxAssigne[];
-      comptesAutoliquidationSuggeres: CompteACategoriser[];
-    };
+// Le calcul se produit désormais toujours, dès le premier cycle, même
+// incomplet — statut 'bloque' retiré (brief v31) : POST /cycles ne renvoie
+// plus jamais que 'calcule'. anomaliesBloquantesOuvertes remplace l'ancien
+// blocage : 0 = calcul complet et validable, > 0 = produit mais incomplet
+// tant que ces anomalies restent ouvertes (le blocage se déplace à la
+// validation, cf. Calcul ci-dessous et POST /calculs/:id/valider).
+export interface ResultatCycle {
+  statut: 'calcule';
+  anomalies: AnomalieCycle[];
+  resultat: ResultatCalculCycle;
+  calculId: string;
+  anomaliesBloquantesOuvertes: number;
+  comptesACategoriser: CompteACategoriser[];
+  comptesSansTauxAssigne: CompteSansTauxAssigne[];
+  comptesClientSansTaux: CompteClientSansTauxAssigne[];
+  comptesAutoliquidationSuggeres: CompteACategoriser[];
+}
 
 // --- Calculs persistés (panneau "Calculs") ---
 
@@ -176,6 +174,10 @@ export interface Calcul {
   statut: StatutCalcul;
   tvaNette: number;
   sens: 'a_decaisser' | 'credit';
+  // Recalculé en direct à chaque GET /dossiers/:id/calculs (brief v31),
+  // jamais figé au moment du cycle qui a produit ce brouillon — résoudre
+  // une anomalie fait baisser ce nombre au prochain chargement.
+  anomaliesBloquantesOuvertes: number;
 }
 
 // --- Paramétrage (cabinet + dossier) ---

@@ -72,6 +72,7 @@ function CalculsDuCycle({
             utilisateurId={utilisateurId}
             onChanged={() => void charger()}
             refreshKey={refreshKey}
+            montantEnGrand
           />
         ))}
       </ul>
@@ -119,34 +120,39 @@ export function CycleZone({
   }, [cabinetId, dossierId]);
 
   return (
-    <section className="panel panel-full">
-      <CycleForm
-        cabinetId={cabinetId}
-        dossierId={dossierId}
-        utilisateurId={utilisateurId}
-        onCycleLance={(debut, fin, resultat) => {
-          onPeriodeChange({ debut, fin });
-          setCycleRefreshKey((k) => k + 1);
-          if (resultat.comptesACategoriser.length > 0) setComptesACategoriser(resultat.comptesACategoriser);
-          onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
-          onSuggestionsAutoliquidation(resultat.comptesAutoliquidationSuggeres);
-        }}
-        onAjustementChange={() => setCycleRefreshKey((k) => k + 1)}
-      />
+    <div className="cycle-zone-layout">
+      <section className="panel cycle-zone-main">
+        <CycleForm
+          cabinetId={cabinetId}
+          dossierId={dossierId}
+          utilisateurId={utilisateurId}
+          onCycleLance={(debut, fin, resultat) => {
+            onPeriodeChange({ debut, fin });
+            setCycleRefreshKey((k) => k + 1);
+            if (resultat.comptesACategoriser.length > 0) setComptesACategoriser(resultat.comptesACategoriser);
+            onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
+            onSuggestionsAutoliquidation(resultat.comptesAutoliquidationSuggeres);
+          }}
+          onAjustementChange={() => setCycleRefreshKey((k) => k + 1)}
+        />
+        {periode && (
+          <>
+            <div className="panel-separateur" />
+            <AnomaliesPanel
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              variant="cycle"
+              periode={periode.debut}
+              periodeFin={periode.fin}
+              refreshKey={cycleRefreshKey}
+              onCompteNonReconnuClic={onCompteNonReconnuClic}
+            />
+          </>
+        )}
+      </section>
       {periode && (
-        <>
-          <div className="panel-separateur" />
-          <AnomaliesPanel
-            cabinetId={cabinetId}
-            dossierId={dossierId}
-            utilisateurId={utilisateurId}
-            variant="cycle"
-            periode={periode.debut}
-            periodeFin={periode.fin}
-            refreshKey={cycleRefreshKey}
-            onCompteNonReconnuClic={onCompteNonReconnuClic}
-          />
-          <div className="panel-separateur" />
+        <aside className="panel cycle-zone-calcul">
           <CalculsDuCycle
             cabinetId={cabinetId}
             dossierId={dossierId}
@@ -154,7 +160,7 @@ export function CycleZone({
             periode={periode}
             refreshKey={cycleRefreshKey}
           />
-        </>
+        </aside>
       )}
       {comptesACategoriser.length > 0 && (
         <CategorisationPopup
@@ -165,6 +171,6 @@ export function CycleZone({
           onClose={() => setComptesACategoriser([])}
         />
       )}
-    </section>
+    </div>
   );
 }
