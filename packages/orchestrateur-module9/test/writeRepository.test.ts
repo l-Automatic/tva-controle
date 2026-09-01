@@ -30,6 +30,7 @@ import {
   assignerTauxCompte,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
+  AnomaliesBloquantesNonResoluesError,
   AnomalieNonQualifiableError,
   ajusterMontantCalcul,
   retirerAjustementCalcul,
@@ -361,6 +362,81 @@ describe('enregistrerCalcul et validerCalcul', () => {
     expect(audit.rows[0].acteur).toBe('utilisateur');
     expect(audit.rows[0].acteur_utilisateur_id).toBe(utilisateurId);
     expect(audit.rows[0].dossier_id).toBe(dossierId);
+  });
+
+  it('refuse de valider tant qu’une anomalie bloquante reste ouverte sur la période (10/08 — le vrai blocage vit ici désormais)', async () => {
+    const periode = '2025-04-01';
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 200, referencesPieces: [1] }],
+      tvaNette: 200,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) => enregistrerCalcul(client, dossierId, periode, '2025-04-30', resultat));
+
+    await avecClient((client) =>
+      enregistrerAnomalies(client, dossierId, periode, [
+        {
+          type: 'compte_tva_non_reconnu',
+          gravite: 'bloquant',
+          ledgerEntryId: 9001,
+          compte: '4452',
+          description: 'toujours ouverte au moment de la validation',
+        },
+      ])
+    );
+
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u2-${Date.now()}@test.fr`]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+
+    await expect(avecClient((client) => validerCalcul(client, calculId, utilisateurId))).rejects.toThrow(
+      AnomaliesBloquantesNonResoluesError
+    );
+
+    const calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    expect(calculs.find((c) => c.id === calculId)?.statut).toBe('brouillon'); // toujours en brouillon, jamais validé
+  });
+
+  it('valide normalement une fois l’anomalie bloquante résolue', async () => {
+    const periode = '2025-05-01';
+    const resultat: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 300, referencesPieces: [1] }],
+      tvaNette: 300,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) => enregistrerCalcul(client, dossierId, periode, '2025-05-31', resultat));
+
+    const inserees = await avecClient((client) =>
+      enregistrerAnomalies(client, dossierId, periode, [
+        {
+          type: 'compte_tva_non_reconnu',
+          gravite: 'bloquant',
+          ledgerEntryId: 9002,
+          compte: '4453',
+          description: 'sera résolue avant validation',
+        },
+      ])
+    );
+    await avecClient((client) => client.query(`UPDATE anomalies SET statut = 'resolu' WHERE id = $1`, [inserees[0]!.id]));
+
+    const resUser = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'U3', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `u3valid-${Date.now()}@test.fr`]
+      )
+    );
+    const utilisateurId = resUser.rows[0]!.id;
+
+    await expect(avecClient((client) => validerCalcul(client, calculId, utilisateurId))).resolves.not.toThrow();
+
+    const calculs = await avecClient((client) => listerCalculs(client, dossierId));
+    expect(calculs.find((c) => c.id === calculId)?.statut).toBe('valide');
   });
 
   it('relancer un cycle sur un calcul encore en brouillon le remplace au lieu de violer la contrainte unique', async () => {
