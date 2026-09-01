@@ -28,8 +28,8 @@ function ecriture(overrides: Partial<EcritureTvaComplete> = {}): EcritureTvaComp
   };
 }
 
-describe('calculerTva — garde-fou anomalies bloquantes', () => {
-  it('refuse de calculer si une anomalie bloquante est présente', () => {
+describe('calculerTva — anomalies bloquantes (10/08 : ne bloquent plus le calcul lui-même)', () => {
+  it('calcule quand même en présence d’une anomalie bloquante — seule la validation reste bloquée désormais (cf. orchestrateur-module9)', () => {
     const anomalieBloquante: Anomalie = {
       type: 'taux_incoherent',
       gravite: 'bloquant',
@@ -37,7 +37,7 @@ describe('calculerTva — garde-fou anomalies bloquantes', () => {
       compte: '445711',
       description: 'test',
     };
-    expect(() => calculerTva([], [anomalieBloquante], [], [])).toThrow(/bloquante/);
+    expect(() => calculerTva([], [anomalieBloquante], [], [])).not.toThrow();
   });
 
   it('calcule normalement s’il n’y a que des anomalies signale/info', () => {
