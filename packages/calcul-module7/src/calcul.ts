@@ -99,14 +99,14 @@ export function calculerTva(
   statutsCarburant: StatutCarburant[],
   config: ConfigCalculTva = {}
 ): ResultatCalculTva {
-  const bloquantes = anomalies.filter((a) => a.gravite === 'bloquant');
-  if (bloquantes.length > 0) {
-    throw new Error(
-      `Calcul refusé : ${bloquantes.length} anomalie(s) bloquante(s) non résolue(s) (${bloquantes
-        .map((a) => a.type)
-        .join(', ')}).`
-    );
-  }
+  // 10/08 — changement de fond décidé avec Rami : une anomalie bloquante ne
+  // bloque plus le calcul lui-même, seulement sa VALIDATION (cf.
+  // validerCalcul, orchestrateur-module9). Ce contrôle refusait jusqu'ici
+  // de calculer quoi que ce soit dès qu'une anomalie bloquante existait —
+  // second niveau de blocage indépendant de celui de pipeline.ts, découvert
+  // en retirant le premier. Retiré pour la même raison : produire un
+  // brouillon dès le premier cycle, même incomplet sur un point précis,
+  // plutôt que de ne rien produire du tout.
 
   const politique = config.politiqueIndetermine ?? 'exclure';
   const compteDue = config.compteAutoliquidationDue ?? '4454';
