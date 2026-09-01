@@ -96,13 +96,27 @@ describe('determinerExigibiliteTva — biens (déductible dès facturation)', ()
 });
 
 describe('determinerExigibiliteTva — cas d’anomalie', () => {
-  it('signale une nature indéterminée si autresLignes est vide', () => {
+  it('signale une nature indéterminée si autresLignes est vide (collecte — exigible par défaut, prudence côté ventes)', () => {
     const ecriture = ecritureRousseau({ autresLignes: [] });
     const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
 
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('nature_operation_indeterminee');
     expect(statuts[0]?.natureOperation).toBe('indetermine');
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+
+  it('nature indéterminée sur un compte déductible : jamais déduit par défaut (10/08, bug réel corrigé — prudence inversée)', () => {
+    const ecriture = ecritureRousseau({
+      ligneTva: { ...ecritureRousseau().ligneTva, compte: '44566', credit: 0, debit: 100 },
+      autresLignes: [],
+    });
+    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
+
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.type).toBe('nature_operation_indeterminee');
+    expect(statuts[0]?.natureOperation).toBe('indetermine');
+    expect(statuts[0]?.exigible).toBe(false); // jamais true avant vérification manuelle, côté achats
   });
 
   it('signale une nature mixte si la pièce touche des comptes bien ET service', () => {
