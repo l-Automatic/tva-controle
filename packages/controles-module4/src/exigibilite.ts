@@ -134,12 +134,21 @@ export function determinerExigibiliteTva(
         description: 'Aucune ligne produit/charge trouvée sur la pièce : nature bien/service non déterminable.',
         details: { libelle },
       });
+      // Prudence inversée achats/ventes (10/08, bug réel confirmé et
+      // corrigé — même défaut que celui déjà traité pour paiement_partiel
+      // et le compte 471) : côté ventes, exigible par défaut est le bon
+      // sens (l'État a droit à la collecte, même en cas de doute). Côté
+      // achats, c'était FAUX jusqu'ici — exigible=true déduisait à 100%
+      // sans lien clairement établi, contraire au principe déjà appliqué
+      // ailleurs dans ce même fichier.
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'indetermine',
-        exigible: true,
-        motif: 'Nature indéterminée : exigibilité supposée par défaut (facturation), à vérifier manuellement.',
+        exigible: estCollecte,
+        motif: estCollecte
+          ? 'Nature indéterminée : exigibilité supposée par défaut (facturation), à vérifier manuellement.'
+          : 'Achat, nature indéterminée : pas de déduction sans lien clairement établi, à vérifier manuellement.',
       });
       continue;
     }
