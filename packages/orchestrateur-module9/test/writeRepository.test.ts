@@ -725,6 +725,84 @@ describe('qualifierEncaissementNonAffecte (compte 471)', () => {
 
     expect(regularisations).toEqual([{ ledgerEntryId: 7001, montantTTC: 1200, taux: 20 }]);
   });
+
+  it('applique automatiquement un ajustement quand un calcul brouillon existe déjà pour la période (option A, 10/08)', async () => {
+    const periode = '2025-11-10';
+    const resultatInitial: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 1000, referencesPieces: [1] }],
+      tvaNette: 1000,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, periode, '2025-11-30', resultatInitial)
+    );
+
+    const anomalieId = await creerAnomalieEncaissement(periode, 600, 8001);
+    const utilisateurId = await creerUtilisateur('Q6');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, anomalieId, utilisateurId, { decision: 'vente', taux: 20 })
+    );
+
+    const ajustement = await avecClient((client) =>
+      client.query(
+        `SELECT montant_original, montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = 'collectee_totale'`,
+        [calculId]
+      )
+    );
+    expect(ajustement.rows).toHaveLength(1);
+    expect(Number.parseFloat(ajustement.rows[0].montant_original)).toBeCloseTo(1000);
+    // 600 TTC à 20% -> 100 € de TVA -> 1000 + 100 = 1100
+    expect(Number.parseFloat(ajustement.rows[0].montant_ajuste)).toBeCloseTo(1100);
+  });
+
+  it('ne fait rien de plus (jamais une erreur) si aucun calcul brouillon n’existe pour la période', async () => {
+    const anomalieId = await creerAnomalieEncaissement('2025-11-11', 600, 8002);
+    const utilisateurId = await creerUtilisateur('Q7');
+
+    await expect(
+      avecClient((client) =>
+        qualifierEncaissementNonAffecte(client, anomalieId, utilisateurId, { decision: 'vente', taux: 20 })
+      )
+    ).resolves.not.toThrow();
+  });
+
+  it('un deuxième encaissement qualifié sur la même période s’additionne au premier ajustement', async () => {
+    const periode = '2025-11-12';
+    const resultatInitial: ResultatCalculTva = {
+      lignes: [{ categorie: 'collectee_20', montant: 500, referencesPieces: [1] }],
+      tvaNette: 500,
+      sens: 'a_decaisser',
+      ecrituresExclues: [],
+    };
+    const calculId = await avecClient((client) =>
+      enregistrerCalcul(client, dossierId, periode, '2025-11-30', resultatInitial)
+    );
+
+    const [id1, id2] = await creerAnomaliesEncaissement(periode, [
+      { montantTTC: 600, ledgerEntryId: 8003 },
+      { montantTTC: 240, ledgerEntryId: 8004 },
+    ]);
+    const utilisateurId = await creerUtilisateur('Q8');
+
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, id1!, utilisateurId, { decision: 'vente', taux: 20 })
+    );
+    await avecClient((client) =>
+      qualifierEncaissementNonAffecte(client, id2!, utilisateurId, { decision: 'vente', taux: 20 })
+    );
+
+    const ajustement = await avecClient((client) =>
+      client.query(
+        `SELECT montant_original, montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = 'collectee_totale'`,
+        [calculId]
+      )
+    );
+    // 500 (initial) + 100 (600 TTC a 20%) + 40 (240 TTC a 20%) = 640
+    expect(Number.parseFloat(ajustement.rows[0].montant_original)).toBeCloseTo(500); // jamais écrasé par le 2e appel
+    expect(Number.parseFloat(ajustement.rows[0].montant_ajuste)).toBeCloseTo(640);
+  });
 });
 
 describe('paramétrage cabinet et dossier', () => {
