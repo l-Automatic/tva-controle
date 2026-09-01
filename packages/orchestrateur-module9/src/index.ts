@@ -40,6 +40,7 @@ export {
   rejeterCalcul,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
+  AnomaliesBloquantesNonResoluesError,
   ajusterMontantCalcul,
   retirerAjustementCalcul,
   CalculPlusEnBrouillonError,
