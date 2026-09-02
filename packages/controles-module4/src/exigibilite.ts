@@ -40,7 +40,17 @@ export interface StatutExigibilite {
 const PREFIXE_COLLECTE = '44571';
 const PREFIXES_DEDUCTIBLE = ['44566', '44562'];
 
+// Comptes assimilés au bien (10/08, demande de Rami) : certains comptes de
+// service sont si indissociables du bien vendu/acheté qu'ils restent
+// TOUJOURS exigibles/déductibles dès facturation, jamais soumis au test de
+// paiement — livraisons (624) et commissions/courtages (6222). Prend le
+// dessus sur toute convention dossier (comptesVenteService/
+// comptesChargeService) : même si le cabinet a classé un préfixe plus large
+// comme service, ces comptes précis restent "bien".
+const PREFIXES_ASSIMILES_BIEN = ['624', '6222'];
+
 function estCompteService(compte: string, comptesService: string[]): boolean {
+  if (PREFIXES_ASSIMILES_BIEN.some((prefixe) => compte.startsWith(prefixe))) return false;
   return comptesService.some((prefixe) => compte.startsWith(prefixe));
 }
 
