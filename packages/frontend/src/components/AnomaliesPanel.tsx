@@ -22,21 +22,24 @@ import { BadgeStatut } from './BadgeStatut';
 // la vérification ciblée, sans repasser par un cycle complet (brief v30).
 const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 
-// 16 des 20 types du catalogue ont un libellé dédié ici — cf.
+// 13 des 17 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
 // incoherence_taux_autoliquidation, immobilisation_sur_compte_tva_incorrect,
 // autoliquidation_incomplete) retombent sur le type brut en repli, hors
 // périmètre de ce brief (v12 ne demandait que les 4 ci-dessous).
+// ligne_tiers_introuvable et nature_operation_indeterminee retirées du
+// catalogue côté backend — résidu purement frontend retiré ici (brief
+// v33). flotte_mixte_carburant retirée pour la même raison en vérifiant
+// ce même brief — même changelog de retrait (10/08) que
+// ligne_tiers_introuvable dans CATALOGUE_ANOMALIES.md, aucune trace non
+// plus dans le code backend.
 const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   compte_tva_non_reconnu: 'Compte de TVA non reconnu',
   encaissement_non_affecte: 'Encaissement non affecté',
-  nature_operation_indeterminee: "Nature de l'opération indéterminée",
   nature_operation_mixte: "Nature de l'opération mixte",
-  ligne_tiers_introuvable: 'Ligne tiers introuvable',
   paiement_partiel_a_verifier: 'Paiement partiel à vérifier',
   avoir_a_verifier: 'Avoir à vérifier',
   parc_vehicules_non_renseigne: 'Parc de véhicules non renseigné',
-  flotte_mixte_carburant: 'Flotte mixte (carburant)',
   immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
   nouveau_tiers_a_verifier: 'Nouveau tiers à vérifier',
   encaissement_client_taux_applique: 'Encaissement client — taux appliqué',

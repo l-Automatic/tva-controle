@@ -10,7 +10,6 @@ import {
   CircleX,
   Clock,
   Copy,
-  Fuel,
   HandCoins,
   Hash,
   HelpCircle,
@@ -28,7 +27,6 @@ import {
   Undo2,
   UserPlus,
   Users,
-  UserX,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -52,18 +50,18 @@ export const ICONE_ACTION = {
   parametres: SlidersHorizontal,
 } as const satisfies Record<string, LucideIcon>;
 
-// Une icône distincte par type d'anomalie (16 types, cf. CATALOGUE_ANOMALIES.md)
-// pour les repérer d'un coup d'œil — repli générique pour un type inconnu.
+// Une icône distincte par type d'anomalie (cf. CATALOGUE_ANOMALIES.md) pour
+// les repérer d'un coup d'œil — repli générique pour un type inconnu.
+// ligne_tiers_introuvable, nature_operation_indeterminee et
+// flotte_mixte_carburant retirées du catalogue côté backend — résidu
+// purement frontend retiré ici (brief v33).
 export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   compte_tva_non_reconnu: HelpCircle,
   encaissement_non_affecte: HandCoins,
-  nature_operation_indeterminee: CircleAlert,
   nature_operation_mixte: Shuffle,
-  ligne_tiers_introuvable: UserX,
   paiement_partiel_a_verifier: Layers,
   avoir_a_verifier: Undo2,
   parc_vehicules_non_renseigne: Car,
-  flotte_mixte_carburant: Fuel,
   immobilisation_potentielle_non_passee: Building2,
   nouveau_tiers_a_verifier: UserPlus,
   encaissement_client_taux_applique: Percent,
