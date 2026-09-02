@@ -125,30 +125,21 @@ export function determinerExigibiliteTva(
 
     const comptesServiceApplicables = estCollecte ? config.comptesVenteService : config.comptesChargeService;
 
+    // Aucune ligne produit/charge du tout (10/08, anomalie retirée après
+    // discussion avec Rami) : en pratique, ce cas ne se présente quasiment
+    // jamais sur une vraie transaction commerciale (même une immobilisation
+    // a sa propre ligne de compte 21xx) — seulement une OD de régularisation
+    // manuelle. Jamais utile à signaler, gardé silencieux mais toujours
+    // avec la prudence inversée achats/ventes (jamais déduit par défaut).
     if (ecriture.autresLignes.length === 0) {
-      anomalies.push({
-        type: 'nature_operation_indeterminee',
-        gravite: 'signale',
-        ledgerEntryId,
-        compte,
-        description: 'Aucune ligne produit/charge trouvée sur la pièce : nature bien/service non déterminable.',
-        details: { libelle },
-      });
-      // Prudence inversée achats/ventes (10/08, bug réel confirmé et
-      // corrigé — même défaut que celui déjà traité pour paiement_partiel
-      // et le compte 471) : côté ventes, exigible par défaut est le bon
-      // sens (l'État a droit à la collecte, même en cas de doute). Côté
-      // achats, c'était FAUX jusqu'ici — exigible=true déduisait à 100%
-      // sans lien clairement établi, contraire au principe déjà appliqué
-      // ailleurs dans ce même fichier.
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'indetermine',
         exigible: estCollecte,
         motif: estCollecte
-          ? 'Nature indéterminée : exigibilité supposée par défaut (facturation), à vérifier manuellement.'
-          : 'Achat, nature indéterminée : pas de déduction sans lien clairement établi, à vérifier manuellement.',
+          ? 'Nature indéterminée : exigibilité supposée par défaut (facturation).'
+          : 'Achat, nature indéterminée : pas de déduction sans lien clairement établi.',
       });
       continue;
     }
