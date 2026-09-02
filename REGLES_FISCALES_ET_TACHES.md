@@ -602,3 +602,28 @@ Mentionné dans la liste d'origine de Rami, jamais creusé. Les valeurs
 `logiciel_source` existent déjà dans le schéma (`001_schema_initial.sql`)
 pour ces quatre-là, mais aucun connecteur n'existe. Ordre de priorité pas
 encore décidé.
+
+---
+
+## nature_operation_mixte — raffinement en attente du paiement partiel achats (10/08)
+
+Construit ce jour : un vrai prorata bien/service sur les montants HT
+(`exigibilite.ts`), plus juste signalé à 100%. Payé/pas payé = binaire
+(lettré ou non) pour la part service — la part bien (dont 624 et 6222,
+assimilés au bien même si structurellement des comptes de service) reste
+toujours exigible.
+
+**CE QUI MANQUE ENCORE, explicitement demandé par Rami, à ne pas
+perdre** : pour la part service d'une pièce mixte, appliquer un vrai
+prorata de paiement PARTIEL (pas juste payé/pas payé) — un service
+important (maintenance annuelle, formation...) souvent réglé en plusieurs
+fois doit voir sa part de TVA déduite progressivement, au fur et à mesure
+des paiements réels, pas tout ou rien à la fin.
+
+**Dépend explicitement du chantier paiement partiel achats**, en pause
+depuis longtemps dans cette session avec un vrai bug non résolu (prorata
+bloqué à 100% pour l'hôtel et le cabinet, anomalie déclenchée à tort sur
+une facture sans paiement — cf. section "Paiement partiel — volet achats"
+plus haut dans ce document). Décision explicite : ne pas construire ce
+raffinement par-dessus un mécanisme connu cassé — reprendre une fois le
+paiement partiel achats corrigé, pas avant.
