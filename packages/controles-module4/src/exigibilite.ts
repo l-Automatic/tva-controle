@@ -149,21 +149,48 @@ export function determinerExigibiliteTva(
     );
 
     if (natures.size > 1) {
+      // 10/08 — désormais calculé, plus seulement signalé. Possible
+      // uniquement depuis que la catégorisation bien/service par compte
+      // existe (conventions_dossier) : au moment où cette anomalie a été
+      // construite, cette information n'existait pas encore. Prorata sur
+      // les montants HT des lignes produit/charge — PAS un prorata de
+      // paiement partiel (question distincte, jamais mélangée ici, comme
+      // demandé par Rami) : uniquement payé/pas payé (lettré ou non), qui
+      // détermine si la part service est exigible ou exclue cette période.
+      // La part bien reste exigible dans tous les cas (exigibilité dès
+      // facturation, jamais liée au paiement).
+      const montantTotal = ecriture.autresLignes.reduce((s, l) => s + l.debit + l.credit, 0);
+      const montantBien = ecriture.autresLignes
+        .filter((l) => !estCompteService(l.compte, comptesServiceApplicables))
+        .reduce((s, l) => s + l.debit + l.credit, 0);
+      const prorataBien = montantTotal > 0 ? montantBien / montantTotal : 0;
+
+      // Aucune ligne tiers = vente comptant, jamais de compte client à
+      // lettrer (même raisonnement que plus bas dans cette fonction pour
+      // le cas service pur) : la part service est alors considérée payée,
+      // donc exigible elle aussi.
+      const partServicePayee = ecriture.lignesTiers.length === 0 || (ecriture.lignesTiers[0]?.lettrage.estLettree ?? false);
+      const prorataExigible = partServicePayee ? 1 : prorataBien;
+
       anomalies.push({
         type: 'nature_operation_mixte',
-        gravite: 'signale',
+        gravite: 'info',
         ledgerEntryId,
         compte,
-        description:
-          'Pièce mêlant des lignes de nature bien et service : exigibilité à vérifier ligne par ligne, non calculée automatiquement.',
-        details: { libelle },
+        description: partServicePayee
+          ? `Pièce mêlant bien et service, mais payée : TVA exigible en totalité.`
+          : `Pièce mêlant bien et service, non payée : ${(prorataBien * 100).toFixed(0)}% de la TVA (part bien) exigible immédiatement, le reste (part service) exclu tant que non payé.`,
+        details: { libelle, prorataBien, partServicePayee },
       });
       statuts.push({
         ledgerEntryId,
         compte,
         natureOperation: 'indetermine',
-        exigible: true,
-        motif: 'Nature mixte : à vérifier manuellement.',
+        exigible: prorataExigible > 0,
+        prorataExigible: prorataExigible < 1 ? prorataExigible : undefined,
+        motif: partServicePayee
+          ? 'Nature mixte, payée : TVA exigible en totalité.'
+          : `Nature mixte, non payée : ${(prorataBien * 100).toFixed(0)}% exigible (part bien uniquement).`,
       });
       continue;
     }
