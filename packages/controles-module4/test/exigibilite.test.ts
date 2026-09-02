@@ -163,6 +163,45 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.prorataExigible).toBeUndefined();
   });
 
+  it('624 (livraison) assimilé au bien même s’il matcherait un préfixe service du dossier — jamais exclu par le prorata (10/08)', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [{ id: 1, compte: '624100', compteId: 1, libelle: null, debit: 0, credit: 300 }],
+      lignesTiers: [
+        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
+      ],
+    });
+    // Un seul compte, donc classification simple (pas nature_operation_mixte) —
+    // vérifie que 624 est bien classé "bien", jamais "service" malgré le non-paiement.
+    const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(anomalies).toEqual([]);
+    expect(statuts[0]?.natureOperation).toBe('bien');
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+
+  it('6222 (commissions et courtages) assimilé au bien — même non payé, la part correspondante reste exigible dans une pièce mixte', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [
+        { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 }, // vrai service
+        { id: 2, compte: '622200', compteId: 2, libelle: null, debit: 0, credit: 500 }, // assimilé bien
+      ],
+      lignesTiers: [
+        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
+      ],
+    });
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle);
+    // 500 (6222, assimilé bien) / 1500 total = 1/3 exigible, malgré le non-paiement
+    expect(statuts[0]?.prorataExigible).toBeCloseTo(1 / 3);
+  });
+
+  it('un compte 622 générique (hors 6222) reste soumis à la convention dossier normale, pas assimilé au bien', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [{ id: 1, compte: '622100', compteId: 1, libelle: null, debit: 0, credit: 300 }],
+    });
+    // 622100 ne matche ni comptesVenteService (706/704) ni PREFIXES_ASSIMILES_BIEN (624/6222) -> bien par défaut
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(statuts[0]?.natureOperation).toBe('bien');
+  });
+
   it('vente comptant sans ligne tiers (caisse) : exigible sans être signalée (10/08, retiré après discussion avec Rami)', () => {
     const ecriture = ecritureRousseau({ lignesTiers: [] });
     const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
