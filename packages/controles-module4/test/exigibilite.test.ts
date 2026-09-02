@@ -117,16 +117,50 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.exigible).toBe(false); // jamais true, côté achats
   });
 
-  it('signale une nature mixte si la pièce touche des comptes bien ET service', () => {
+  it('nature mixte, payée : TVA exigible en totalité malgré le mélange bien/service (10/08 — désormais calculé, plus juste signalé)', () => {
     const ecriture = ecritureRousseau({
       autresLignes: [
         { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 }, // service
         { id: 2, compte: '701', compteId: 2, libelle: null, debit: 0, credit: 500 }, // bien
       ],
+      // lignesTiers par défaut du fixture : lettrée (cas réel confirmé) — donc payée
     });
-    const { anomalies } = determinerExigibiliteTva([ecriture], configReelle);
+    const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('nature_operation_mixte');
+    expect(anomalies[0]?.gravite).toBe('info');
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.prorataExigible).toBeUndefined(); // 100%, pas besoin d'un prorata partiel
+  });
+
+  it('nature mixte, NON payée : seule la part bien est exigible, au prorata des montants HT', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [
+        { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 }, // service — 2/3
+        { id: 2, compte: '701', compteId: 2, libelle: null, debit: 0, credit: 500 }, // bien — 1/3
+      ],
+      lignesTiers: [
+        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
+      ],
+    });
+    const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.gravite).toBe('info');
+    expect(statuts[0]?.exigible).toBe(true); // > 0, donc pas totalement exclu
+    expect(statuts[0]?.prorataExigible).toBeCloseTo(1 / 3); // 500 / (1000 + 500)
+  });
+
+  it('nature mixte, vente comptant sans ligne tiers : traitée comme payée, exigible en totalité', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [
+        { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 },
+        { id: 2, compte: '701', compteId: 2, libelle: null, debit: 0, credit: 500 },
+      ],
+      lignesTiers: [],
+    });
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.prorataExigible).toBeUndefined();
   });
 
   it('vente comptant sans ligne tiers (caisse) : exigible sans être signalée (10/08, retiré après discussion avec Rami)', () => {
