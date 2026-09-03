@@ -40,6 +40,7 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
   enregistrerRapprochementPaiementAchat,
   definirStatutDossier,
@@ -2244,4 +2245,64 @@ describe('enregistrerRapprochementPaiementAchat — garde-fou paiement déjà r�
     ).resolves.not.toThrow();
   });
 
+});
+
+describe('autoResoudreFactureSansCandidat', () => {
+  it('crée un rapprochement vide, sans confirmed_by, avec un événement d’audit distinct', async () => {
+    const periode = '2025-08-10';
+    await avecClient((client) => autoResoudreFactureSansCandidat(client, dossierId, periode, 8001, 500));
+
+    const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
+    expect(rapprochements).toHaveLength(1);
+    expect(rapprochements[0]?.paiementsValides).toEqual([]);
+    expect(rapprochements[0]?.montantTotalValide).toBe(0);
+
+    const ligne = await avecClient((client) =>
+      client.query(`SELECT confirmed_by FROM rapprochements_paiement_achat WHERE dossier_id = $1 AND facture_ledger_entry_id = 8001`, [dossierId])
+    );
+    expect(ligne.rows[0]?.confirmed_by).toBeNull();
+
+    const audit = await avecClient((client) =>
+      client.query(`SELECT * FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'rapprochement_paiement_achat_auto_resolu'`, [dossierId])
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]?.acteur).toBe('systeme');
+  });
+
+  it('idempotent : un second appel sur la même facture ne fait rien de plus (pas de doublon, pas de second événement)', async () => {
+    const periode = '2025-08-11';
+    await avecClient((client) => autoResoudreFactureSansCandidat(client, dossierId, periode, 8010, 300));
+    await avecClient((client) => autoResoudreFactureSansCandidat(client, dossierId, periode, 8010, 300));
+
+    const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
+    expect(rapprochements).toHaveLength(1);
+
+    const audit = await avecClient((client) =>
+      client.query(
+        `SELECT COUNT(*)::int AS n FROM audit_log WHERE dossier_id = $1 AND type_evenement = 'rapprochement_paiement_achat_auto_resolu' AND details->>'factureLedgerEntryId' = '8010'`,
+        [dossierId]
+      )
+    );
+    expect(audit.rows[0]?.n).toBe(1);
+  });
+
+  it('ne remplace jamais une résolution manuelle déjà faite par le collaborateur', async () => {
+    const periode = '2025-08-12';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ8', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq8-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, periode, 8020, 500, [{ ledgerEntryId: 8021, montant: 500 }], utilisateurId)
+    );
+    await avecClient((client) => autoResoudreFactureSansCandidat(client, dossierId, periode, 8020, 500));
+
+    const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
+    expect(rapprochements[0]?.montantTotalValide).toBe(500); // jamais écrasé
+  });
 });
