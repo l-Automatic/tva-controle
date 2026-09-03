@@ -681,3 +681,23 @@ export async function listerRapprochementsPaiementAchat(
     confirmedAt: r.confirmed_at,
   }));
 }
+
+// Ensemble de tous les ledgerEntryId de paiement déjà réclamés par une
+// AUTRE facture, sur tout le dossier (10/08) — jamais scopé à une seule
+// période : la fenêtre de recherche des candidats couvre tout l'exercice,
+// un paiement validé pour une facture doit donc être exclu des candidats
+// de toute autre facture, même sur une période différente. Empêche
+// qu'un même paiement soit compté deux fois (demande explicite de Rami).
+export async function listerPaiementsDejaReclames(client: PoolClient, dossierId: string): Promise<Set<number>> {
+  const res = await client.query<{ paiements_valides: { ledgerEntryId: number }[] }>(
+    `SELECT paiements_valides FROM rapprochements_paiement_achat WHERE dossier_id = $1`,
+    [dossierId]
+  );
+  const ids = new Set<number>();
+  for (const row of res.rows) {
+    for (const p of row.paiements_valides) {
+      ids.add(p.ledgerEntryId);
+    }
+  }
+  return ids;
+}
