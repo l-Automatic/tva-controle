@@ -2,9 +2,9 @@ import type { LigneGroupeLettrage } from '@tva-controle/core';
 
 // Module 5, volet ventes (10/08) — purement arithmétique, aucune IA
 // nécessaire : contrairement aux achats (où il faut d'abord établir par
-// jugement quel paiement se rattache à quelle facture), côté ventes le
-// groupe de lettrage donne déjà tous les montants nécessaires, tous
-// rattachés à la même ligne tiers.
+// jugement quel paiement se rattache à quelle facture), côté ventes les
+// lignes déjà rapprochées par Pennylane donnent directement tous les
+// montants nécessaires, tous rattachés à la même ligne tiers.
 //
 // Convention de sens (compte client, 411) : une facture de vente CRÉDITE
 // le compte tiers, un encaissement reçu le DÉBITE. Le prorata exigible
