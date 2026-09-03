@@ -56,6 +56,14 @@ describe('identifierFacturesCandidatesAcompte', () => {
     expect(identifierFacturesCandidatesAcompte([e], comptesChargeService)).toEqual([]);
   });
 
+  it('inclut une facture lettrée mais dans un groupe AMBIGU de plus de 2 pièces (10/08, remplace l’ancien mécanisme séparé)', () => {
+    const e = ecriture({ compteCharge: '604CONSEIL', estLettree: true });
+    // Remplace le groupeIds par défaut ([1, 2], 2 pièces = clair) par un
+    // groupe ambigu à 3 pièces.
+    e.lignesTiers[0]!.lettrage = { estLettree: true, groupeIds: [1, 2, 3] };
+    expect(identifierFacturesCandidatesAcompte([e], comptesChargeService)).toHaveLength(1);
+  });
+
   it('exclut une écriture sans TVA', () => {
     const e = ecriture({ compteCharge: '604CONSEIL', estLettree: false, montantTva: 0 });
     expect(identifierFacturesCandidatesAcompte([e], comptesChargeService)).toEqual([]);
