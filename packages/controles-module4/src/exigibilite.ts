@@ -118,6 +118,20 @@ export function determinerExigibiliteTva(
       continue;
     }
 
+    const comptesServiceApplicables = estCollecte ? config.comptesVenteService : config.comptesChargeService;
+
+    // natures calculé ICI, avant le contrôle du prorata anticipé
+    // ci-dessous (10/08, bug réel corrigé) : sans ça, une facture MIXTE
+    // (bien + service) avec un rapprochement déjà validé se faisait
+    // intercepter par le chemin simple ci-dessous, qui applique le
+    // prorata brut tel quel — jamais la formule mélangée bien/service de
+    // la branche nature_operation_mixte plus bas, jamais atteinte dans ce
+    // cas. Trouvé en testant : le résultat obtenu était exactement le
+    // prorata brut de paiement (0.6, ou 0), jamais le mélange attendu.
+    const natures = new Set(
+      ecriture.autresLignes.map((l) => (estCompteService(l.compte, comptesServiceApplicables) ? 'service' : 'bien'))
+    );
+
     // Prorata calculé (10/08) : vérifié ICI, avant même la détermination
     // bien/service (pas seulement avant le lettrage) — bug réel trouvé en
     // testant l'exception hôtel : un compte comme 625 n'est jamais dans
@@ -127,7 +141,10 @@ export function determinerExigibiliteTva(
     // l'appelant signifie que le lien service+paiement partiel a déjà été
     // établi (calcul pur pour les ventes, jugement LLM pour les achats) —
     // ça prévaut sur toute classification bien/service par convention.
-    const prorataAnticipe = prorataParEcriture.get(ledgerEntryId);
+    // RESTREINT à natures.size <= 1 (pas mixte) — une facture mixte avec
+    // un prorata déjà validé doit passer par la formule mélangée de la
+    // branche nature_operation_mixte plus bas, jamais ce chemin simple.
+    const prorataAnticipe = natures.size <= 1 ? prorataParEcriture.get(ledgerEntryId) : undefined;
     if (prorataAnticipe !== undefined) {
       const compteTiersProrata = ecriture.lignesTiers[0]?.compte ?? 'inconnu';
       prorataAppliques.push({
@@ -148,8 +165,6 @@ export function determinerExigibiliteTva(
       continue;
     }
 
-    const comptesServiceApplicables = estCollecte ? config.comptesVenteService : config.comptesChargeService;
-
     // Aucune ligne produit/charge du tout (10/08, anomalie retirée après
     // discussion avec Rami) : en pratique, ce cas ne se présente quasiment
     // jamais sur une vraie transaction commerciale (même une immobilisation
@@ -168,10 +183,6 @@ export function determinerExigibiliteTva(
       });
       continue;
     }
-
-    const natures = new Set(
-      ecriture.autresLignes.map((l) => (estCompteService(l.compte, comptesServiceApplicables) ? 'service' : 'bien'))
-    );
 
     if (natures.size > 1) {
       // 10/08 — désormais calculé, plus seulement signalé. Prorata sur
