@@ -61,6 +61,7 @@ export {
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
   enregistrerRapprochementPaiementAchat,
+  autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
   type PaiementValide,
   definirStatutDossier,
