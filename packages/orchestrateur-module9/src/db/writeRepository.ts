@@ -1546,3 +1546,62 @@ export async function mettreAJourInfosDossier(
     throw new DossierIntrouvableError(dossierId);
   }
 }
+
+// ============================================================================
+// RAPPROCHEMENTS DE PAIEMENT ACHATS — validation manuelle (10/08)
+// ============================================================================
+
+export interface PaiementValide {
+  ledgerEntryId: number;
+  montant: number;
+}
+
+// Enregistre le choix du collaborateur — jamais celui du LLM seul, qui n'a
+// fait que précocher une proposition (cf. jugerCandidatsPaiementAchat,
+// connector-mistral). paiementsValides peut être un tableau vide : le
+// collaborateur peut valider "aucun de ces paiements ne correspond",
+// ce qui referme quand même la facture (exclue par prudence — aucun
+// paiement rattaché, donc rien à déduire cette période).
+export async function enregistrerRapprochementPaiementAchat(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  factureLedgerEntryId: number,
+  montantFactureTotal: number,
+  paiementsValides: PaiementValide[],
+  utilisateurId: string
+): Promise<void> {
+  const montantTotalValide = paiementsValides.reduce((s, p) => s + p.montant, 0);
+
+  await client.query(
+    `INSERT INTO rapprochements_paiement_achat
+       (dossier_id, periode, facture_ledger_entry_id, montant_facture_total, paiements_valides, montant_total_valide, confirmed_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (dossier_id, facture_ledger_entry_id)
+     DO UPDATE SET
+       periode = EXCLUDED.periode,
+       montant_facture_total = EXCLUDED.montant_facture_total,
+       paiements_valides = EXCLUDED.paiements_valides,
+       montant_total_valide = EXCLUDED.montant_total_valide,
+       confirmed_by = EXCLUDED.confirmed_by,
+       confirmed_at = now()`,
+    [
+      dossierId,
+      periode,
+      factureLedgerEntryId,
+      montantFactureTotal,
+      JSON.stringify(paiementsValides),
+      montantTotalValide,
+      utilisateurId,
+    ]
+  );
+
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'rapprochement_paiement_achat_valide',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { factureLedgerEntryId, montantFactureTotal, paiementsValides, montantTotalValide },
+  });
+}
