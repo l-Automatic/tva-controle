@@ -11,7 +11,7 @@ import { identifierFacturesCandidatesAcompte, verifierCoherenceTvaHotel, identif
 import { MistralClient, jugerCandidatsPaiementAchat, jugerLibellesHotel } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, chargerDossierComplet, conventionListe } from './db/dossierRepository.js';
-import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees } from './db/readRepository.js';
+import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees, listerPaiementsDejaReclames } from './db/readRepository.js';
 
 // Prépare le contenu du popup de rapprochement des paiements achats
 // (10/08, refonte complète demandée par Rami — remplace les deux anciens
@@ -33,6 +33,8 @@ export interface CandidatPaiementPopup {
 
 export interface FactureARapprocher {
   ledgerEntryId: number;
+  compteFournisseur: string;
+  libelleCompteFournisseur: string | null;
   libelle: string | null;
   montantFactureTotal: number;
   date: string;
@@ -127,6 +129,14 @@ export async function preparerRapprochementsPaiementAchat(
   );
   const facturesARapprocher = facturesCandidates.filter((f) => !dejaResolues.has(f.ledgerEntryId));
 
+  // Un paiement déjà rattaché à une AUTRE facture (n'importe quelle
+  // période du dossier) ne doit jamais réapparaître comme candidat
+  // ailleurs (10/08, demande de Rami) — double garantie avec le refus
+  // côté écriture (enregistrerRapprochementPaiementAchat).
+  const paiementsDejaReclames = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerPaiementsDejaReclames(client, params.dossierId)
+  );
+
   // Fenêtre = tout l'exercice comptable du dossier — repli sur l'année
   // civile de la période si l'exercice n'a pas encore été renseigné
   // (champ ajouté migration 015, pas toujours déjà rempli).
@@ -145,8 +155,18 @@ export async function preparerRapprochementsPaiementAchat(
       periodeDebut: exerciceDebut,
       periodeFin: exerciceFin,
     });
+    // Un vrai paiement RÉDUIT ce qui est dû au fournisseur -> toujours au
+    // DÉBIT sur un compte 401 (10/08, bug réel corrigé — sans ce filtre,
+    // d'autres FACTURES du même fournisseur, au crédit, apparaissaient à
+    // tort comme candidats de règlement). Peu importe le journal d'origine
+    // (banque, caisse, OD) — le sens comptable suffit, pas besoin de
+    // connaître le journal précis.
     const candidatsBruts = mouvementsCompte.filter(
-      (l) => l.ledgerEntryId !== facture.ledgerEntryId && !l.lettrage.estLettree
+      (l) =>
+        l.ledgerEntryId !== facture.ledgerEntryId &&
+        !l.lettrage.estLettree &&
+        l.debit > 0 &&
+        !paiementsDejaReclames.has(l.ledgerEntryId)
     );
 
     let precochageParId = new Map<number, { precoche: boolean; confiance: 'haute' | 'moyenne' | 'basse' }>();
@@ -175,6 +195,8 @@ export async function preparerRapprochementsPaiementAchat(
 
     resultat.push({
       ledgerEntryId: facture.ledgerEntryId,
+      compteFournisseur: facture.compteTiers,
+      libelleCompteFournisseur: nomsComptesFournisseur.get(facture.compteTiers) ?? null,
       libelle: facture.libelle,
       montantFactureTotal: facture.montantFactureTotal,
       date: facture.date,
