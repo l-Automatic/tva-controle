@@ -1714,3 +1714,39 @@ export async function appliquerCorrectionAvoir(
   const montantActuel = await calculerMontantActuelPourType(client, calculId, typeMontant);
   await ajusterMontantCalcul(client, calculId, typeMontant, montantActuel, montantActuel + delta, description, utilisateurId);
 }
+
+// ============================================================================
+// QUALIFICATION D'UN AVOIR/OD (10/08) — choix structuré, pas du texte libre
+// ============================================================================
+
+// Résolution structurée demandée par Rami : le collaborateur confirme
+// précisément s'il s'agit d'un avoir ou d'une OD de régularisation —
+// jamais un simple commentaire libre. N'affecte jamais le calcul (rien à
+// ajuster ici, contrairement à verifierAvoirsLegere) : cette qualification
+// documente seulement CE QUE C'EST, une correction éventuelle d'une
+// vraie erreur passe par "Vérifier à nouveau", pas par cette résolution.
+export async function qualifierAvoir(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  type: 'avoir' | 'od'
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = 'avoir_a_verifier' AND statut = 'ouvert'
+     RETURNING dossier_id`,
+    [anomalieId, utilisateurId, JSON.stringify({ type })]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'avoir_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, type },
+  });
+}
