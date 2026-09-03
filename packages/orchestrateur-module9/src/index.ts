@@ -62,6 +62,7 @@ export {
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
   appliquerCorrectionAvoir,
+  qualifierAvoir,
   enregistrerRapprochementPaiementAchat,
   autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
