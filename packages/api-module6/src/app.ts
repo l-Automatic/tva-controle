@@ -13,6 +13,8 @@ import {
   ClefMistralAbsenteError,
   verifierComptesNonReconnus,
   verifierComptesACategoriser,
+  preparerRapprochementsPaiementAchat,
+  enregistrerRapprochementPaiementAchat,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   justifierAnomalie,
@@ -874,6 +876,76 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
+  // --- Rapprochement des paiements achats (10/08) — remplace complètement
+  // l'ancien mécanisme automatique. Contenu du popup : factures de service
+  // non payées, avec leurs paiements candidats sur toute la fenêtre de
+  // l'exercice, précochés par l'IA quand fiable.
+  app.get<{ Params: { dossierId: string }; Querystring: { periodeDebut: string; periodeFin: string } }>(
+    '/dossiers/:dossierId/rapprochements-paiement-achat',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      const { periodeDebut, periodeFin } = request.query;
+      if (!periodeDebut || !periodeFin) {
+        return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+      }
+
+      let client;
+      try {
+        client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+      } catch (err) {
+        if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+        if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+          return reply.code(400).send({ erreur: err.message });
+        }
+        throw err;
+      }
+
+      return preparerRapprochementsPaiementAchat(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        client,
+        periodeDebut,
+        periodeFin,
+      });
+    }
+  );
+
+  // Validation du choix du collaborateur — jamais celui du LLM seul.
+  // paiementsValides peut être vide (aucun paiement ne correspond).
+  app.post<{
+    Params: { dossierId: string };
+    Body: {
+      periode: string;
+      factureLedgerEntryId: number;
+      montantFactureTotal: number;
+      paiementsValides: { ledgerEntryId: number; montant: number }[];
+      utilisateurId: string;
+    };
+  }>('/dossiers/:dossierId/rapprochements-paiement-achat', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periode, factureLedgerEntryId, montantFactureTotal, paiementsValides, utilisateurId } = request.body;
+
+    if (!periode || typeof factureLedgerEntryId !== 'number' || typeof montantFactureTotal !== 'number' || !Array.isArray(paiementsValides)) {
+      return reply.code(400).send({
+        erreur: 'periode, factureLedgerEntryId, montantFactureTotal et paiementsValides (tableau) sont requis',
+      });
+    }
+
+    await avecContexteCabinet(pool, cabinetId, (client) =>
+      enregistrerRapprochementPaiementAchat(
+        client,
+        request.params.dossierId,
+        periode,
+        factureLedgerEntryId,
+        montantFactureTotal,
+        paiementsValides,
+        utilisateurId
+      )
+    );
+    reply.code(204).send();
+  });
+
+
   // --- Déclenchement d'un cycle réel (Module 9) ---
   app.post<{
     Params: { dossierId: string };
@@ -925,6 +997,25 @@ export function buildApp(pool: Pool): FastifyInstance {
       return reply.code(409).send({
         erreur: `${comptesACategoriser.length} compte(s) doivent être catégorisés (bien ou service) avant de pouvoir lancer un cycle sur cette période.`,
         comptesACategoriser,
+      });
+    }
+
+    // Même principe, même jour : le rapprochement des paiements achats
+    // (facture de service non payée + ses paiements candidats validés
+    // manuellement) doit lui aussi être garanti complet avant qu'un cycle
+    // ne parte — remplace l'ancien mécanisme automatique, jamais
+    // rattrapable après coup pour la même raison que la catégorisation.
+    const facturesARapprocher = await preparerRapprochementsPaiementAchat(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+    if (facturesARapprocher.length > 0) {
+      return reply.code(409).send({
+        erreur: `${facturesARapprocher.length} facture(s) de service non payées doivent être rapprochées de leurs paiements avant de pouvoir lancer un cycle sur cette période.`,
+        facturesARapprocher,
       });
     }
 
