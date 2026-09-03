@@ -37,15 +37,28 @@ export async function verifierComptesACategoriser(
     periodeDebut: params.periodeDebut,
     periodeFin: params.periodeFin,
   });
+  if (process.env.DEBUG_CYCLE) {
+    console.error(`[DEBUG_CYCLE] verifierComptesACategoriser : balance = ${JSON.stringify(balance)}`);
+  }
   const comptesTva = filterComptesParPrefixe(balance, ['445'])
     .filter((c) => c.debit !== 0 || c.credit !== 0)
     .map((c) => c.numeroCompte);
+  if (process.env.DEBUG_CYCLE) {
+    console.error(`[DEBUG_CYCLE] verifierComptesACategoriser : comptesTva = ${JSON.stringify(comptesTva)}`);
+  }
 
   const ecritures = await fetchEcrituresTvaCompletes(params.client, {
     comptesTva,
     periodeDebut: params.periodeDebut,
     periodeFin: params.periodeFin,
   });
+  if (process.env.DEBUG_CYCLE) {
+    console.error(
+      `[DEBUG_CYCLE] verifierComptesACategoriser : ${ecritures.length} écriture(s) récupérée(s), autresLignes = ${JSON.stringify(
+        ecritures.map((e) => ({ ledgerEntryId: e.ledgerEntryId, autresLignes: e.autresLignes.map((l) => l.compte) }))
+      )}`
+    );
+  }
 
   return identifierComptesACategoriser(ecritures, {
     comptesVenteService: conventionListe(contexteDossier, 'comptes_vente_service') ?? [],
