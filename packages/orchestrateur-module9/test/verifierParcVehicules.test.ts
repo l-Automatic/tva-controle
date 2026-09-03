@@ -37,7 +37,7 @@ beforeAll(async () => {
     // Convention comptes_carburant confirmée, sans quoi la fonction sort
     // toujours false avant même de vérifier quoi que ce soit.
     await client.query(
-      `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut) VALUES ($1, 'comptes_carburant', '["6061"]'::jsonb, 'confirmed')`,
+      `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut, source) VALUES ($1, 'comptes_carburant', '["6061"]'::jsonb, 'confirmed', 'saisie_manuelle')`,
       [DOSSIER_ID]
     );
 
