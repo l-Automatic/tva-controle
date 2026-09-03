@@ -40,6 +40,7 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  ajouterVehiculeManuel,
   autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
   enregistrerRapprochementPaiementAchat,
@@ -66,6 +67,7 @@ import {
   listerFacturesLedgerEntryIdsRapprochees,
   listerRapprochementsPaiementAchat,
   listerPaiementsDejaReclames,
+  listerVehicules,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -2304,5 +2306,50 @@ describe('autoResoudreFactureSansCandidat', () => {
 
     const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
     expect(rapprochements[0]?.montantTotalValide).toBe(500); // jamais écrasé
+  });
+});
+
+describe('ajouterVehiculeManuel — type de carburant (10/08)', () => {
+  it('accepte un type de carburant optionnel, restitué par listerVehicules', async () => {
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ9', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq9-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      ajouterVehiculeManuel(
+        client,
+        dossierId,
+        { typeBien: 'vehicule_utilitaire', designation: 'Camionnette diesel', typeCarburant: 'diesel' },
+        utilisateurId
+      )
+    );
+
+    const vehicules = await avecClient((client) => listerVehicules(client, dossierId));
+    const ajoute = vehicules.find((v) => v.designation === 'Camionnette diesel');
+    expect(ajoute?.typeCarburant).toBe('diesel');
+  });
+
+  it('reste NULL si non renseigné (rétrocompatible, aucun effet sur le calcul)', async () => {
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ10', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq10-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      ajouterVehiculeManuel(client, dossierId, { typeBien: 'vehicule_tourisme', designation: 'Sans carburant précisé' }, utilisateurId)
+    );
+
+    const vehicules = await avecClient((client) => listerVehicules(client, dossierId));
+    const ajoute = vehicules.find((v) => v.designation === 'Sans carburant précisé');
+    expect(ajoute?.typeCarburant).toBeNull();
   });
 });
