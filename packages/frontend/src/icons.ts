@@ -20,7 +20,6 @@ import {
   RefreshCw,
   Settings,
   Settings2,
-  Shuffle,
   SlidersHorizontal,
   Tags,
   Undo2,
@@ -54,12 +53,12 @@ export const ICONE_ACTION = {
 // ligne_tiers_introuvable, nature_operation_indeterminee et
 // flotte_mixte_carburant retirées du catalogue côté backend — résidu
 // purement frontend retiré ici (brief v33). paiement_partiel_a_verifier et
-// paiement_partiel_calcule retirées pour la même raison en brief v35 (la
-// seconde remplacée par le champ prorataAppliques, hors anomalies).
+// paiement_partiel_calcule retirées pour la même raison en brief v35,
+// nature_operation_mixte en brief v36 (les deux dernières remplacées par
+// le champ prorataAppliques, hors anomalies).
 export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   compte_tva_non_reconnu: HelpCircle,
   encaissement_non_affecte: HandCoins,
-  nature_operation_mixte: Shuffle,
   avoir_a_verifier: Undo2,
   parc_vehicules_non_renseigne: Car,
   immobilisation_potentielle_non_passee: Building2,

@@ -22,7 +22,7 @@ import { BadgeStatut } from './BadgeStatut';
 // la vérification ciblée, sans repasser par un cycle complet (brief v30).
 const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 
-// 11 des 15 types du catalogue ont un libellé dédié ici — cf.
+// 10 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
 // incoherence_taux_autoliquidation, immobilisation_sur_compte_tva_incorrect,
 // autoliquidation_incomplete) retombent sur le type brut en repli, hors
@@ -33,14 +33,14 @@ const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 // ce même brief — même changelog de retrait (10/08) que
 // ligne_tiers_introuvable dans CATALOGUE_ANOMALIES.md, aucune trace non
 // plus dans le code backend. paiement_partiel_a_verifier et
-// paiement_partiel_calcule retirées en brief v35 — la seconde n'est plus
-// une anomalie du tout, remplacée par le champ prorataAppliques d'un
-// cycle (affiché dans le panneau de calcul pour sens='collecte', déjà
-// visible dans le popup de rapprochement pour sens='deductible').
+// paiement_partiel_calcule retirées en brief v35, nature_operation_mixte
+// en brief v36 — les deux dernières ne sont plus des anomalies du tout,
+// remplacées par le champ prorataAppliques d'un cycle (affiché dans le
+// panneau de calcul pour sens='collecte', déjà visible dans le popup de
+// rapprochement pour sens='deductible').
 const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   compte_tva_non_reconnu: 'Compte de TVA non reconnu',
   encaissement_non_affecte: 'Encaissement non affecté',
-  nature_operation_mixte: "Nature de l'opération mixte",
   avoir_a_verifier: 'Avoir à vérifier',
   parc_vehicules_non_renseigne: 'Parc de véhicules non renseigné',
   immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
