@@ -63,6 +63,7 @@ import {
   trouverUtilisateurPourConnexion,
   listerFacturesLedgerEntryIdsRapprochees,
   listerRapprochementsPaiementAchat,
+  listerPaiementsDejaReclames,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -2171,5 +2172,30 @@ describe('enregistrerRapprochementPaiementAchat', () => {
     const ids = await avecClient((client) => listerFacturesLedgerEntryIdsRapprochees(client, dossierId, periode));
     expect(ids.has(5030)).toBe(true);
     expect(ids.has(9999999)).toBe(false);
+  });
+});
+
+describe('listerPaiementsDejaReclames', () => {
+  it('agrège les paiements réclamés à travers plusieurs factures/périodes différentes du même dossier', async () => {
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ5', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq5-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, '2025-08-01', 6001, 500, [{ ledgerEntryId: 6002, montant: 500 }], utilisateurId)
+    );
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, '2025-09-01', 6010, 300, [{ ledgerEntryId: 6011, montant: 300 }], utilisateurId)
+    );
+
+    const reclames = await avecClient((client) => listerPaiementsDejaReclames(client, dossierId));
+    expect(reclames.has(6002)).toBe(true);
+    expect(reclames.has(6011)).toBe(true);
+    expect(reclames.has(9999)).toBe(false);
   });
 });
