@@ -226,7 +226,7 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.exigible).toBe(true);
   });
 
-  it('applique le prorata calculé quand fourni (10/08) — remplace le signalement manuel par un calcul', () => {
+  it('applique le prorata calculé quand fourni (10/08) — plus une anomalie, porté séparément via prorataAppliques', () => {
     const ecriture = ecritureRousseau({
       lignesTiers: [
         {
@@ -236,11 +236,12 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
       ],
     });
     const prorataParEcriture = new Map([[ecriture.ligneTva.ledgerEntryId, 0.6]]);
-    const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle, prorataParEcriture);
+    const { anomalies, statuts, prorataAppliques } = determinerExigibiliteTva([ecriture], configReelle, prorataParEcriture);
 
-    expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.type).toBe('paiement_partiel_calcule');
-    expect(anomalies[0]?.gravite).toBe('info'); // plus "à vérifier", c'est calculé
+    expect(anomalies).toEqual([]);
+    expect(prorataAppliques).toHaveLength(1);
+    expect(prorataAppliques[0]?.prorata).toBe(0.6);
+    expect(prorataAppliques[0]?.sens).toBe('collecte'); // ecritureRousseau touche un compte 445711
     expect(statuts[0]?.exigible).toBe(true);
     expect(statuts[0]?.prorataExigible).toBe(0.6);
   });
@@ -411,11 +412,13 @@ describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur g
       ],
     };
     const prorataParEcriture = new Map([[1, 0.5]]);
-    const { statuts, anomalies } = determinerExigibiliteTva([e], configReelle, prorataParEcriture);
+    const { statuts, anomalies, prorataAppliques } = determinerExigibiliteTva([e], configReelle, prorataParEcriture);
 
     expect(statuts[0]?.exigible).toBe(true);
     expect(statuts[0]?.prorataExigible).toBe(0.5);
-    expect(anomalies[0]?.type).toBe('paiement_partiel_calcule');
+    expect(anomalies).toEqual([]);
+    expect(prorataAppliques).toHaveLength(1);
+    expect(prorataAppliques[0]?.prorata).toBe(0.5);
   });
 
   it('un compte "paiement comptant" (625) reste toujours exigible normalement pour un péage, sans exception', () => {
