@@ -12,13 +12,16 @@ export interface FactureCandidateAcompte {
 }
 
 // Chantier rapprochement paiement achats (10/08, refonte complète demandée
-// par Rami) : identifie toute facture de service dont le lien avec ses
-// paiements n'est PAS clairement établi — jamais lettrée du tout, OU
-// lettrée mais dans un groupe ambigu de plus de 2 pièces (fusion des deux
-// anciens mécanismes distincts en un seul). Remplace complètement l'ancien
-// jugement automatique sur "groupe de lettrage" — terme volontairement
-// absent d'ici — par une résolution manuelle (popup, coche par
-// candidat, précochage IA) avant qu'un cycle puisse être lancé.
+// par Rami) : identifie toute facture de service JAMAIS lettrée — le
+// lettrage chez Pennylane est tout ou rien (confirmé par Rami), un
+// groupe lettré équilibre forcément à zéro quelle que soit sa taille,
+// donc jamais ambigu une fois lettré. Seule une facture non lettrée
+// reste une vraie question ouverte : soit vraiment pas encore payée,
+// soit payée mais jamais rapprochée par erreur dans Pennylane. Remplace
+// complètement l'ancien jugement automatique — terme "groupe de
+// lettrage" volontairement absent d'ici — par une résolution manuelle
+// (popup, coche par candidat, précochage IA) avant qu'un cycle puisse
+// être lancé.
 //
 // Pré-filtre déterministe, avant tout appel LLM (coûteux s'il fallait
 // l'appliquer à chaque facture non lettrée) : SEULEMENT les factures de
@@ -37,16 +40,17 @@ export function identifierFacturesCandidatesAcompte(
 
     const ligneTiers = ecriture.lignesTiers[0];
     if (!ligneTiers) continue;
-    // 10/08 — étendu (remplace l'ancien mécanisme "groupe de lettrage à
-    // plus de 2 lignes", terme volontairement absent d'ici, demande de
-    // Rami) : une facture DÉJÀ lettrée mais dans un groupe de plus de 2
-    // pièces reste ambiguë (plusieurs factures/paiements mélangés, lien
-    // exact pas garanti) — candidate au même titre qu'une facture jamais
-    // lettrée. Seul un lettrage à EXACTEMENT 2 pièces (la facture + son
-    // unique paiement) est un cas clair, jamais candidat ici.
-    const estLettreeSansAmbiguite =
-      ligneTiers.lettrage.estLettree && ligneTiers.lettrage.groupeIds.length <= 2;
-    if (estLettreeSansAmbiguite) continue;
+    // Correctif (10/08) : ma première extension de cette fonction (le
+    // 10/08, plus tôt le même jour) traitait un groupe lettré de plus de
+    // 2 pièces comme ambigu, par analogie avec l'ancien mécanisme
+    // "groupe de lettrage" retiré — erreur de raisonnement, corrigée
+    // immédiatement après que Rami l'ait relevée. Le lettrage chez
+    // Pennylane est tout ou rien (confirmé par Rami plus tôt dans le
+    // projet) : un groupe lettré équilibre forcément à zéro, quelle que
+    // soit sa taille — tout ce qu'il contient est donc réglé. Seule une
+    // facture JAMAIS lettrée reste une vraie ambiguïté (le cas d'acompte
+    // sans lettrage décrit à l'origine par Rami).
+    if (ligneTiers.lettrage.estLettree) continue;
 
     // Un hôtel identifié comme exception au "paiement comptant" (625) est
     // candidat même si 625 n'est pas dans comptes_charge_service — c'est
