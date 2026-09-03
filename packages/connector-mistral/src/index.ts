@@ -7,10 +7,6 @@ export {
 export { jugerLibellesHotel, type JugementHotel } from './jugementHotel.js';
 export { decouvrirMotifNumerotation, type MotifNumerotation } from './decouvrirMotifNumerotation.js';
 export {
-  jugerPaiementPartielAchat,
-  type JugementPaiementPartielAchat,
-} from './jugerPaiementPartielAchat.js';
-export {
   jugerCandidatsPaiementAchat,
   type CandidatPaiementInput,
   type CandidatPreCoche,
