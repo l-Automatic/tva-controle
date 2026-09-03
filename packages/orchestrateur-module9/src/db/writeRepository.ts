@@ -1682,3 +1682,35 @@ export async function autoResoudreFactureSansCandidat(
   });
 }
 
+// ============================================================================
+// CORRECTION D'UN AVOIR/OD (10/08, mécanisme "Vérifier à nouveau")
+// ============================================================================
+
+// Applique un delta (pas un montant absolu) sur le calcul brouillon
+// existant, une fois qu'un avoir_a_verifier a été confirmé corrigé côté
+// Pennylane — même principe que l'ajustement automatique déjà construit
+// pour encaissement_non_affecte. Si aucun brouillon n'existe pour cette
+// période, ne fait rien de plus : le prochain cycle intégrera
+// naturellement la correction, plus besoin de rattraper après coup.
+export async function appliquerCorrectionAvoir(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  sens: 'collecte' | 'deductible',
+  delta: number,
+  description: string,
+  utilisateurId: string
+): Promise<void> {
+  if (delta === 0) return; // rien à ajuster
+
+  const calcul = await client.query<{ id: string }>(
+    `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+    [dossierId, periode]
+  );
+  const calculId = calcul.rows[0]?.id;
+  if (!calculId) return;
+
+  const typeMontant = sens === 'collecte' ? 'collectee_totale' : 'deductible_totale';
+  const montantActuel = await calculerMontantActuelPourType(client, calculId, typeMontant);
+  await ajusterMontantCalcul(client, calculId, typeMontant, montantActuel, montantActuel + delta, description, utilisateurId);
+}
