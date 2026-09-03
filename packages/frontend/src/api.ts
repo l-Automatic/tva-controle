@@ -24,6 +24,7 @@ import type {
   TauxAssigneEntry,
   TiersReference,
   TypeBienVehicule,
+  TypeCarburant,
   TypeMontantAjustement,
   UtilisateurCabinet,
   Vehicule,
@@ -747,7 +748,13 @@ export function fetchVehicules(cabinetId: string, dossierId: string): Promise<Ve
 export function ajouterVehicule(
   cabinetId: string,
   dossierId: string,
-  vehicule: { designation?: string; typeBien: TypeBienVehicule; montantHt?: number; dateAcquisition?: string },
+  vehicule: {
+    designation?: string;
+    typeBien: TypeBienVehicule;
+    montantHt?: number;
+    dateAcquisition?: string;
+    typeCarburant?: TypeCarburant;
+  },
   utilisateurId: string
 ): Promise<{ id: string }> {
   return request<{ id: string }>(`/dossiers/${dossierId}/vehicules`, cabinetId, {

@@ -3,7 +3,15 @@ import { Plus } from 'lucide-react';
 import { ApiError, ajouterVehicule, fetchVehicules, retirerVehicule } from '../api';
 import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
-import { LIBELLE_TYPE_BIEN_VEHICULE, TYPES_BIEN_VEHICULE, type TypeBienVehicule, type Vehicule } from '../types';
+import {
+  LIBELLE_TYPE_BIEN_VEHICULE,
+  LIBELLE_TYPE_CARBURANT,
+  TYPES_BIEN_VEHICULE,
+  TYPES_CARBURANT,
+  type TypeBienVehicule,
+  type TypeCarburant,
+  type Vehicule,
+} from '../types';
 
 interface VehiculesPanelProps {
   cabinetId: string;
@@ -26,6 +34,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
   const [typeBien, setTypeBien] = useState<TypeBienVehicule>('vehicule_tourisme');
   const [montantHt, setMontantHt] = useState('');
   const [dateAcquisition, setDateAcquisition] = useState('');
+  const [typeCarburant, setTypeCarburant] = useState<TypeCarburant | ''>('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [retraitEnCours, setRetraitEnCours] = useState<string | null>(null);
@@ -67,6 +76,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
           typeBien,
           ...(montant !== undefined ? { montantHt: montant } : {}),
           ...(dateAcquisition ? { dateAcquisition } : {}),
+          ...(typeCarburant ? { typeCarburant } : {}),
         },
         utilisateurId
       );
@@ -74,6 +84,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
       setDesignation('');
       setMontantHt('');
       setDateAcquisition('');
+      setTypeCarburant('');
       await charger();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Échec de l'ajout");
@@ -116,6 +127,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
             <p className="reference">
               {formatMontant(v.montantHt)}
               {v.dateAcquisition ? ` — acquis le ${v.dateAcquisition.split('T')[0]}` : ''}
+              {v.typeCarburant ? ` — ${LIBELLE_TYPE_CARBURANT[v.typeCarburant]}` : ''}
             </p>
             <div className="actions">
               <button
@@ -170,6 +182,21 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
             onChange={(e) => setDateAcquisition(e.target.value)}
             disabled={submitting}
           />
+        </label>
+        <label>
+          Carburant
+          <select
+            value={typeCarburant}
+            onChange={(e) => setTypeCarburant(e.target.value as TypeCarburant | '')}
+            disabled={submitting}
+          >
+            <option value="">Non renseigné</option>
+            {TYPES_CARBURANT.map((t) => (
+              <option key={t} value={t}>
+                {LIBELLE_TYPE_CARBURANT[t]}
+              </option>
+            ))}
+          </select>
         </label>
         <button onClick={() => void handleAjouter()} disabled={submitting}>
           <Plus size={14} aria-hidden="true" />

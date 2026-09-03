@@ -429,12 +429,24 @@ export const LIBELLE_TYPE_BIEN_VEHICULE: Record<TypeBienVehicule, string> = {
   autre: 'Autre',
 };
 
+// Type de carburant (brief v39) — collecte préparatoire au chantier de
+// correspondance carburant/véhicule (cf. REGLES_FISCALES_ET_TACHES.md, pas
+// encore construit) : pas de logique de rapprochement ici, juste le champ.
+export const TYPES_CARBURANT = ['diesel', 'essence'] as const;
+export type TypeCarburant = (typeof TYPES_CARBURANT)[number];
+
+export const LIBELLE_TYPE_CARBURANT: Record<TypeCarburant, string> = {
+  diesel: 'Diesel',
+  essence: 'Essence',
+};
+
 export interface Vehicule {
   id: string;
   designation: string | null;
   typeBien: TypeBienVehicule;
   montantHt: number | null;
   dateAcquisition: string | null;
+  typeCarburant: TypeCarburant | null;
   statut: 'candidate' | 'confirmed' | 'rejected';
 }
 
