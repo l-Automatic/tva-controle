@@ -30,6 +30,7 @@ export {
   type CandidatPaiementPopup,
 } from './preparerRapprochementsPaiementAchat.js';
 export { verifierAvoirsLegere, type ParametresVerificationAvoirs } from './verifierAvoirsLegere.js';
+export { verifierParcVehicules, type ParametresVerificationParc } from './verifierParcVehicules.js';
 export {
   enregistrerEvenementAudit,
   type EvenementAudit,
