@@ -9,6 +9,7 @@ export {
   type ConfigExigibiliteTva,
   type StatutExigibilite,
   type NatureOperation,
+  type ProrataApplique,
 } from './exigibilite.js';
 export {
   detecterImmobilisationManquee,
