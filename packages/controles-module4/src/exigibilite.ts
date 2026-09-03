@@ -55,14 +55,30 @@ function estCompteService(compte: string, comptesService: string[]): boolean {
   return comptesService.some((prefixe) => compte.startsWith(prefixe));
 }
 
+// Détail d'un prorata de paiement partiel réellement appliqué (10/08) —
+// remplace l'ancienne anomalie paiement_partiel_calcule, jugée peu
+// compréhensible côté utilisateur (demande de Rami). Porté séparément des
+// anomalies pour que l'appelant (pipeline.ts) puisse l'afficher là où la
+// décision a été prise : le popup de rapprochement côté achats, le
+// panneau de calcul côté ventes — jamais dans le bucket générique
+// "anomalies".
+export interface ProrataApplique {
+  ledgerEntryId: number;
+  compte: string;
+  compteTiers: string;
+  prorata: number;
+  sens: 'collecte' | 'deductible';
+}
+
 export function determinerExigibiliteTva(
   ecritures: EcritureTvaComplete[],
   config: ConfigExigibiliteTva,
   prorataParEcriture: Map<number, number> = new Map(),
   ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set()
-): { statuts: StatutExigibilite[]; anomalies: Anomalie[] } {
+): { statuts: StatutExigibilite[]; anomalies: Anomalie[]; prorataAppliques: ProrataApplique[] } {
   const statuts: StatutExigibilite[] = [];
   const anomalies: Anomalie[] = [];
+  const prorataAppliques: ProrataApplique[] = [];
 
   for (const ecriture of ecritures) {
     const { compte, ledgerEntryId, libelle } = ecriture.ligneTva;
@@ -114,14 +130,12 @@ export function determinerExigibiliteTva(
     const prorataAnticipe = prorataParEcriture.get(ledgerEntryId);
     if (prorataAnticipe !== undefined) {
       const compteTiersProrata = ecriture.lignesTiers[0]?.compte ?? 'inconnu';
-      const groupeIdsProrata = ecriture.lignesTiers[0]?.lettrage.groupeIds ?? [];
-      anomalies.push({
-        type: 'paiement_partiel_calcule',
-        gravite: 'info',
+      prorataAppliques.push({
         ledgerEntryId,
         compte,
-        description: `Compte tiers ${compteTiersProrata} : paiement partiel détecté — prorata de ${(prorataAnticipe * 100).toFixed(0)}% appliqué automatiquement à partir des montants réels.`,
-        details: { compteTiers: compteTiersProrata, groupeIds: groupeIdsProrata, prorata: prorataAnticipe },
+        compteTiers: compteTiersProrata,
+        prorata: prorataAnticipe,
+        sens: estCollecte ? 'collecte' : 'deductible',
       });
       statuts.push({
         ledgerEntryId,
@@ -258,5 +272,5 @@ export function determinerExigibiliteTva(
     });
   }
 
-  return { statuts, anomalies };
+  return { statuts, anomalies, prorataAppliques };
 }
