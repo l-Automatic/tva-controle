@@ -40,6 +40,7 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  PaiementDejaReclameError,
   enregistrerRapprochementPaiementAchat,
   definirStatutDossier,
   mettreAJourInfosDossier,
@@ -2198,4 +2199,49 @@ describe('listerPaiementsDejaReclames', () => {
     expect(reclames.has(6011)).toBe(true);
     expect(reclames.has(9999)).toBe(false);
   });
+});
+
+describe('enregistrerRapprochementPaiementAchat — garde-fou paiement déjà réclamé', () => {
+  it('refuse un paiement déjà rattaché à une autre facture', async () => {
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ6', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq6-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, '2025-08-02', 7001, 500, [{ ledgerEntryId: 7002, montant: 500 }], utilisateurId)
+    );
+
+    await expect(
+      avecClient((client) =>
+        enregistrerRapprochementPaiementAchat(client, dossierId, '2025-08-02', 7010, 300, [{ ledgerEntryId: 7002, montant: 300 }], utilisateurId)
+      )
+    ).rejects.toThrow(PaiementDejaReclameError);
+  });
+
+  it('permet de re-confirmer la MÊME facture en réutilisant ses propres paiements déjà validés (upsert, pas un conflit)', async () => {
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ7', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq7-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, '2025-08-03', 7020, 500, [{ ledgerEntryId: 7021, montant: 500 }], utilisateurId)
+    );
+
+    await expect(
+      avecClient((client) =>
+        enregistrerRapprochementPaiementAchat(client, dossierId, '2025-08-03', 7020, 500, [{ ledgerEntryId: 7021, montant: 500 }], utilisateurId)
+      )
+    ).resolves.not.toThrow();
+  });
+
 });
