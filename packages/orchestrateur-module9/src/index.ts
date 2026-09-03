@@ -60,6 +60,7 @@ export {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  appliquerCorrectionAvoir,
   enregistrerRapprochementPaiementAchat,
   autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
