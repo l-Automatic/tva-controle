@@ -117,7 +117,7 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.exigible).toBe(false); // jamais true, côté achats
   });
 
-  it('nature mixte, payée : TVA exigible en totalité malgré le mélange bien/service (10/08 — désormais calculé, plus juste signalé)', () => {
+  it('nature mixte, payée : TVA exigible en totalité malgré le mélange bien/service (10/08 — désormais calculé, plus une anomalie du tout)', () => {
     const ecriture = ecritureRousseau({
       autresLignes: [
         { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 }, // service
@@ -125,10 +125,10 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
       ],
       // lignesTiers par défaut du fixture : lettrée (cas réel confirmé) — donc payée
     });
-    const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
-    expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.type).toBe('nature_operation_mixte');
-    expect(anomalies[0]?.gravite).toBe('info');
+    const { anomalies, statuts, prorataAppliques } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(anomalies).toEqual([]);
+    expect(prorataAppliques).toHaveLength(1);
+    expect(prorataAppliques[0]?.prorata).toBe(1);
     expect(statuts[0]?.exigible).toBe(true);
     expect(statuts[0]?.prorataExigible).toBeUndefined(); // 100%, pas besoin d'un prorata partiel
   });
@@ -143,9 +143,9 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
         { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
       ],
     });
-    const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
-    expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.gravite).toBe('info');
+    const { anomalies, statuts, prorataAppliques } = determinerExigibiliteTva([ecriture], configReelle);
+    expect(anomalies).toEqual([]);
+    expect(prorataAppliques).toHaveLength(1);
     expect(statuts[0]?.exigible).toBe(true); // > 0, donc pas totalement exclu
     expect(statuts[0]?.prorataExigible).toBeCloseTo(1 / 3); // 500 / (1000 + 500)
   });
