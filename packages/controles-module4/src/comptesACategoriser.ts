@@ -114,7 +114,11 @@ export function identifierComptesServiceSansSousCategorieAutoliquidation(
   const estDejaMarqueAutoliquidation = (compte: string) =>
     comptesChargeAutoliquidationDejaConnus.some((prefixe) => compte.startsWith(prefixe));
   const estChargeService = (compte: string) => comptesChargeService.some((prefixe) => compte.startsWith(prefixe));
-  const estRejete = (compte: string) => comptesRejetes.some((prefixe) => compte.startsWith(prefixe));
+  // Même correctif que comptesSansCategorie ci-dessus (10/08) : un registre
+  // "déjà rejeté" est un registre technique, pas une catégorie fiscale —
+  // comparaison exacte, jamais par préfixe.
+  const comptesRejetesExacts = new Set(comptesRejetes);
+  const estRejete = (compte: string) => comptesRejetesExacts.has(compte);
 
   const libellesParCompte = new Map<string, Set<string>>();
 
