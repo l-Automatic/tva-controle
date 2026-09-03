@@ -1119,6 +1119,10 @@ export interface VehiculeManuel {
   typeBien: 'vehicule_tourisme' | 'vehicule_utilitaire' | 'autre';
   montantHt?: number;
   dateAcquisition?: string;
+  // Optionnel (10/08) — prépare le chantier correspondance carburant/
+  // véhicule, pas encore construit. NULL = non renseigné, aucun effet sur
+  // le calcul tant que ce contrôle n'existe pas.
+  typeCarburant?: 'diesel' | 'essence';
 }
 
 export async function ajouterVehiculeManuel(
@@ -1128,8 +1132,8 @@ export async function ajouterVehiculeManuel(
   utilisateurId: string
 ): Promise<string> {
   const res = await client.query<{ id: string }>(
-    `INSERT INTO immobilisations (dossier_id, compte, designation, montant_ht, date_acquisition, type_bien, statut, source, confirmed_by, confirmed_at)
-     VALUES ($1, '2182', $2, $3, $4, $5, 'confirmed', 'saisie_manuelle', $6, now())
+    `INSERT INTO immobilisations (dossier_id, compte, designation, montant_ht, date_acquisition, type_bien, type_carburant, statut, source, confirmed_by, confirmed_at)
+     VALUES ($1, '2182', $2, $3, $4, $5, $6, 'confirmed', 'saisie_manuelle', $7, now())
      RETURNING id`,
     [
       dossierId,
@@ -1137,6 +1141,7 @@ export async function ajouterVehiculeManuel(
       vehicule.montantHt ?? null,
       vehicule.dateAcquisition ?? null,
       vehicule.typeBien,
+      vehicule.typeCarburant ?? null,
       utilisateurId,
     ]
   );
@@ -1147,7 +1152,7 @@ export async function ajouterVehiculeManuel(
     moduleSource: 'module6_validation',
     acteur: 'utilisateur',
     acteurUtilisateurId: utilisateurId,
-    details: { immobilisationId: id, typeBien: vehicule.typeBien, designation: vehicule.designation },
+    details: { immobilisationId: id, typeBien: vehicule.typeBien, typeCarburant: vehicule.typeCarburant ?? null, designation: vehicule.designation },
   });
   return id;
 }
