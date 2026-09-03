@@ -211,7 +211,7 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.motif).toContain('vente comptant');
   });
 
-  it('signale un paiement partiel possible si le groupe de lettrage a plus de 2 lignes', () => {
+  it('un groupe lettré à plus de 2 pièces reste simplement exigible, sans signalement (10/08, correction après un raisonnement erroné de ma part sur le lettrage Pennylane)', () => {
     const ecriture = ecritureRousseau({
       lignesTiers: [
         {
@@ -222,10 +222,8 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     });
     const { anomalies, statuts } = determinerExigibiliteTva([ecriture], configReelle);
 
-    expect(anomalies).toHaveLength(1);
-    expect(anomalies[0]?.type).toBe('paiement_partiel_a_verifier');
-    expect(anomalies[0]?.gravite).toBe('signale');
-    expect(statuts[0]?.exigible).toBe(true); // lettrée quand même, juste à vérifier le montant exact
+    expect(anomalies).toEqual([]);
+    expect(statuts[0]?.exigible).toBe(true);
   });
 
   it('applique le prorata calculé quand fourni (10/08) — remplace le signalement manuel par un calcul', () => {
@@ -365,12 +363,10 @@ describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur g
     };
   }
 
-  it('achat : sans prorata calculé, exclut par prudence même si le groupe est "lettré"', () => {
+  it('achat : un groupe lettré à plusieurs pièces reste déductible normalement, sans traitement spécial (10/08, correction)', () => {
     const { statuts, anomalies } = determinerExigibiliteTva([ecritureAchatGroupeAmbigu()], configReelle);
-    expect(statuts[0]?.exigible).toBe(false);
-    expect(statuts[0]?.motif).toContain('Achat');
-    expect(statuts[0]?.motif).toContain('pas de déduction');
-    expect(anomalies.some((a) => a.type === 'paiement_partiel_a_verifier')).toBe(true);
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(anomalies.some((a) => a.type === 'paiement_partiel_a_verifier')).toBe(false);
   });
 
   it('achat : avec un prorata calculé (LLM ayant établi le lien), applique le prorata normalement', () => {
@@ -380,7 +376,7 @@ describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur g
     expect(statuts[0]?.prorataExigible).toBe(0.4);
   });
 
-  it('vente : sans prorata calculé sur un groupe ambigu, reste exigible par prudence (comportement historique inchangé)', () => {
+  it('vente : un groupe lettré à plusieurs pièces reste exigible normalement (10/08, plus une question de prudence, juste la règle simple lettré = payé)', () => {
     const e = ecritureRousseau({
       lignesTiers: [{ ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: true, groupeIds: [1, 2, 3] } }],
     });
