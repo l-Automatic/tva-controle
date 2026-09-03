@@ -41,13 +41,13 @@ export function identifierFacturesCandidatesAcompte(
     const ligneTiers = ecriture.lignesTiers[0];
     if (!ligneTiers) continue;
     // Correctif (10/08) : ma première extension de cette fonction (le
-    // 10/08, plus tôt le même jour) traitait un groupe lettré de plus de
-    // 2 pièces comme ambigu, par analogie avec l'ancien mécanisme
-    // "groupe de lettrage" retiré — erreur de raisonnement, corrigée
-    // immédiatement après que Rami l'ait relevée. Le lettrage chez
-    // Pennylane est tout ou rien (confirmé par Rami plus tôt dans le
-    // projet) : un groupe lettré équilibre forcément à zéro, quelle que
-    // soit sa taille — tout ce qu'il contient est donc réglé. Seule une
+    // 10/08, plus tôt le même jour) traitait des lignes rapprochées à
+    // plus de 2 pièces comme ambiguës, par analogie avec l'ancien
+    // mécanisme retiré — erreur de raisonnement, corrigée immédiatement
+    // après que Rami l'ait relevée. Le lettrage chez Pennylane est tout
+    // ou rien (confirmé par Rami plus tôt dans le projet) : des lignes
+    // rapprochées ensemble équilibrent forcément à zéro, quel que soit
+    // leur nombre — tout ce qu'elles contiennent est donc réglé. Seule une
     // facture JAMAIS lettrée reste une vraie ambiguïté (le cas d'acompte
     // sans lettrage décrit à l'origine par Rami).
     if (ligneTiers.lettrage.estLettree) continue;
