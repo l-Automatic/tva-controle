@@ -150,6 +150,41 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.prorataExigible).toBeCloseTo(1 / 3); // 500 / (1000 + 500)
   });
 
+  it('nature mixte, rapprochement validé (10/08, confirmé par Rami) : la part service suit le paiement réel, pas juste payé/pas payé', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [
+        { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 }, // service — 2/3
+        { id: 2, compte: '701', compteId: 2, libelle: null, debit: 0, credit: 500 }, // bien — 1/3
+      ],
+      lignesTiers: [
+        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
+      ],
+    });
+    // 60% du montant payé validé pour cette facture précise
+    const prorataParEcriture = new Map([[ecriture.ligneTva.ledgerEntryId, 0.6]]);
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle, prorataParEcriture);
+
+    // prorataBien (1/3) + (1 - 1/3) * 0.6 = 1/3 + 0.4 = 0.7333...
+    expect(statuts[0]?.prorataExigible).toBeCloseTo(1 / 3 + (2 / 3) * 0.6);
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+
+  it('nature mixte, rapprochement validé à 0 (aucun paiement rattaché) : seule la part bien reste exigible, comme le cas non payé', () => {
+    const ecriture = ecritureRousseau({
+      autresLignes: [
+        { id: 1, compte: '7061', compteId: 1, libelle: null, debit: 0, credit: 1000 },
+        { id: 2, compte: '701', compteId: 2, libelle: null, debit: 0, credit: 500 },
+      ],
+      lignesTiers: [
+        { ...ecritureRousseau().lignesTiers[0]!, lettrage: { estLettree: false, groupeIds: [] } },
+      ],
+    });
+    const prorataParEcriture = new Map([[ecriture.ligneTva.ledgerEntryId, 0]]);
+    const { statuts } = determinerExigibiliteTva([ecriture], configReelle, prorataParEcriture);
+
+    expect(statuts[0]?.prorataExigible).toBeCloseTo(1 / 3); // identique au cas sans rapprochement du tout
+  });
+
   it('nature mixte, vente comptant sans ligne tiers : traitée comme payée, exigible en totalité', () => {
     const ecriture = ecritureRousseau({
       autresLignes: [
