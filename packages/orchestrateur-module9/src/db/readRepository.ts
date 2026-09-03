@@ -634,3 +634,50 @@ export async function listerUtilisateursCabinet(
     aUnMotDePasse: r.a_un_mot_de_passe,
   }));
 }
+
+// ============================================================================
+// RAPPROCHEMENTS DE PAIEMENT ACHATS (10/08)
+// ============================================================================
+
+export interface RapprochementPaiementDb {
+  id: string;
+  factureLedgerEntryId: number;
+  montantFactureTotal: number;
+  paiementsValides: { ledgerEntryId: number; montant: number }[];
+  montantTotalValide: number;
+  confirmedAt: string;
+}
+
+// Ensemble des factures déjà résolues sur une période — pour ne jamais
+// re-proposer dans le popup une facture déjà traitée par le collaborateur.
+export async function listerFacturesLedgerEntryIdsRapprochees(
+  client: PoolClient,
+  dossierId: string,
+  periode: string
+): Promise<Set<number>> {
+  const res = await client.query<{ facture_ledger_entry_id: string }>(
+    `SELECT facture_ledger_entry_id FROM rapprochements_paiement_achat WHERE dossier_id = $1 AND periode = $2`,
+    [dossierId, periode]
+  );
+  return new Set(res.rows.map((r) => Number(r.facture_ledger_entry_id)));
+}
+
+export async function listerRapprochementsPaiementAchat(
+  client: PoolClient,
+  dossierId: string,
+  periode: string
+): Promise<RapprochementPaiementDb[]> {
+  const res = await client.query(
+    `SELECT id, facture_ledger_entry_id, montant_facture_total, paiements_valides, montant_total_valide, confirmed_at
+     FROM rapprochements_paiement_achat WHERE dossier_id = $1 AND periode = $2`,
+    [dossierId, periode]
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    factureLedgerEntryId: Number(r.facture_ledger_entry_id),
+    montantFactureTotal: Number.parseFloat(r.montant_facture_total),
+    paiementsValides: r.paiements_valides,
+    montantTotalValide: Number.parseFloat(r.montant_total_valide),
+    confirmedAt: r.confirmed_at,
+  }));
+}
