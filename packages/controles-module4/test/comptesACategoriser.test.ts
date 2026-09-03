@@ -123,6 +123,13 @@ describe('identifierComptesServiceSansSousCategorieAutoliquidation', () => {
     const e = ecriture([{ id: 1, compte: '607', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
     expect(identifierComptesServiceSansSousCategorieAutoliquidation([e], ['604', '611'], [])).toEqual([]);
   });
+
+  it('un compte rejeté (6041) ne masque plus un compte numériquement voisin mais sans rapport (60412), même correctif que comptesSansCategorie', () => {
+    const e = ecriture([{ id: 1, compte: '60412', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
+    const resultat = identifierComptesServiceSansSousCategorieAutoliquidation([e], ['604'], [], ['6041']);
+    expect(resultat).toHaveLength(1);
+    expect(resultat[0]?.compte).toBe('60412');
+  });
 });
 
 describe('identifierComptesACategoriser — comptesSansCategorie (10/08, bug réel corrigé)', () => {
@@ -135,5 +142,13 @@ describe('identifierComptesACategoriser — comptesSansCategorie (10/08, bug ré
   it('sans comptesSansCategorie, un compte inconnu reste proposé (comportement d’avant, toujours vrai pour un compte jamais vu)', () => {
     const e = ecriture([{ id: 1, compte: '699', compteId: 1, libelle: null, debit: 500, credit: 0 }]);
     expect(identifierComptesACategoriser([e], connusVides)).toHaveLength(1);
+  });
+
+  it('un compte rejeté (6061) ne masque plus un compte numériquement voisin mais fiscalement sans rapport (60614) — cas réel trouvé chez Rami', () => {
+    const e = ecriture([{ id: 1, compte: '60614', compteId: 1, libelle: 'ACHATS NON STOCKE DE CARBURANT', debit: 50, credit: 0 }]);
+    const connus = { ...connusVides, comptesSansCategorie: ['6061'] };
+    const resultat = identifierComptesACategoriser([e], connus);
+    expect(resultat).toHaveLength(1);
+    expect(resultat[0]?.compte).toBe('60614');
   });
 });
