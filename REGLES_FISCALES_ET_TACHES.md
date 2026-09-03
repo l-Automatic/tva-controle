@@ -644,3 +644,15 @@ maintenant. Piste probable pour la correction : croiser avec la
 détection déjà construite pour `avoir_a_verifier` (verifierAvoirs,
 controles-module4/src/avoirs.ts) ou avec le libellé de la pièce, avant de
 proposer une qualification de taux.
+
+---
+
+## Bug réel repéré — encaissement_client_taux_applique confond avoir client et vrai encaissement (10/08)
+
+Repéré par Rami sur une vraie capture : un AVOIR CLIENT (note de crédit)
+a son montant TTC au crédit du compte 411, exactement comme un vrai
+encaissement — le contrôle actuel ne fait pas la distinction, donc un
+avoir se fait traiter à tort comme "encaissement non lettré, taux
+appliqué par défaut". Mis de côté volontairement (Rami : "on y est pas
+encore") — à corriger quand cette anomalie sera reprise dans la revue
+systématique.
