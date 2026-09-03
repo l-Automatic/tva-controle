@@ -605,25 +605,26 @@ encore décidé.
 
 ---
 
-## nature_operation_mixte — raffinement en attente du paiement partiel achats (10/08)
+## nature_operation_mixte — raffinement du prorata service (10/08, RÉSOLU)
 
-Construit ce jour : un vrai prorata bien/service sur les montants HT
-(`exigibilite.ts`), plus juste signalé à 100%. Payé/pas payé = binaire
-(lettré ou non) pour la part service — la part bien (dont 624 et 6222,
-assimilés au bien même si structurellement des comptes de service) reste
-toujours exigible.
+Résolu le même jour, une fois le chantier paiement partiel achats corrigé
+(popup de rapprochement, validation manuelle par facture). La part
+service d'une pièce mixte n'est plus traitée en binaire payé/pas payé —
+`identifierFacturesCandidatesAcompte` capte déjà les factures mixtes
+comme candidates au rapprochement (elle utilise `.some(...)` sur les
+lignes, il suffit qu'une seule touche un compte service), aucune
+extension n'a été nécessaire de ce côté.
 
-**CE QUI MANQUE ENCORE, explicitement demandé par Rami, à ne pas
-perdre** : pour la part service d'une pièce mixte, appliquer un vrai
-prorata de paiement PARTIEL (pas juste payé/pas payé) — un service
-important (maintenance annuelle, formation...) souvent réglé en plusieurs
-fois doit voir sa part de TVA déduite progressivement, au fur et à mesure
-des paiements réels, pas tout ou rien à la fin.
+Formule appliquée dans `exigibilite.ts` quand un rapprochement a été
+validé pour la facture (`prorataParEcriture` contient une entrée) :
+`prorataExigible = prorataBien + (1 - prorataBien) * prorataPaiementConfirme`
+— la part bien reste toujours à 100%, la part service suit le prorata
+réellement payé. Hypothèse assumée, jamais vérifiable autrement : le
+paiement couvre bien et service proportionnellement à leur part
+respective dans le total de la facture. Confirmée explicitement par Rami
+avant construction.
 
-**Dépend explicitement du chantier paiement partiel achats**, en pause
-depuis longtemps dans cette session avec un vrai bug non résolu (prorata
-bloqué à 100% pour l'hôtel et le cabinet, anomalie déclenchée à tort sur
-une facture sans paiement — cf. section "Paiement partiel — volet achats"
-plus haut dans ce document). Décision explicite : ne pas construire ce
-raffinement par-dessus un mécanisme connu cassé — reprendre une fois le
-paiement partiel achats corrigé, pas avant.
+Sans rapprochement validé (facture clairement lettrée en 1-pour-1, ou
+vente comptant sans ligne tiers) : repli sur l'ancien binaire payé/pas
+payé, inchangé.
+
