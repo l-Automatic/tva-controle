@@ -24,6 +24,12 @@ export {
   type ParametresVerificationCategorisation,
 } from './verifierComptesACategoriser.js';
 export {
+  preparerRapprochementsPaiementAchat,
+  type ParametresPreparationRapprochements,
+  type FactureARapprocher,
+  type CandidatPaiementPopup,
+} from './preparerRapprochementsPaiementAchat.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
