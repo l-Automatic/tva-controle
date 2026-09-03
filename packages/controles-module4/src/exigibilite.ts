@@ -237,37 +237,14 @@ export function determinerExigibiliteTva(
     }
 
     const ligneTiers = ecriture.lignesTiers[0]!;
+    // Le lettrage chez Pennylane est tout ou rien (confirmé par Rami,
+    // 10/08) : un groupe lettré équilibre forcément à zéro, quelle que
+    // soit sa taille — jamais besoin de traiter un groupe à plus de 2
+    // pièces différemment. Ancienne distinction retirée le même jour,
+    // après une correction de Rami sur un raisonnement erroné de ma part
+    // (cf. facturesCandidatesAcompte.ts pour le même correctif côté
+    // détection des factures candidates au rapprochement).
     const exigible = ligneTiers.lettrage.estLettree;
-
-    // Plus de 2 id dans le groupe de lettrage = possible paiement partiel ou
-    // rapprochement multi-factures, sans prorata disponible (déjà vérifié
-    // ci-dessus) : signalé pour vérification manuelle.
-    if (ligneTiers.lettrage.groupeIds.length > 2) {
-      anomalies.push({
-        type: 'paiement_partiel_a_verifier',
-        gravite: 'signale',
-        ledgerEntryId,
-        compte,
-        description: `Compte tiers ${ligneTiers.compte} : ce règlement est rapproché avec ${ligneTiers.lettrage.groupeIds.length} autres pièces à la fois (pas juste une facture et son paiement). Signe possible d'un paiement partiel dont le montant exigible n'est pas calculé automatiquement ici : à vérifier manuellement dans Pennylane.`,
-        details: { compteTiers: ligneTiers.compte, groupeIds: ligneTiers.lettrage.groupeIds, libelle },
-      });
-
-      // Prudence INVERSÉE entre ventes et achats (10/08, confirmé par
-      // Rami) : côté ventes, un groupe ambigu non résolu reste exigible
-      // par prudence (l'État a droit à la collecte). Côté achats, c'est
-      // l'inverse — jamais de déduction sans lien facture/paiement
-      // clairement établi.
-      if (estDeductible) {
-        statuts.push({
-          ledgerEntryId,
-          compte,
-          natureOperation: 'service',
-          exigible: false,
-          motif: 'Achat : paiement partiel non résolu (groupe de lettrage ambigu) — pas de déduction sans lien clairement établi avec la facture.',
-        });
-        continue;
-      }
-    }
 
     statuts.push({
       ledgerEntryId,
