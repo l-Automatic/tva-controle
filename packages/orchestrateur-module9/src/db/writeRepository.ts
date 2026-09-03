@@ -1556,12 +1556,28 @@ export interface PaiementValide {
   montant: number;
 }
 
+export class PaiementDejaReclameError extends Error {
+  constructor(public readonly ledgerEntryId: number, public readonly autreFactureId: number) {
+    super(
+      `Le paiement ${ledgerEntryId} est déjà rattaché à la facture ${autreFactureId} — ` +
+        `un même paiement ne peut jamais être compté pour deux factures différentes.`
+    );
+    this.name = 'PaiementDejaReclameError';
+  }
+}
+
 // Enregistre le choix du collaborateur — jamais celui du LLM seul, qui n'a
 // fait que précocher une proposition (cf. jugerCandidatsPaiementAchat,
 // connector-mistral). paiementsValides peut être un tableau vide : le
 // collaborateur peut valider "aucun de ces paiements ne correspond",
 // ce qui referme quand même la facture (exclue par prudence — aucun
 // paiement rattaché, donc rien à déduire cette période).
+//
+// Garde-fou (10/08, demande de Rami) : un paiement déjà rattaché à une
+// AUTRE facture (peu importe la période — la fenêtre de recherche couvre
+// tout l'exercice) est refusé ici, en plus d'être déjà exclu des
+// candidats proposés côté lecture (preparerRapprochementsPaiementAchat) —
+// double garantie, jamais un simple filtrage côté affichage seul.
 export async function enregistrerRapprochementPaiementAchat(
   client: PoolClient,
   dossierId: string,
@@ -1571,6 +1587,21 @@ export async function enregistrerRapprochementPaiementAchat(
   paiementsValides: PaiementValide[],
   utilisateurId: string
 ): Promise<void> {
+  if (paiementsValides.length > 0) {
+    const autresFactures = await client.query<{ facture_ledger_entry_id: string; paiements_valides: PaiementValide[] }>(
+      `SELECT facture_ledger_entry_id, paiements_valides FROM rapprochements_paiement_achat
+       WHERE dossier_id = $1 AND facture_ledger_entry_id != $2`,
+      [dossierId, factureLedgerEntryId]
+    );
+    for (const nouveauPaiement of paiementsValides) {
+      for (const autre of autresFactures.rows) {
+        if (autre.paiements_valides.some((p) => p.ledgerEntryId === nouveauPaiement.ledgerEntryId)) {
+          throw new PaiementDejaReclameError(nouveauPaiement.ledgerEntryId, Number(autre.facture_ledger_entry_id));
+        }
+      }
+    }
+  }
+
   const montantTotalValide = paiementsValides.reduce((s, p) => s + p.montant, 0);
 
   await client.query(
