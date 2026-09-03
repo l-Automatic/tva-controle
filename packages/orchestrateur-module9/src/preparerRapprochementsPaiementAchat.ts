@@ -12,6 +12,7 @@ import { MistralClient, jugerCandidatsPaiementAchat, jugerLibellesHotel } from '
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, chargerDossierComplet, conventionListe } from './db/dossierRepository.js';
 import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees, listerPaiementsDejaReclames } from './db/readRepository.js';
+import { autoResoudreFactureSansCandidat } from './db/writeRepository.js';
 
 // Prépare le contenu du popup de rapprochement des paiements achats
 // (10/08, refonte complète demandée par Rami — remplace les deux anciens
@@ -169,6 +170,17 @@ export async function preparerRapprochementsPaiementAchat(
         !paiementsDejaReclames.has(l.ledgerEntryId)
     );
 
+    // Aucun candidat du tout (10/08, demande de Rami) : rien à faire
+    // décider au collaborateur, on sait déjà que ce n'est pas déductible.
+    // Résolu automatiquement plutôt que de l'afficher pour une
+    // confirmation vide sans intérêt — retiré du panneau.
+    if (candidatsBruts.length === 0) {
+      await avecContexteCabinet(pool, params.cabinetId, (client) =>
+        autoResoudreFactureSansCandidat(client, params.dossierId, params.periodeDebut, facture.ledgerEntryId, facture.montantFactureTotal)
+      );
+      continue;
+    }
+
     let precochageParId = new Map<number, { precoche: boolean; confiance: 'haute' | 'moyenne' | 'basse' }>();
     if (mistralClient && candidatsBruts.length > 0) {
       try {
@@ -213,6 +225,14 @@ export async function preparerRapprochementsPaiementAchat(
       }),
     });
   }
+
+  // Rangé par compte fournisseur (ordre alphabétique), puis par date
+  // (ordre chronologique) au sein d'un même compte — demande de Rami.
+  resultat.sort((a, b) => {
+    const parCompte = a.compteFournisseur.localeCompare(b.compteFournisseur);
+    if (parCompte !== 0) return parCompte;
+    return a.date.localeCompare(b.date);
+  });
 
   return resultat;
 }
