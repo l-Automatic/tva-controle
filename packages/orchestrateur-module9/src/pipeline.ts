@@ -20,7 +20,6 @@ import {
   verifierCoherenceCompteImmobilisation,
   verifierCoherenceTvaHotel,
   identifierCandidatsJugementHotel,
-  identifierFacturesCandidatesAcompte,
   detecterTrousNumerotation,
   calculerProrataEncaissement,
   verifierExhaustiviteAutoliquidation,
@@ -44,7 +43,6 @@ import {
   suggererClassificationComptes,
   type SuggestionClassificationCompte,
   jugerLibellesHotel,
-  jugerPaiementPartielAchat,
 } from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
@@ -64,6 +62,7 @@ import {
   listerTauxAssignes,
   parametreDossierValeur,
   parametreCabinetValeur,
+  listerRapprochementsPaiementAchat,
 } from './db/readRepository.js';
 
 export interface ParametresCycleTva {
@@ -407,45 +406,6 @@ export async function executerCycleTva(
     prorataParEcriture.set(candidat.ledgerEntryId, calculerProrataEncaissement(lignesGroupe));
   }
 
-  // Paiement partiel, volet achats (10/08) — jamais de calcul arithmétique
-  // aveugle sur le groupe entier : d'abord établir, par jugement LLM, s'il
-  // s'agit vraiment d'un acompte rattaché à UNE facture identifiable (pas
-  // un mélange de plusieurs factures). Prudence par défaut si pas de clé
-  // Mistral configurée, ou si le lien n'est pas établi avec une confiance
-  // suffisante — aucun prorata n'est alors ajouté à la map, et
-  // exigibilite.ts exclut par défaut (cf. correctif du même jour).
-  const candidatsProrataAchat = ecritures
-    .filter((e) => e.ligneTva.compte.startsWith('44566') || e.ligneTva.compte.startsWith('44562'))
-    .map((e) => ({ ledgerEntryId: e.ligneTva.ledgerEntryId, ligneTiers: e.lignesTiers[0] }))
-    .filter((c): c is { ledgerEntryId: number; ligneTiers: NonNullable<typeof c.ligneTiers> } =>
-      c.ligneTiers !== undefined && c.ligneTiers.lettrage.groupeIds.length > 2
-    );
-
-  if (
-    candidatsProrataAchat.length > 0 &&
-    typeof mistralApiKey === 'string' &&
-    mistralApiKey.length > 0
-  ) {
-    const mistralClientAchat = new MistralClient({ apiKey: mistralApiKey });
-    for (const candidat of candidatsProrataAchat) {
-      try {
-        const lignesGroupe = await fetchLignesGroupeLettrage(params.client, candidat.ligneTiers.lettrage.groupeIds);
-        const jugement = await jugerPaiementPartielAchat(
-          mistralClientAchat,
-          lignesGroupe.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date }))
-        );
-        if (jugement.lienEtabli && jugement.confiance !== 'basse' && jugement.montantFacture && jugement.montantPayeRattache !== null) {
-          const prorata = Math.min(jugement.montantPayeRattache / jugement.montantFacture, 1);
-          prorataParEcriture.set(candidat.ledgerEntryId, prorata);
-        }
-      } catch (err) {
-        if (process.env.DEBUG_CYCLE) {
-          console.error(`[DEBUG_CYCLE] échec jugement IA (paiement partiel achat) : ${String(err)}`);
-        }
-      }
-    }
-  }
-
   // Contrôle hôtel (10/08) : résout le nom réel des comptes fournisseurs
   // touchés par une ligne déductible ABS (44566) — jamais un libellé
   // d'écriture, même raison que pour la présélection IA plus haut.
@@ -505,93 +465,20 @@ export async function executerCycleTva(
     ...anomaliesJugementHotel.map((a) => a.ledgerEntryId),
   ]);
 
-  // Paiement partiel achats, volet SANS lettrage (10/08) — confirmé par
-  // Rami : il n'existe pas de lettrage partiel/en attente en pratique, donc
-  // un vrai acompte se traduit par une facture ET un paiement TOUS LES DEUX
-  // non lettrés, sans aucun lien structurel. Recherche active parmi les
-  // mouvements du même compte fournisseur sur une fenêtre de temps, plutôt
-  // que de dépendre d'un lettrage qui n'existera jamais dans ce cas.
-  const facturesCandidatesAcompte = identifierFacturesCandidatesAcompte(
-    ecritures,
-    comptesChargeService,
-    ledgerEntryIdsHotel
+  // Paiement partiel achats — désormais résolu AVANT que le cycle ne
+  // parte (10/08, refonte complète demandée par Rami) : le popup de
+  // rapprochement (preparerRapprochementsPaiementAchat + validation
+  // manuelle du collaborateur, cf. app.ts) est une porte obligatoire au
+  // lancement du cycle, exactement comme la catégorisation bien/service.
+  // Plus aucun appel LLM ici — tout a déjà été tranché, il ne reste qu'à
+  // lire les décisions déjà confirmées en base.
+  const rapprochementsConfirmes = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerRapprochementsPaiementAchat(client, params.dossierId, params.periodeDebut)
   );
-  if (process.env.DEBUG_CYCLE) {
-    console.error(
-      `[DEBUG_CYCLE] facturesCandidatesAcompte : ${JSON.stringify(facturesCandidatesAcompte)}`
-    );
-  }
-
-  if (
-    facturesCandidatesAcompte.length > 0 &&
-    typeof mistralApiKey === 'string' &&
-    mistralApiKey.length > 0
-  ) {
-    const mistralClientAcompte = new MistralClient({ apiKey: mistralApiKey });
-    const FENETRE_JOURS = 60;
-
-    for (const facture of facturesCandidatesAcompte) {
-      try {
-        const dateFacture = new Date(facture.date);
-        const periodeDebut = new Date(dateFacture);
-        periodeDebut.setDate(periodeDebut.getDate() - FENETRE_JOURS);
-        const periodeFin = new Date(dateFacture);
-        periodeFin.setDate(periodeFin.getDate() + FENETRE_JOURS);
-
-        const mouvementsCompte = await fetchLignesParCompte(params.client, {
-          compteIds: [facture.compteTiersId],
-          periodeDebut: periodeDebut.toISOString().slice(0, 10),
-          periodeFin: periodeFin.toISOString().slice(0, 10),
-        });
-
-        // Exclut la ligne de la facture elle-même (déjà représentée
-        // séparément ci-dessous) et toute ligne déjà lettrée (un paiement
-        // déjà rattaché ailleurs n'est pas un candidat).
-        const paiementsCandidats = mouvementsCompte.filter(
-          (l) => l.ledgerEntryId !== facture.ledgerEntryId && !l.lettrage.estLettree
-        );
-        if (process.env.DEBUG_CYCLE) {
-          console.error(
-            `[DEBUG_CYCLE] facture ${facture.ledgerEntryId} (compteTiersId ${facture.compteTiersId}) : ${mouvementsCompte.length} mouvement(s) trouvé(s) sur la fenêtre, ${paiementsCandidats.length} candidat(s) après filtre`
-          );
-        }
-        if (process.env.DEBUG_CYCLE) {
-          console.error(
-            `[DEBUG_CYCLE] facture ${facture.ledgerEntryId} candidats détaillés : ${JSON.stringify(paiementsCandidats.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date })))}`
-          );
-        }
-        if (paiementsCandidats.length === 0) continue;
-
-        const jugement = await jugerPaiementPartielAchat(mistralClientAcompte, [
-          { libelle: facture.libelle, debit: 0, credit: facture.montantFactureTotal, date: facture.date },
-          ...paiementsCandidats.map((l) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit, date: l.date })),
-        ]);
-        if (process.env.DEBUG_CYCLE) {
-          console.error(`[DEBUG_CYCLE] jugement acompte facture ${facture.ledgerEntryId} : ${JSON.stringify(jugement)}`);
-        }
-
-        if (
-          jugement.lienEtabli &&
-          jugement.confiance !== 'basse' &&
-          jugement.montantPayeRattache !== null
-        ) {
-          // Bug réel corrigé le 10/08 : ne fait PLUS confiance au
-          // montantFacture renvoyé par le LLM (déjà vu se tromper de ligne
-          // — un cas où il a pris le montant d'une AUTRE facture sans
-          // rapport présente dans les candidats, donnant un prorata de 1%
-          // au lieu de ~45%). Le montant de la facture est déjà connu avec
-          // certitude par l'appelant (facture.montantFactureTotal) — on
-          // ne demande au LLM que d'identifier le paiement rattaché,
-          // jamais de répéter un chiffre qu'on connaît déjà.
-          const prorata = Math.min(jugement.montantPayeRattache / facture.montantFactureTotal, 1);
-          prorataParEcriture.set(facture.ledgerEntryId, prorata);
-        }
-      } catch (err) {
-        if (process.env.DEBUG_CYCLE) {
-          console.error(`[DEBUG_CYCLE] échec recherche acompte sans lettrage : ${String(err)}`);
-        }
-      }
-    }
+  for (const r of rapprochementsConfirmes) {
+    if (r.montantFactureTotal <= 0) continue; // jamais de division par zéro
+    const prorata = Math.min(r.montantTotalValide / r.montantFactureTotal, 1);
+    prorataParEcriture.set(r.factureLedgerEntryId, prorata);
   }
 
   const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
