@@ -30,10 +30,11 @@ export interface StatutExigibilite {
   motif: string;
   // Paiement partiel authentique (10/08) : fraction de la ligne réellement
   // exigible cette période (0 à 1), quand un vrai prorata a pu être
-  // calculé à partir des montants complets du groupe de lettrage — fourni
-  // par l'appelant (pipeline.ts, réseau requis pour le récupérer), cette
-  // fonction reste pure. Absent = comportement binaire habituel
-  // (exigible=true -> montant complet, false -> exclu).
+  // calculé à partir des montants complets des lignes rapprochées entre
+  // elles par Pennylane — fourni par l'appelant (pipeline.ts, réseau
+  // requis pour le récupérer), cette fonction reste pure. Absent =
+  // comportement binaire habituel (exigible=true -> montant complet,
+  // false -> exclu).
   prorataExigible?: number;
 }
 
