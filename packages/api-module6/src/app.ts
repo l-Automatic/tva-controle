@@ -12,6 +12,7 @@ import {
   analyserMotifNumerotationFacture,
   ClefMistralAbsenteError,
   verifierComptesNonReconnus,
+  verifierComptesACategoriser,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   justifierAnomalie,
@@ -839,11 +840,41 @@ export function buildApp(pool: Pool): FastifyInstance {
       .send(versCsv(evenements));
   });
 
+  // --- Comptes à catégoriser, sans passer par un cycle complet (10/08) ---
+  // Pour l'onglet dédié — vérification légère, appelable à tout moment,
+  // pas seulement au moment de lancer un cycle (cf. le blocage dans la
+  // route de cycle juste en dessous, qui réutilise la même fonction).
+  app.get<{ Params: { dossierId: string }; Querystring: { periodeDebut: string; periodeFin: string } }>(
+    '/dossiers/:dossierId/comptes-a-categoriser',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      const { periodeDebut, periodeFin } = request.query;
+      if (!periodeDebut || !periodeFin) {
+        return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+      }
+
+      let client;
+      try {
+        client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+      } catch (err) {
+        if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+        if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+          return reply.code(400).send({ erreur: err.message });
+        }
+        throw err;
+      }
+
+      return verifierComptesACategoriser(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        client,
+        periodeDebut,
+        periodeFin,
+      });
+    }
+  );
+
   // --- Déclenchement d'un cycle réel (Module 9) ---
-  // Simplification v1 assumée : le token Pennylane est passé directement
-  // dans le corps de la requête, faute de résolution via connexions_api /
-  // secret manager (pas construit). Ne pas reproduire ce pattern une fois
-  // qu'une vraie gestion de secrets existera.
   app.post<{
     Params: { dossierId: string };
     Body: {
@@ -874,6 +905,27 @@ export function buildApp(pool: Pool): FastifyInstance {
         return reply.code(400).send({ erreur: err.message });
       }
       throw err;
+    }
+
+    // Porte obligatoire (10/08, demande de Rami) : la catégorisation
+    // bien/service doit être garantie complète AVANT qu'un cycle ne parte
+    // — jamais rattrapée après coup. Contrairement à encaissement_non_affecte
+    // (un ajustement rétroactif suffit), confirmer un compte peut toucher
+    // plusieurs écritures à la fois sur la période — recalculer
+    // rétroactivement serait bien plus lourd que d'empêcher le problème à
+    // la source. Vérification légère, sans LLM ni les autres contrôles.
+    const comptesACategoriser = await verifierComptesACategoriser(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+    if (comptesACategoriser.length > 0) {
+      return reply.code(409).send({
+        erreur: `${comptesACategoriser.length} compte(s) doivent être catégorisés (bien ou service) avant de pouvoir lancer un cycle sur cette période.`,
+        comptesACategoriser,
+      });
     }
 
     try {
