@@ -3,14 +3,17 @@ import type {
   Anomalie,
   AuditEvenement,
   Calcul,
+  CompteACategoriser,
   ConfigurationOnboarding,
   Dossier,
   DossierComplet,
   ElementATraiter,
+  FactureARapprocher,
   InfosIdentiteDossier,
   MotifNumerotation,
   NiveauConfianceTiers,
   Parametre,
+  ParametresRapprochementPaiementAchat,
   Proposition,
   QualificationEncaissement,
   ResultatCycle,
@@ -31,7 +34,12 @@ const BASE_URL = '/api';
 export class ApiError extends Error {
   constructor(
     message: string,
-    public readonly status: number
+    public readonly status: number,
+    // Corps JSON brut de la réponse d'erreur, quand il a pu être parsé
+    // (brief v34) — permet à un appelant (ex: le 409 de POST
+    // /dossiers/:id/cycles) de lire comptesACategoriser/facturesARapprocher
+    // directement depuis l'erreur, sans second appel réseau immédiat.
+    public readonly corps?: unknown
   ) {
     super(message);
     this.name = 'ApiError';
@@ -99,13 +107,15 @@ async function request<T>(
 
   if (!response.ok) {
     let message = response.statusText;
+    let corps: unknown;
     try {
-      const body = (await response.json()) as { erreur?: string };
+      corps = await response.json();
+      const body = corps as { erreur?: string };
       if (body.erreur) message = body.erreur;
     } catch {
       // corps non-JSON, on garde le statusText
     }
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, corps);
   }
 
   if (response.status === 204) {
@@ -433,8 +443,16 @@ export interface ParametresCycle {
   comptesCarburant?: string[];
 }
 
-// 409 (ApiError.status) si un calcul déjà validé/déclaré existe sur cette
-// période — géré par l'appelant, pas ici (message déjà porté par ApiError).
+// 409 (ApiError.status) dans trois cas désormais (brief v34) — géré par
+// l'appelant, pas ici (message déjà porté par ApiError, corps déjà porté
+// par ApiError.corps pour les deux premiers, pour rediriger sans second
+// appel réseau) :
+// - comptesACategoriser non vide : des comptes produit/charge restent à
+//   catégoriser (porte obligatoire, jamais rattrapée après coup).
+// - facturesARapprocher non vide : des factures de service achats restent
+//   à rapprocher de leurs paiements (même principe).
+// - aucun des deux ci-dessus : un calcul déjà validé/déclaré existe sur
+//   cette période (comportement historique).
 // 400 si aucun jeton cabinet Pennylane n'est configuré (message backend
 // déjà clair, affiché tel quel par l'appelant).
 export function lancerCycle(
@@ -443,6 +461,41 @@ export function lancerCycle(
   parametres: ParametresCycle
 ): Promise<ResultatCycle> {
   return request<ResultatCycle>(`/dossiers/${dossierId}/cycles`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(parametres),
+  });
+}
+
+// Consultable à tout moment, pas seulement en réaction à un 409 (brief
+// v34) — vérification légère sans passer par un cycle complet.
+export function fetchComptesACategoriser(
+  cabinetId: string,
+  dossierId: string,
+  periodeDebut: string,
+  periodeFin: string
+): Promise<CompteACategoriser[]> {
+  const params = new URLSearchParams({ periodeDebut, periodeFin });
+  return request<CompteACategoriser[]>(`/dossiers/${dossierId}/comptes-a-categoriser?${params}`, cabinetId);
+}
+
+export function fetchRapprochementsPaiementAchat(
+  cabinetId: string,
+  dossierId: string,
+  periodeDebut: string,
+  periodeFin: string
+): Promise<FactureARapprocher[]> {
+  const params = new URLSearchParams({ periodeDebut, periodeFin });
+  return request<FactureARapprocher[]>(`/dossiers/${dossierId}/rapprochements-paiement-achat?${params}`, cabinetId);
+}
+
+// paiementsValides peut être vide — le collaborateur estime qu'aucun
+// candidat ne correspond, jamais une erreur.
+export function enregistrerRapprochementPaiementAchat(
+  cabinetId: string,
+  dossierId: string,
+  parametres: ParametresRapprochementPaiementAchat
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/rapprochements-paiement-achat`, cabinetId, {
     method: 'POST',
     body: JSON.stringify(parametres),
   });

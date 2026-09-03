@@ -130,6 +130,39 @@ export interface CompteACategoriser {
   suggestionIA?: SuggestionIA;
 }
 
+// --- Rapprochement des paiements achats (brief v34) — deux portes
+// obligatoires avant un cycle, avec la catégorisation ci-dessus : POST
+// /dossiers/:dossierId/cycles refuse désormais (409) tant qu'il reste des
+// comptes à catégoriser ou des factures de service à rapprocher, jamais
+// rattrapé après coup contrairement à encaissement_non_affecte.
+
+export interface CandidatPaiementPopup {
+  ledgerEntryId: number;
+  libelle: string | null;
+  montant: number;
+  date: string;
+  precoche: boolean;
+  // null = pas de précochage (IA non configurée, ou n'a pas pu se
+  // prononcer) — jamais un message d'erreur, juste rien de coché.
+  confiance: ConfianceSuggestionIA | null;
+}
+
+export interface FactureARapprocher {
+  ledgerEntryId: number;
+  libelle: string | null;
+  montantFactureTotal: number;
+  date: string;
+  candidats: CandidatPaiementPopup[];
+}
+
+export interface ParametresRapprochementPaiementAchat {
+  periode: string;
+  factureLedgerEntryId: number;
+  montantFactureTotal: number;
+  paiementsValides: { ledgerEntryId: number; montant: number }[];
+  utilisateurId: string;
+}
+
 // Comptes produit/charge (classes 6/7) mouvementés sans taux assigné, et
 // comptes clients mouvementés sans taux historique ni assignation manuelle
 // — suggestions pour l'onglet Taux assigné (brief v4, section 4), même

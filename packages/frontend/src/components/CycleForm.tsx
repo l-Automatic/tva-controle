@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
-import { ApiError, ajusterMontantCalcul, fetchAjustementsCalcul, lancerCycle, retirerAjustementCalcul } from '../api';
+import {
+  ApiError,
+  ajusterMontantCalcul,
+  fetchAjustementsCalcul,
+  fetchComptesACategoriser,
+  fetchRapprochementsPaiementAchat,
+  lancerCycle,
+  retirerAjustementCalcul,
+} from '../api';
 import { useToast } from '../toast';
-import type { AjustementCalcul, LigneCalcul, ResultatCycle, TypeMontantAjustement } from '../types';
+import type { AjustementCalcul, CompteACategoriser, FactureARapprocher, LigneCalcul, ResultatCycle, TypeMontantAjustement } from '../types';
 import { MessageCalculIncomplet } from './CalculsPanel';
+import { CategorisationPopup } from './CategorisationPopup';
 import { CycleLoadingPopup } from './CycleLoadingPopup';
 import { InfoTooltip } from './InfoTooltip';
+import { RapprochementPaiementAchatPopup } from './RapprochementPaiementAchatPopup';
 
 interface CycleFormProps {
   cabinetId: string;
@@ -336,6 +346,14 @@ export function CycleForm({
   const [resultat, setResultat] = useState<ResultatCycle | null>(null);
   const [phasePopup, setPhasePopup] = useState<'chargement' | 'succes' | null>(null);
   const [messageSucces, setMessageSucces] = useState('');
+  // Deux portes obligatoires avant un cycle (brief v34) — jamais rattrapées
+  // après coup, contrairement à encaissement_non_affecte. Popups ouverts
+  // soit directement (boutons "Vérifier…", consultable à tout moment, pas
+  // seulement en réaction à un 409), soit pré-remplis depuis le corps d'un
+  // 409 de lancerCycle, sans second appel réseau.
+  const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[] | null>(null);
+  const [facturesARapprocher, setFacturesARapprocher] = useState<FactureARapprocher[] | null>(null);
+  const [verificationEnCours, setVerificationEnCours] = useState<'categorisation' | 'rapprochement' | null>(null);
   const notifier = useToast();
 
   async function handleLancer() {
@@ -367,13 +385,64 @@ export function CycleForm({
     } catch (err) {
       setPhasePopup(null);
       if (err instanceof ApiError && err.status === 409) {
-        setDejaValide(true);
+        const corps = err.corps as
+          | { comptesACategoriser?: CompteACategoriser[]; facturesARapprocher?: FactureARapprocher[] }
+          | undefined;
+        if (corps?.comptesACategoriser) {
+          setComptesACategoriser(corps.comptesACategoriser);
+        } else if (corps?.facturesARapprocher) {
+          setFacturesARapprocher(corps.facturesARapprocher);
+        } else {
+          setDejaValide(true);
+        }
         setError(err.message);
       } else {
         setError(err instanceof ApiError ? err.message : 'Échec du lancement du cycle');
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleVerifierCategorisation() {
+    if (!periodeDebut || !periodeFin) {
+      setError('Période de début et période de fin sont requises');
+      return;
+    }
+    setVerificationEnCours('categorisation');
+    setError(null);
+    try {
+      const comptes = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
+      if (comptes.length === 0) {
+        notifier('Aucun compte à catégoriser pour cette période');
+      } else {
+        setComptesACategoriser(comptes);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification de la catégorisation');
+    } finally {
+      setVerificationEnCours(null);
+    }
+  }
+
+  async function handleVerifierRapprochement() {
+    if (!periodeDebut || !periodeFin) {
+      setError('Période de début et période de fin sont requises');
+      return;
+    }
+    setVerificationEnCours('rapprochement');
+    setError(null);
+    try {
+      const factures = await fetchRapprochementsPaiementAchat(cabinetId, dossierId, periodeDebut, periodeFin);
+      if (factures.length === 0) {
+        notifier('Aucune facture à rapprocher pour cette période');
+      } else {
+        setFacturesARapprocher(factures);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification du rapprochement');
+    } finally {
+      setVerificationEnCours(null);
     }
   }
 
@@ -397,6 +466,25 @@ export function CycleForm({
         </button>
       </div>
 
+      {/* Deux portes obligatoires (brief v34) — consultables à tout moment,
+          pas seulement en réaction à un 409 au lancement du cycle. */}
+      <div className="cycle-form">
+        <button
+          className="secondary"
+          onClick={() => void handleVerifierCategorisation()}
+          disabled={verificationEnCours !== null}
+        >
+          {verificationEnCours === 'categorisation' ? '…' : 'Vérifier la catégorisation'}
+        </button>
+        <button
+          className="secondary"
+          onClick={() => void handleVerifierRapprochement()}
+          disabled={verificationEnCours !== null}
+        >
+          {verificationEnCours === 'rapprochement' ? '…' : 'Vérifier les rapprochements paiements achats'}
+        </button>
+      </div>
+
       {error && <p className={dejaValide ? 'error error-409' : 'error'}>{error}</p>}
       {resultat && (
         <ResultatCycleView
@@ -407,6 +495,25 @@ export function CycleForm({
         />
       )}
       {phasePopup && <CycleLoadingPopup phase={phasePopup} messageSucces={messageSucces} />}
+      {comptesACategoriser && (
+        <CategorisationPopup
+          cabinetId={cabinetId}
+          dossierId={dossierId}
+          utilisateurId={utilisateurId}
+          comptes={comptesACategoriser}
+          onClose={() => setComptesACategoriser(null)}
+        />
+      )}
+      {facturesARapprocher && (
+        <RapprochementPaiementAchatPopup
+          cabinetId={cabinetId}
+          dossierId={dossierId}
+          utilisateurId={utilisateurId}
+          periode={periodeDebut}
+          factures={facturesARapprocher}
+          onClose={() => setFacturesARapprocher(null)}
+        />
+      )}
     </div>
   );
 }
