@@ -10,3 +10,9 @@ export {
   jugerPaiementPartielAchat,
   type JugementPaiementPartielAchat,
 } from './jugerPaiementPartielAchat.js';
+export {
+  jugerCandidatsPaiementAchat,
+  type CandidatPaiementInput,
+  type CandidatPreCoche,
+  type JugementRapprochementPaiements,
+} from './jugerCandidatsPaiementAchat.js';
