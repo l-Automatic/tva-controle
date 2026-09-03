@@ -14,6 +14,7 @@ import {
   verifierComptesNonReconnus,
   verifierComptesACategoriser,
   preparerRapprochementsPaiementAchat,
+  verifierParcVehicules,
   enregistrerRapprochementPaiementAchat,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
@@ -1081,6 +1082,26 @@ export function buildApp(pool: Pool): FastifyInstance {
       return reply.code(409).send({
         erreur: `${facturesARapprocher.length} facture(s) de service non payées doivent être rapprochées de leurs paiements avant de pouvoir lancer un cycle sur cette période.`,
         facturesARapprocher,
+      });
+    }
+
+    // Troisième verrou, même jour (10/08) : le parc de véhicules doit être
+    // renseigné dès qu'un compte carburant est touché sur la période —
+    // sinon la déductibilité 80%/100% resterait indéterminée en silence.
+    // Une fois renseigné une première fois, ce verrou ne bloque plus rien
+    // pour les cycles suivants (configuration dossier, pas une décision
+    // par écriture).
+    const parcNonRenseigne = await verifierParcVehicules(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+    if (parcNonRenseigne) {
+      return reply.code(409).send({
+        erreur:
+          'Le parc de véhicules doit être renseigné avant de pouvoir lancer un cycle sur cette période (au moins une écriture touche un compte carburant).',
       });
     }
 
