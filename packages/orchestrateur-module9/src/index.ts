@@ -20,6 +20,10 @@ export {
   type ParametresVerificationComptesNonReconnus,
 } from './verifierComptesNonReconnus.js';
 export {
+  verifierComptesACategoriser,
+  type ParametresVerificationCategorisation,
+} from './verifierComptesACategoriser.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
