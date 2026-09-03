@@ -628,3 +628,19 @@ Sans rapprochement validé (facture clairement lettrée en 1-pour-1, ou
 vente comptant sans ligne tiers) : repli sur l'ancien binaire payé/pas
 payé, inchangé.
 
+
+---
+
+## Bug réel trouvé — encaissement_client_taux_applique confond avoir et vrai encaissement (10/08)
+
+Repéré par Rami via des données réelles : un avoir client (AVOIR CLIENT
+AV0001, AV0002, AV0003 dans l'exemple) se manifeste par un **crédit** sur
+le compte 411, exactement comme un vrai encaissement — le contrôle actuel
+ne fait pas la différence, et propose un taux par défaut comme s'il
+s'agissait d'un vrai paiement client à qualifier.
+
+**Mis en pause explicitement par Rami** — à reprendre plus tard, pas
+maintenant. Piste probable pour la correction : croiser avec la
+détection déjà construite pour `avoir_a_verifier` (verifierAvoirs,
+controles-module4/src/avoirs.ts) ou avec le libellé de la pièce, avant de
+proposer une qualification de taux.
