@@ -5,9 +5,10 @@ import {
   filterComptesParPrefixe,
   fetchEcrituresTvaCompletes,
   fetchLignesParCompte,
+  resolveLedgerAccounts,
 } from '@tva-controle/connector-pennylane';
-import { identifierFacturesCandidatesAcompte } from '@tva-controle/controles-module4';
-import { MistralClient, jugerCandidatsPaiementAchat } from '@tva-controle/connector-mistral';
+import { identifierFacturesCandidatesAcompte, verifierCoherenceTvaHotel, identifierCandidatsJugementHotel } from '@tva-controle/controles-module4';
+import { MistralClient, jugerCandidatsPaiementAchat, jugerLibellesHotel } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, chargerDossierComplet, conventionListe } from './db/dossierRepository.js';
 import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees } from './db/readRepository.js';
@@ -74,7 +75,53 @@ export async function preparerRapprochementsPaiementAchat(
     periodeFin: params.periodeFin,
   });
 
-  const facturesCandidates = identifierFacturesCandidatesAcompte(ecritures, comptesChargeService);
+  const mistralApiKey = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    parametreCabinetValeur(client, params.cabinetId, 'mistral_api_key')
+  );
+
+  // Exception hôtel (10/08) : un compte 625 (paiement comptant par défaut)
+  // peut en pratique être réglé en plusieurs fois — sans cette détection,
+  // une facture d'hôtel payée en deux fois serait silencieusement traitée
+  // comme "déjà réglée comptant, rien à vérifier". Même logique que dans
+  // executerCycleTva (pipeline.ts) — dupliquée ici car ce popup tourne
+  // maintenant AVANT le cycle, plus dans son enchaînement.
+  const comptesFournisseurConcernes = [
+    ...new Set(
+      ecritures
+        .filter((e) => e.ligneTva.compte.startsWith('44566'))
+        .map((e) => e.lignesTiers[0]?.compte)
+        .filter((c): c is string => c !== undefined)
+    ),
+  ];
+  const nomsComptesFournisseur =
+    comptesFournisseurConcernes.length > 0
+      ? new Map(
+          [...(await resolveLedgerAccounts(params.client, comptesFournisseurConcernes)).entries()].map(
+            ([numero, resolu]) => [numero, resolu.libelle]
+          )
+        )
+      : new Map<string, string>();
+  const anomaliesHotel = verifierCoherenceTvaHotel(ecritures, nomsComptesFournisseur);
+
+  const ledgerEntryIdsHotel = new Set<number>(anomaliesHotel.map((a) => a.ledgerEntryId));
+  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
+    const candidatsJugementHotel = identifierCandidatsJugementHotel(ecritures, nomsComptesFournisseur);
+    if (candidatsJugementHotel.length > 0) {
+      try {
+        const mistralClientHotel = new MistralClient({ apiKey: mistralApiKey });
+        const jugements = await jugerLibellesHotel(mistralClientHotel, candidatsJugementHotel);
+        for (const j of jugements.filter((j) => j.estHotel)) {
+          ledgerEntryIdsHotel.add(j.ledgerEntryId);
+        }
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec jugement IA (hôtel, popup rapprochement) : ${String(err)}`);
+        }
+      }
+    }
+  }
+
+  const facturesCandidates = identifierFacturesCandidatesAcompte(ecritures, comptesChargeService, ledgerEntryIdsHotel);
 
   const dejaResolues = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     listerFacturesLedgerEntryIdsRapprochees(client, params.dossierId, params.periodeDebut)
@@ -88,9 +135,6 @@ export async function preparerRapprochementsPaiementAchat(
   const exerciceDebut = dossierComplet?.dateDebutExercice ?? `${anneeCivile}-01-01`;
   const exerciceFin = dossierComplet?.dateFinExercice ?? `${anneeCivile}-12-31`;
 
-  const mistralApiKey = await avecContexteCabinet(pool, params.cabinetId, (client) =>
-    parametreCabinetValeur(client, params.cabinetId, 'mistral_api_key')
-  );
   const mistralClient =
     typeof mistralApiKey === 'string' && mistralApiKey.length > 0 ? new MistralClient({ apiKey: mistralApiKey }) : null;
 
