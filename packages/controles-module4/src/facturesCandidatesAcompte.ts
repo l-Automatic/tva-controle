@@ -11,13 +11,14 @@ export interface FactureCandidateAcompte {
   montantFactureTotal: number; // montant TTC dû au fournisseur (ligneTiers.credit)
 }
 
-// Chantier paiement partiel achats, volet "sans lettrage" (10/08) — confirmé
-// par Rami : il n'existe pas en pratique de lettrage partiel/en attente
-// dans Pennylane. Un acompte réel se traduit donc par une facture ET un
-// paiement TOUS LES DEUX non lettrés, sans aucun lien structurel entre
-// eux — contrairement au cas d'un groupe de lettrage à plus de 2 lignes
-// (paiementPartielAchat.ts / jugerPaiementPartielAchat, toujours valable
-// pour le cas où plusieurs factures sont réglées ensemble en une fois).
+// Chantier rapprochement paiement achats (10/08, refonte complète demandée
+// par Rami) : identifie toute facture de service dont le lien avec ses
+// paiements n'est PAS clairement établi — jamais lettrée du tout, OU
+// lettrée mais dans un groupe ambigu de plus de 2 pièces (fusion des deux
+// anciens mécanismes distincts en un seul). Remplace complètement l'ancien
+// jugement automatique sur "groupe de lettrage" — terme volontairement
+// absent d'ici — par une résolution manuelle (popup, coche par
+// candidat, précochage IA) avant qu'un cycle puisse être lancé.
 //
 // Pré-filtre déterministe, avant tout appel LLM (coûteux s'il fallait
 // l'appliquer à chaque facture non lettrée) : SEULEMENT les factures de
@@ -36,7 +37,16 @@ export function identifierFacturesCandidatesAcompte(
 
     const ligneTiers = ecriture.lignesTiers[0];
     if (!ligneTiers) continue;
-    if (ligneTiers.lettrage.estLettree) continue; // déjà lettrée : traitée par le contrôle existant, pas ici
+    // 10/08 — étendu (remplace l'ancien mécanisme "groupe de lettrage à
+    // plus de 2 lignes", terme volontairement absent d'ici, demande de
+    // Rami) : une facture DÉJÀ lettrée mais dans un groupe de plus de 2
+    // pièces reste ambiguë (plusieurs factures/paiements mélangés, lien
+    // exact pas garanti) — candidate au même titre qu'une facture jamais
+    // lettrée. Seul un lettrage à EXACTEMENT 2 pièces (la facture + son
+    // unique paiement) est un cas clair, jamais candidat ici.
+    const estLettreeSansAmbiguite =
+      ligneTiers.lettrage.estLettree && ligneTiers.lettrage.groupeIds.length <= 2;
+    if (estLettreeSansAmbiguite) continue;
 
     // Un hôtel identifié comme exception au "paiement comptant" (625) est
     // candidat même si 625 n'est pas dans comptes_charge_service — c'est
