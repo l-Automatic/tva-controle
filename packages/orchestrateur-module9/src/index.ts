@@ -29,6 +29,7 @@ export {
   type FactureARapprocher,
   type CandidatPaiementPopup,
 } from './preparerRapprochementsPaiementAchat.js';
+export { verifierAvoirsLegere, type ParametresVerificationAvoirs } from './verifierAvoirsLegere.js';
 export {
   enregistrerEvenementAudit,
   type EvenementAudit,
