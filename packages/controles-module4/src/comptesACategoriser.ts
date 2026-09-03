@@ -38,20 +38,33 @@ export function identifierComptesACategoriser(
   ecritures: EcritureTvaComplete[],
   connus: ComptesConnus
 ): CompteACategoriser[] {
-  const tousPrefixesConnus = [
+  const prefixesFiscaux = [
     ...connus.comptesVenteService,
     ...connus.comptesChargeService,
     ...connus.comptesEquipement,
     ...connus.comptesCarburant,
     ...(connus.comptesCadeaux ?? []),
     ...(connus.comptesImmobilisation ?? []),
-    ...(connus.comptesSansCategorie ?? []),
   ];
+  const comptesSansCategorieExacts = new Set(connus.comptesSansCategorie ?? []);
+
   // Comparaison par préfixe, cohérente avec exigibilite.ts/carburant.ts/
-  // immobilisation.ts : les conventions contiennent des préfixes ('706'),
-  // pas forcément des numéros de compte exacts ('706100' doit compter comme
-  // déjà catégorisé si '706' est déjà dans une convention).
-  const estDejaConnu = (compte: string) => tousPrefixesConnus.some((prefixe) => compte.startsWith(prefixe));
+  // immobilisation.ts, MAIS uniquement pour les vraies catégories fiscales
+  // (les conventions contiennent des préfixes ('706'), pas forcément des
+  // numéros de compte exacts — '706100' doit compter comme déjà catégorisé
+  // si '706' est déjà dans une convention).
+  //
+  // comptes_sans_categorie est structurellement différent (10/08, bug réel
+  // corrigé) : ce n'est pas une catégorie fiscale, juste un registre
+  // technique "déjà vu, ne plus reproposer" — un préfixe large y est
+  // dangereux, puisqu'il peut avaler silencieusement un compte
+  // numériquement voisin mais fiscalement sans rapport. Cas réel trouvé :
+  // "6061" (Fournitures non stockables) rejeté faisait disparaître à tort
+  // "60614" (Achats non stocké de carburant) du popup, alors que ce sont
+  // deux comptes complètement différents. Comparaison EXACTE ici, jamais
+  // par préfixe.
+  const estDejaConnu = (compte: string) =>
+    prefixesFiscaux.some((prefixe) => compte.startsWith(prefixe)) || comptesSansCategorieExacts.has(compte);
 
   // Filtre par classe de compte (PCG) : seules les charges (6), produits (7)
   // et immobilisations (2) ont un sens pour ce popup. Bug réel trouvé le
