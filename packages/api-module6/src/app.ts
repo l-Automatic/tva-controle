@@ -19,6 +19,8 @@ import {
   resoudreAnomaliesEnMasse,
   justifierAnomalie,
   qualifierEncaissementNonAffecte,
+  qualifierAvoir,
+  verifierAvoirsLegere,
   AnomalieNonQualifiableError,
   ajouterConventionManuelle,
   confirmerConvention,
@@ -463,6 +465,69 @@ export function buildApp(pool: Pool): FastifyInstance {
       }
       throw err;
     }
+  });
+
+  // Qualification structurée pour 'avoir_a_verifier' (10/08) : avoir ou
+  // OD, jamais un simple commentaire libre — n'affecte jamais le calcul,
+  // cf. qualifierAvoir. La correction éventuelle d'une vraie erreur passe
+  // par "Vérifier à nouveau" (route suivante), pas par cette qualification.
+  app.post<{
+    Params: { id: string };
+    Body: { utilisateurId: string; type: 'avoir' | 'od' };
+  }>('/anomalies/:id/qualifier-avoir', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { utilisateurId, type } = request.body;
+    if (type !== 'avoir' && type !== 'od') {
+      return reply.code(400).send({ erreur: "type doit être 'avoir' ou 'od'" });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        qualifierAvoir(client, request.params.id, utilisateurId, type)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AnomalieNonQualifiableError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // "Vérifier à nouveau" pour avoir_a_verifier (10/08) — mécanisme demandé
+  // par Rami : contrairement à Résoudre/Justifier (qui ne corrige jamais
+  // le calcul), ce bouton refait le contrôle sur des données fraîches et
+  // AJUSTE le calcul brouillon existant si le débit/crédit litigieux a été
+  // corrigé côté Pennylane. L'anomalie reste ouverte si toujours présente,
+  // disparaît si corrigée — jamais l'inverse.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+  }>('/dossiers/:dossierId/verifier-avoirs', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin, utilisateurId } = request.body;
+    if (!periodeDebut || !periodeFin || !utilisateurId) {
+      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierAvoirsLegere(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+      utilisateurId,
+    });
   });
 
   // --- Conventions dossier ---
