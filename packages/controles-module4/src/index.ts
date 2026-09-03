@@ -2,7 +2,8 @@ import type { EcritureTvaComplete, Anomalie, ContexteDossier } from '@tva-contro
 import { TAUX_NOMINAL_PAR_DEFAUT } from './types.js';
 import { verifierCoherenceTauxCollecte } from './coherenceTaux.js';
 import { verifierAutoliquidationEquilibree } from './autoliquidation.js';
-import { verifierAvoirsCollecte } from './avoirs.js';
+import { verifierAvoirs } from './avoirs.js';
+export { verifierAvoirs } from './avoirs.js';
 import { detecterComptesTvaNonReconnus } from './comptesNonReconnus.js';
 export {
   determinerExigibiliteTva,
@@ -118,7 +119,7 @@ export function executerPreControles(
           config.compteAutoliquidationDeductibleIntracom
         )
       : []),
-    ...verifierAvoirsCollecte(ecritures),
+    ...verifierAvoirs(ecritures),
     ...detecterComptesTvaNonReconnus(ecritures, {
       ...(config.compteAutoliquidationDue !== undefined
         ? { compteAutoliquidationDue: config.compteAutoliquidationDue }
