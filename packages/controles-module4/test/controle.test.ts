@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { EcritureTvaComplete } from '@tva-controle/core';
 import { verifierCoherenceTauxCollecte } from '../src/coherenceTaux.js';
 import { verifierAutoliquidationEquilibree } from '../src/autoliquidation.js';
-import { verifierAvoirsCollecte } from '../src/avoirs.js';
+import { verifierAvoirs } from '../src/avoirs.js';
 import { executerPreControles } from '../src/index.js';
 
 // Construit une EcritureTvaComplete minimale pour les tests. Les montants par
@@ -220,20 +220,29 @@ describe('verifierAutoliquidationEquilibree', () => {
   });
 });
 
-describe('verifierAvoirsCollecte', () => {
+describe('verifierAvoirs', () => {
   it('signale un débit sur un compte de TVA collectée', () => {
     const ecriture = construireEcriture({
       ligneTva: { ...construireEcriture().ligneTva, compte: '445711', debit: 49.08, credit: 0 },
     });
-    const anomalies = verifierAvoirsCollecte([ecriture]);
+    const anomalies = verifierAvoirs([ecriture]);
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('avoir_a_verifier');
     expect(anomalies[0]?.gravite).toBe('signale'); // jamais bloquant : ne peut pas être confirmé sans la pièce
   });
 
   it('ne signale rien sur le cas réel ROUSSEAU (crédit normal, pas de débit)', () => {
-    const anomalies = verifierAvoirsCollecte([construireEcriture()]);
+    const anomalies = verifierAvoirs([construireEcriture()]);
     expect(anomalies).toEqual([]);
+  });
+
+  it('signale aussi un crédit sur un compte de TVA déductible (10/08, étendu aux achats)', () => {
+    const ecriture = construireEcriture({
+      ligneTva: { ...construireEcriture().ligneTva, compte: '44566', debit: 0, credit: 30 },
+    });
+    const anomalies = verifierAvoirs([ecriture]);
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.details).toMatchObject({ sens: 'deductible' });
   });
 });
 
