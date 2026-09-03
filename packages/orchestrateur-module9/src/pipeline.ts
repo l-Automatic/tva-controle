@@ -23,6 +23,7 @@ import {
   detecterTrousNumerotation,
   calculerProrataEncaissement,
   verifierExhaustiviteAutoliquidation,
+  type ProrataApplique,
   verifierAbsenceTvaLivraisonIntracom,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
@@ -127,6 +128,12 @@ export interface ResultatCycleTva {
   comptesSansTauxAssigne: CompteSansTauxAssigne[];
   comptesClientSansTaux: CompteClientSansTauxAssigne[];
   comptesAutoliquidationSuggeres: CompteACategoriserAvecSuggestion[];
+  // Paiements partiels réellement appliqués (10/08) — remplace l'ancienne
+  // anomalie paiement_partiel_calcule. sens='collecte' = ventes, à
+  // afficher dans le panneau de calcul ; sens='deductible' = achats, déjà
+  // visible dans le popup de rapprochement (présent ici aussi par
+  // cohérence, mais redondant avec ce que le popup montre déjà).
+  prorataAppliques: ProrataApplique[];
 }
 
 // Enchaîne : charge le contexte dossier (Module 2) -> récupère les écritures
@@ -481,7 +488,11 @@ export async function executerCycleTva(
     prorataParEcriture.set(r.factureLedgerEntryId, prorata);
   }
 
-  const { statuts: statutsExigibilite, anomalies: anomaliesExigibilite } = determinerExigibiliteTva(
+  const {
+    statuts: statutsExigibilite,
+    anomalies: anomaliesExigibilite,
+    prorataAppliques,
+  } = determinerExigibiliteTva(
     ecritures,
     { comptesVenteService, comptesChargeService, comptesPaiementComptant },
     prorataParEcriture,
@@ -811,5 +822,6 @@ export async function executerCycleTva(
     comptesSansTauxAssigne,
     comptesClientSansTaux,
     comptesAutoliquidationSuggeres: comptesAutoliquidationEnrichi,
+    prorataAppliques,
   };
 }
