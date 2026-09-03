@@ -15,8 +15,7 @@ import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees } from 
 
 // Prépare le contenu du popup de rapprochement des paiements achats
 // (10/08, refonte complète demandée par Rami — remplace les deux anciens
-// mécanismes, y compris toute notion de "groupe de lettrage", jugée
-// source de confusion). Une facture de service non payée est présentée
+// mécanismes automatiques). Une facture de service non payée est présentée
 // avec TOUS les paiements candidats du même compte fournisseur trouvés
 // sur toute la fenêtre de l'EXERCICE (pas 60 jours comme avant — "on ne
 // sait jamais, un service peut être payé bien après la date de
