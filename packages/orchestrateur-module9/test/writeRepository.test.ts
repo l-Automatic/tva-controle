@@ -40,6 +40,7 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  enregistrerRapprochementPaiementAchat,
   definirStatutDossier,
   mettreAJourInfosDossier,
   DossierIntrouvableError,
@@ -60,6 +61,8 @@ import {
   listerTauxAssignes,
   listerAjustementsCalcul,
   trouverUtilisateurPourConnexion,
+  listerFacturesLedgerEntryIdsRapprochees,
+  listerRapprochementsPaiementAchat,
 } from '../src/db/readRepository.js';
 
 const CONNECTION_STRING =
@@ -2067,5 +2070,106 @@ describe('enregistrerAnomaliesPartielles', () => {
 
     const liste = await avecClient((client) => listerAnomalies(client, dossierId, { periode }));
     expect(liste.find((a) => a.id === inserees[0]!.id)?.statut).toBe('resolu'); // jamais repassée a obsolete
+  });
+});
+
+describe('enregistrerRapprochementPaiementAchat', () => {
+  it('enregistre un rapprochement avec deux paiements, calcule le montant total valide', async () => {
+    const periode = '2025-07-01';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ1', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq1-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(
+        client,
+        dossierId,
+        periode,
+        5001,
+        1000,
+        [
+          { ledgerEntryId: 5002, montant: 600 },
+          { ledgerEntryId: 5003, montant: 400 },
+        ],
+        utilisateurId
+      )
+    );
+
+    const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
+    expect(rapprochements).toHaveLength(1);
+    expect(rapprochements[0]?.factureLedgerEntryId).toBe(5001);
+    expect(rapprochements[0]?.montantTotalValide).toBe(1000);
+    expect(rapprochements[0]?.paiementsValides).toEqual([
+      { ledgerEntryId: 5002, montant: 600 },
+      { ledgerEntryId: 5003, montant: 400 },
+    ]);
+  });
+
+  it('accepte un tableau vide de paiements (le collaborateur confirme qu’aucun ne correspond)', async () => {
+    const periode = '2025-07-02';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ2', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq2-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, periode, 5010, 500, [], utilisateurId)
+    );
+
+    const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
+    expect(rapprochements[0]?.montantTotalValide).toBe(0);
+    expect(rapprochements[0]?.paiementsValides).toEqual([]);
+  });
+
+  it('un second appel pour la même facture remplace le premier (upsert), pas un doublon', async () => {
+    const periode = '2025-07-03';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ3', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq3-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, periode, 5020, 1000, [{ ledgerEntryId: 5021, montant: 300 }], utilisateurId)
+    );
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, periode, 5020, 1000, [{ ledgerEntryId: 5021, montant: 900 }], utilisateurId)
+    );
+
+    const rapprochements = await avecClient((client) => listerRapprochementsPaiementAchat(client, dossierId, periode));
+    expect(rapprochements).toHaveLength(1); // pas 2
+    expect(rapprochements[0]?.montantTotalValide).toBe(900); // la valeur du 2e appel
+  });
+
+  it('listerFacturesLedgerEntryIdsRapprochees retourne bien les factures déjà résolues', async () => {
+    const periode = '2025-07-04';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ4', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq4-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      enregistrerRapprochementPaiementAchat(client, dossierId, periode, 5030, 1000, [], utilisateurId)
+    );
+
+    const ids = await avecClient((client) => listerFacturesLedgerEntryIdsRapprochees(client, dossierId, periode));
+    expect(ids.has(5030)).toBe(true);
+    expect(ids.has(9999999)).toBe(false);
   });
 });
