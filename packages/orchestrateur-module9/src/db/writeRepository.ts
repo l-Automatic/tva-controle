@@ -212,18 +212,30 @@ export class AnomalieNonQualifiableError extends Error {
 // définition correspond bien à ce que le frontend affiche déjà comme
 // "TVA collectée totale" (calculée côté frontend depuis les lignes brutes,
 // jamais vérifié directement contre cette définition backend).
-async function calculerCollecteeTotaleActuelle(client: PoolClient, calculId: string): Promise<number> {
+const CATEGORIES_PAR_TYPE_MONTANT: Record<'collectee_totale' | 'deductible_totale', string[]> = {
+  collectee_totale: ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due'],
+  deductible_totale: ['deductible_abs', 'deductible_immo', 'autoliquidation_deductible'],
+};
+
+// Généralisée (10/08) — gérait jusqu'ici uniquement collectee_totale
+// (construite pour encaissement_non_affecte) ; élargie pour couvrir aussi
+// deductible_totale, nécessaire pour le nouveau mécanisme de vérification
+// des avoirs côté achats.
+async function calculerMontantActuelPourType(
+  client: PoolClient,
+  calculId: string,
+  typeMontant: 'collectee_totale' | 'deductible_totale'
+): Promise<number> {
   const ajustementExistant = await client.query<{ montant_ajuste: string }>(
-    `SELECT montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = 'collectee_totale'`,
-    [calculId]
+    `SELECT montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = $2`,
+    [calculId, typeMontant]
   );
   if (ajustementExistant.rows.length > 0) {
     return Number.parseFloat(ajustementExistant.rows[0]!.montant_ajuste);
   }
   const sommeBrute = await client.query<{ total: string | null }>(
-    `SELECT SUM(montant) AS total FROM calculs_tva_lignes
-     WHERE calcul_id = $1 AND categorie IN ('collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due')`,
-    [calculId]
+    `SELECT SUM(montant) AS total FROM calculs_tva_lignes WHERE calcul_id = $1 AND categorie = ANY($2)`,
+    [calculId, CATEGORIES_PAR_TYPE_MONTANT[typeMontant]]
   );
   return sommeBrute.rows[0]?.total ? Number.parseFloat(sommeBrute.rows[0].total) : 0;
 }
@@ -283,7 +295,7 @@ export async function qualifierEncaissementNonAffecte(
     const calculId = calculRes.rows[0]?.id;
     if (calculId) {
       const montantTva = ligne.details.montantTTC - ligne.details.montantTTC / (1 + qualification.taux / 100);
-      const collecteeActuelle = await calculerCollecteeTotaleActuelle(client, calculId);
+      const collecteeActuelle = await calculerMontantActuelPourType(client, calculId, 'collectee_totale');
       await ajusterMontantCalcul(
         client,
         calculId,
