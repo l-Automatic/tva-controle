@@ -656,3 +656,48 @@ avoir se fait traiter à tort comme "encaissement non lettré, taux
 appliqué par défaut". Mis de côté volontairement (Rami : "on y est pas
 encore") — à corriger quand cette anomalie sera reprise dans la revue
 systématique.
+
+---
+
+## Chantier futur — correspondance carburant/véhicule (10/08, documenté par Rami, pas commencé)
+
+Distinct du parc de véhicules obligatoire (celui-là construit le même
+jour — verrou avant cycle dès qu'un compte carburant est touché). Ici,
+il s'agit d'aller plus loin : vérifier que le carburant d'une facture
+correspond bien au carburant du véhicule concerné.
+
+### La règle
+Si un véhicule est diesel (gazole) et qu'une facture de carburant est de
+l'essence (ou l'inverse), **ni la TVA ni la charge elle-même** ne sont
+déductibles pour cette facture précise — pas juste la TVA, la charge
+aussi. Détail important qui distingue ce contrôle du reste du projet.
+
+### Comment détecter le type de carburant
+Chercher dans le libellé de chaque écriture touchant le compte de charge
+carburant (606140 cité par Rami comme exemple) une indication du type :
+GO, SP95, SP98, diesel, essence, et toute autre variante — pas une liste
+fixe et fermée, plutôt une détection large.
+
+### La vraie limite pratique, à ne jamais oublier
+Les collaborateurs ne notent pas toujours ce détail dans le libellé.
+Rami, sur les deux cabinets où il a travaillé : le premier le faisait
+systématiquement, le second seulement 50 à 60% du temps. Conséquence
+directe pour la conception : **une facture sans indication détectable ne
+doit jamais être traitée comme une incohérence** — seulement comme "type
+inconnu", et retomber sur la règle normale (80%/100% selon la
+composition de la flotte), jamais un signalement d'anomalie pour absence
+d'info.
+
+### Ce qui manque déjà, structurellement
+`Vehicule` (packages/core/src/dossier.ts) n'a aujourd'hui qu'un champ
+`type` (tourisme/utilitaire) — aucun champ carburant. La table
+`immobilisations` (001_schema_initial.sql) n'a pas non plus de colonne
+pour ça. Une vraie migration sera nécessaire (ajouter un
+`type_carburant` ou équivalent), en plus de la détection par libellé et
+de la logique de correspondance elle-même.
+
+### Séquencement décidé
+Le parc obligatoire (renseigné une fois, sert pour tous les cycles
+suivants) est construit et suffisant pour l'instant. Ce raffinement est
+un chantier à part, pas commencé, à reprendre quand on y revient
+explicitement.
