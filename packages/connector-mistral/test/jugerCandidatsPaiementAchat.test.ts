@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MistralClient } from '../src/client.js';
+import { MistralClient, MistralReponseInvalideError } from '../src/client.js';
 import { jugerCandidatsPaiementAchat } from '../src/jugerCandidatsPaiementAchat.js';
 
 function fakeFetch(contenu: string): typeof fetch {
@@ -47,12 +47,11 @@ describe('jugerCandidatsPaiementAchat', () => {
     expect(resultat.candidats?.[1]).toMatchObject({ ledgerEntryId: 2, precoche: false, confiance: 'basse' });
   });
 
-  it('retourne candidats: null si le LLM ne peut pas se prononcer (réponse malformée)', async () => {
+  it('lève MistralReponseInvalideError si la réponse n’est pas du JSON (même convention que jugementHotel.ts — à l’appelant de l’attraper)', async () => {
     const client = new MistralClient({ apiKey: 'x', fetchImpl: fakeFetch('ceci nest pas du json') });
-    const resultat = await jugerCandidatsPaiementAchat(client, facture, [
-      { ledgerEntryId: 1, libelle: 'X', montant: 100, date: '2025-01-01' },
-    ]);
-    expect(resultat.candidats).toBeNull();
+    await expect(
+      jugerCandidatsPaiementAchat(client, facture, [{ ledgerEntryId: 1, libelle: 'X', montant: 100, date: '2025-01-01' }])
+    ).rejects.toThrow(MistralReponseInvalideError);
   });
 
   it('retourne candidats: null si un ledgerEntryId inconnu apparaît dans la réponse', async () => {
