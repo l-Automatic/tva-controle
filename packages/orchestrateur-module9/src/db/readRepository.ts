@@ -521,11 +521,14 @@ export interface VehiculeDb {
   montantHt: number | null;
   dateAcquisition: string | null;
   statut: 'candidate' | 'confirmed' | 'rejected';
+  // Optionnel (10/08) — prépare le chantier correspondance carburant/
+  // véhicule, pas encore construit.
+  typeCarburant: 'diesel' | 'essence' | null;
 }
 
 export async function listerVehicules(client: PoolClient, dossierId: string): Promise<VehiculeDb[]> {
   const res = await client.query(
-    `SELECT id, designation, type_bien, montant_ht, date_acquisition, statut
+    `SELECT id, designation, type_bien, montant_ht, date_acquisition, statut, type_carburant
      FROM immobilisations
      WHERE dossier_id = $1 AND type_bien IS NOT NULL AND statut != 'rejected'
      ORDER BY created_at DESC`,
@@ -538,6 +541,7 @@ export async function listerVehicules(client: PoolClient, dossierId: string): Pr
     montantHt: r.montant_ht !== null ? Number.parseFloat(r.montant_ht) : null,
     dateAcquisition: r.date_acquisition,
     statut: r.statut,
+    typeCarburant: r.type_carburant,
   }));
 }
 
