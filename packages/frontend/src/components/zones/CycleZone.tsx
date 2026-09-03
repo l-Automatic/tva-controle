@@ -2,10 +2,18 @@ import { useEffect, useState } from 'react';
 import { fetchCalculs } from '../../api';
 import { toDateOnly } from '../../dateUtils';
 import { AnomaliesPanel } from '../AnomaliesPanel';
-import { CalculRow } from '../CalculsPanel';
+import { CalculRow, formatMontant } from '../CalculsPanel';
 import { CategorisationPopup } from '../CategorisationPopup';
 import { CycleForm } from '../CycleForm';
-import type { Anomalie, Calcul, CompteACategoriser, CompteClientSansTauxAssigne, CompteSansTauxAssigne } from '../../types';
+import type {
+  Anomalie,
+  Calcul,
+  CompteACategoriser,
+  CompteClientSansTauxAssigne,
+  CompteSansTauxAssigne,
+  LigneCalcul,
+  ProrataApplique,
+} from '../../types';
 
 interface CycleZoneProps {
   cabinetId: string;
@@ -16,6 +24,72 @@ interface CycleZoneProps {
   onSuggestionsTaux: (comptes: CompteSansTauxAssigne[], clients: CompteClientSansTauxAssigne[]) => void;
   onSuggestionsAutoliquidation: (comptes: CompteACategoriser[]) => void;
   onCompteNonReconnuClic?: (anomalie: Anomalie) => void;
+}
+
+// Paiements partiels réellement appliqués côté ventes (brief v35) —
+// remplace l'ancienne anomalie paiement_partiel_calcule, jamais dans le
+// panneau Anomalies. Le montant TVA exigible n'est isolable que quand la
+// ligne de calcul agrégée (par catégorie de taux) ne regroupe QUE cette
+// pièce (referencesPieces d'une seule entrée) : au-delà, calculerTva ne
+// distingue plus la contribution de chaque pièce dans le total — mieux
+// vaut l'indiquer explicitement que d'afficher un montant qui mélangerait
+// plusieurs pièces sans le dire.
+interface DetailProrataCollecte {
+  ledgerEntryId: number;
+  compte: string;
+  compteTiers: string;
+  prorataPourcent: number;
+  montantExigible: number | null;
+  montantExclu: number | null;
+}
+
+function calculerDetailsProrataCollecte(prorataAppliques: ProrataApplique[], lignes: LigneCalcul[]): DetailProrataCollecte[] {
+  return prorataAppliques
+    .filter((p) => p.sens === 'collecte')
+    .map((p) => {
+      const ligne = lignes.find((l) => l.referencesPieces.length === 1 && l.referencesPieces[0] === p.ledgerEntryId);
+      const montantExigible = ligne ? ligne.montant : null;
+      const montantExclu = ligne && p.prorata > 0 ? (ligne.montant * (1 - p.prorata)) / p.prorata : null;
+      return {
+        ledgerEntryId: p.ledgerEntryId,
+        compte: p.compte,
+        compteTiers: p.compteTiers,
+        prorataPourcent: Math.round(p.prorata * 100),
+        montantExigible,
+        montantExclu,
+      };
+    });
+}
+
+function DetailsProrataCollecte({ details }: { details: DetailProrataCollecte[] }) {
+  if (details.length === 0) return null;
+  return (
+    <>
+      <div className="panel-separateur" />
+      <div className="panel-header">
+        <h2>Paiements partiels appliqués</h2>
+      </div>
+      <ul className="card-list">
+        {details.map((d) => (
+          <li key={d.ledgerEntryId} className="card">
+            <p className="label">
+              Compte {d.compte} — client {d.compteTiers} : <strong>{d.prorataPourcent} % exigible</strong>
+            </p>
+            {d.montantExigible !== null ? (
+              <p className="reference">
+                TVA exigible : {formatMontant(d.montantExigible)}
+                {d.montantExclu !== null && ` — TVA exclue (paiement restant) : ${formatMontant(d.montantExclu)}`}
+              </p>
+            ) : (
+              <p className="reference">
+                Montant non isolable — plusieurs pièces agrégées dans la même ligne de calcul.
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 function CalculsDuCycle({
@@ -95,6 +169,7 @@ export function CycleZone({
   onCompteNonReconnuClic,
 }: CycleZoneProps) {
   const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
+  const [detailsProrataCollecte, setDetailsProrataCollecte] = useState<DetailProrataCollecte[]>([]);
   // Bug réel (brief v14) : relancer un cycle sur EXACTEMENT la même période
   // ne change pas la valeur de `periode.debut` passée à AnomaliesPanel — son
   // effet ne se redéclenchait donc pas, laissant les nouvelles anomalies
@@ -132,6 +207,7 @@ export function CycleZone({
             if (resultat.comptesACategoriser.length > 0) setComptesACategoriser(resultat.comptesACategoriser);
             onSuggestionsTaux(resultat.comptesSansTauxAssigne, resultat.comptesClientSansTaux);
             onSuggestionsAutoliquidation(resultat.comptesAutoliquidationSuggeres);
+            setDetailsProrataCollecte(calculerDetailsProrataCollecte(resultat.prorataAppliques, resultat.resultat.lignes));
           }}
           onAjustementChange={() => setCycleRefreshKey((k) => k + 1)}
         />
@@ -161,6 +237,7 @@ export function CycleZone({
             periode={periode}
             refreshKey={cycleRefreshKey}
           />
+          <DetailsProrataCollecte details={detailsProrataCollecte} />
         </aside>
       )}
       {comptesACategoriser.length > 0 && (

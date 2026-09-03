@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { ApiError, enregistrerRapprochementPaiementAchat } from '../api';
+import { ApiError, enregistrerRapprochementPaiementAchat, fetchRapprochementsPaiementAchat } from '../api';
 import { formatDate } from '../dateUtils';
 import { useToast } from '../toast';
 import { formatMontant } from './CalculsPanel';
@@ -11,9 +11,12 @@ interface RapprochementPaiementAchatPopupProps {
   dossierId: string;
   utilisateurId: string;
   // periodeDebut du cycle en cours de préparation — clé de résolution
-  // côté backend (cf. listerFacturesLedgerEntryIdsRapprochees), distincte
-  // de la fenêtre de recherche des candidats (tout l'exercice comptable).
-  periode: string;
+  // côté backend (cf. listerFacturesLedgerEntryIdsRapprochees) et borne
+  // basse de la requête de rechargement (brief v35) ; periodeFin sert
+  // uniquement à ce rechargement, distinctes de la fenêtre de recherche
+  // des candidats (tout l'exercice comptable).
+  periodeDebut: string;
+  periodeFin: string;
   factures: FactureARapprocher[];
   onClose: () => void;
 }
@@ -29,14 +32,14 @@ function FactureCard({
   cabinetId,
   dossierId,
   utilisateurId,
-  periode,
+  periodeDebut,
   onTraite,
 }: {
   facture: FactureARapprocher;
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
-  periode: string;
+  periodeDebut: string;
   onTraite: () => void;
 }) {
   // Précochage IA (brief v34) : point de départ modifiable, jamais une
@@ -66,7 +69,7 @@ function FactureCard({
         .filter((c) => coches.has(c.ledgerEntryId))
         .map((c) => ({ ledgerEntryId: c.ledgerEntryId, montant: c.montant }));
       await enregistrerRapprochementPaiementAchat(cabinetId, dossierId, {
-        periode,
+        periode: periodeDebut,
         factureLedgerEntryId: facture.ledgerEntryId,
         montantFactureTotal: facture.montantFactureTotal,
         paiementsValides,
@@ -87,11 +90,19 @@ function FactureCard({
 
   return (
     <li className="card">
+      {/* Ordre demandé (brief v35) : compte fournisseur, libellé du
+          compte, date de la facture, libellé de l'écriture, montant TTC —
+          identifier immédiatement de quoi il s'agit sans avoir à déduire
+          l'information. */}
       <p className="label">
-        {facture.libelle ?? 'Facture sans libellé'} — <strong>{formatMontant(facture.montantFactureTotal)}</strong>
+        {facture.compteFournisseur}
+        {facture.libelleCompteFournisseur && ` — ${facture.libelleCompteFournisseur}`}
       </p>
       <p className="reference">
-        {formatDate(facture.date)} — pièce {facture.ledgerEntryId}
+        {formatDate(facture.date)} — {facture.libelle ?? 'Facture sans libellé'} — pièce {facture.ledgerEntryId}
+      </p>
+      <p className="label">
+        Montant TTC : <strong>{formatMontant(facture.montantFactureTotal)}</strong>
       </p>
       {facture.candidats.length === 0 ? (
         <p className="empty">Aucun paiement candidat trouvé sur l'exercice.</p>
@@ -130,18 +141,39 @@ function FactureCard({
 // cycle, comme la catégorisation (CategorisationPopup) : fermer sans tout
 // traiter est normal, les factures non traitées réapparaîtront au
 // prochain essai de lancement de cycle.
+//
+// Déjà triée côté backend par compte fournisseur puis par date (brief
+// v35) — jamais re-triée ici. Les factures sans aucun candidat sont
+// désormais résolues automatiquement côté backend, absentes de la liste.
 export function RapprochementPaiementAchatPopup({
   cabinetId,
   dossierId,
   utilisateurId,
-  periode,
+  periodeDebut,
+  periodeFin,
   factures: facturesInitiales,
   onClose,
 }: RapprochementPaiementAchatPopupProps) {
   const [factures, setFactures] = useState(facturesInitiales);
+  const [rechargement, setRechargement] = useState(false);
 
-  function retirer(ledgerEntryId: number) {
-    setFactures((prev) => prev.filter((f) => f.ledgerEntryId !== ledgerEntryId));
+  // Un paiement validé pour une facture doit disparaître des candidats
+  // des autres (brief v35, le backend exclut désormais automatiquement
+  // les paiements déjà validés ailleurs) — un simple retrait local de la
+  // facture traitée ne suffit plus, il faut recharger depuis le serveur
+  // avant d'afficher la suite de la liste.
+  async function recharger() {
+    setRechargement(true);
+    try {
+      setFactures(await fetchRapprochementsPaiementAchat(cabinetId, dossierId, periodeDebut, periodeFin));
+    } catch {
+      // Silencieux : la facture qui vient d'être validée a déjà disparu
+      // de son propre point de vue (toast de confirmation affiché) — un
+      // échec de rechargement n'empêche pas de continuer, "Rafraîchir"
+      // au prochain essai de lancement de cycle reste possible.
+    } finally {
+      setRechargement(false);
+    }
   }
 
   return (
@@ -157,22 +189,25 @@ export function RapprochementPaiementAchatPopup({
           Factures de service non payées, avec leurs paiements candidats trouvés sur toute la fenêtre de l'exercice.
           Les cases précochées reflètent une suggestion IA quand disponible — à valider ou corriger avant d'envoyer.
         </p>
-        {factures.length === 0 ? (
+        {rechargement && <p className="empty">Actualisation…</p>}
+        {!rechargement && factures.length === 0 ? (
           <p className="empty">Toutes les factures ont été rapprochées.</p>
         ) : (
-          <ul className="card-list">
-            {factures.map((f) => (
-              <FactureCard
-                key={f.ledgerEntryId}
-                facture={f}
-                cabinetId={cabinetId}
-                dossierId={dossierId}
-                utilisateurId={utilisateurId}
-                periode={periode}
-                onTraite={() => retirer(f.ledgerEntryId)}
-              />
-            ))}
-          </ul>
+          !rechargement && (
+            <ul className="card-list">
+              {factures.map((f) => (
+                <FactureCard
+                  key={f.ledgerEntryId}
+                  facture={f}
+                  cabinetId={cabinetId}
+                  dossierId={dossierId}
+                  utilisateurId={utilisateurId}
+                  periodeDebut={periodeDebut}
+                  onTraite={() => void recharger()}
+                />
+              ))}
+            </ul>
+          )
         )}
       </div>
     </div>

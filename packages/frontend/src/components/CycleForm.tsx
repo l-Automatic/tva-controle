@@ -509,7 +509,8 @@ export function CycleForm({
           cabinetId={cabinetId}
           dossierId={dossierId}
           utilisateurId={utilisateurId}
-          periode={periodeDebut}
+          periodeDebut={periodeDebut}
+          periodeFin={periodeFin}
           factures={facturesARapprocher}
           onClose={() => setFacturesARapprocher(null)}
         />

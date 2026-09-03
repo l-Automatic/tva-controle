@@ -15,7 +15,6 @@ import {
   HelpCircle,
   History,
   Hotel,
-  Layers,
   MessageSquareText,
   Percent,
   RefreshCw,
@@ -54,12 +53,13 @@ export const ICONE_ACTION = {
 // les repérer d'un coup d'œil — repli générique pour un type inconnu.
 // ligne_tiers_introuvable, nature_operation_indeterminee et
 // flotte_mixte_carburant retirées du catalogue côté backend — résidu
-// purement frontend retiré ici (brief v33).
+// purement frontend retiré ici (brief v33). paiement_partiel_a_verifier et
+// paiement_partiel_calcule retirées pour la même raison en brief v35 (la
+// seconde remplacée par le champ prorataAppliques, hors anomalies).
 export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   compte_tva_non_reconnu: HelpCircle,
   encaissement_non_affecte: HandCoins,
   nature_operation_mixte: Shuffle,
-  paiement_partiel_a_verifier: Layers,
   avoir_a_verifier: Undo2,
   parc_vehicules_non_renseigne: Car,
   immobilisation_potentielle_non_passee: Building2,
@@ -68,7 +68,6 @@ export const ICONE_TYPE_ANOMALIE: Record<string, LucideIcon> = {
   tva_hotel_a_verifier: Hotel,
   tva_hotel_a_tort: Hotel,
   trou_numerotation_facture: Hash,
-  paiement_partiel_calcule: Layers,
   doublon_numerotation_facture: Copy,
 };
 export const ICONE_TYPE_ANOMALIE_DEFAUT: LucideIcon = CircleAlert;

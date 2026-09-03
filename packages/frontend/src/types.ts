@@ -149,6 +149,11 @@ export interface CandidatPaiementPopup {
 
 export interface FactureARapprocher {
   ledgerEntryId: number;
+  // Ajoutés en v35, à afficher en premier — identifier immédiatement de
+  // quoi il s'agit sans avoir à déduire l'information depuis le libellé
+  // de l'écriture seul.
+  compteFournisseur: string;
+  libelleCompteFournisseur: string | null;
   libelle: string | null;
   montantFactureTotal: number;
   date: string;
@@ -184,6 +189,20 @@ export interface CompteClientSansTauxAssigne {
 // blocage : 0 = calcul complet et validable, > 0 = produit mais incomplet
 // tant que ces anomalies restent ouvertes (le blocage se déplace à la
 // validation, cf. Calcul ci-dessous et POST /calculs/:id/valider).
+// Paiements partiels réellement appliqués (brief v35) — remplace
+// l'ancienne anomalie paiement_partiel_calcule, retirée du catalogue.
+// sens='collecte' (ventes) : à afficher dans le panneau de calcul,
+// jamais dans le panneau Anomalies. sens='deductible' (achats) : déjà
+// visible dans le popup de rapprochement des paiements achats (v34), pas
+// dupliqué ailleurs pour ce sens-là.
+export interface ProrataApplique {
+  ledgerEntryId: number;
+  compte: string;
+  compteTiers: string;
+  prorata: number;
+  sens: 'collecte' | 'deductible';
+}
+
 export interface ResultatCycle {
   statut: 'calcule';
   anomalies: AnomalieCycle[];
@@ -194,6 +213,7 @@ export interface ResultatCycle {
   comptesSansTauxAssigne: CompteSansTauxAssigne[];
   comptesClientSansTaux: CompteClientSansTauxAssigne[];
   comptesAutoliquidationSuggeres: CompteACategoriser[];
+  prorataAppliques: ProrataApplique[];
 }
 
 // --- Calculs persistés (panneau "Calculs") ---

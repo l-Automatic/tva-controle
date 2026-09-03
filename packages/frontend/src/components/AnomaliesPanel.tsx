@@ -22,7 +22,7 @@ import { BadgeStatut } from './BadgeStatut';
 // la vérification ciblée, sans repasser par un cycle complet (brief v30).
 const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 
-// 13 des 17 types du catalogue ont un libellé dédié ici — cf.
+// 11 des 15 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
 // incoherence_taux_autoliquidation, immobilisation_sur_compte_tva_incorrect,
 // autoliquidation_incomplete) retombent sur le type brut en repli, hors
@@ -32,12 +32,15 @@ const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 // v33). flotte_mixte_carburant retirée pour la même raison en vérifiant
 // ce même brief — même changelog de retrait (10/08) que
 // ligne_tiers_introuvable dans CATALOGUE_ANOMALIES.md, aucune trace non
-// plus dans le code backend.
+// plus dans le code backend. paiement_partiel_a_verifier et
+// paiement_partiel_calcule retirées en brief v35 — la seconde n'est plus
+// une anomalie du tout, remplacée par le champ prorataAppliques d'un
+// cycle (affiché dans le panneau de calcul pour sens='collecte', déjà
+// visible dans le popup de rapprochement pour sens='deductible').
 const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   compte_tva_non_reconnu: 'Compte de TVA non reconnu',
   encaissement_non_affecte: 'Encaissement non affecté',
   nature_operation_mixte: "Nature de l'opération mixte",
-  paiement_partiel_a_verifier: 'Paiement partiel à vérifier',
   avoir_a_verifier: 'Avoir à vérifier',
   parc_vehicules_non_renseigne: 'Parc de véhicules non renseigné',
   immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
@@ -46,7 +49,6 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   tva_hotel_a_verifier: 'TVA hôtel à vérifier',
   tva_hotel_a_tort: 'TVA hôtel déduite à tort',
   trou_numerotation_facture: 'Trou dans la numérotation des factures',
-  paiement_partiel_calcule: 'Paiement partiel — prorata calculé',
   doublon_numerotation_facture: 'Doublon de numérotation de facture',
 };
 
@@ -128,8 +130,9 @@ const CLES_DEJA_AFFICHEES = new Set(['libelle', 'exemplesLibelle', 'montantTTC',
 function detailsResiduels(details: unknown): string | null {
   if (!details || typeof details !== 'object') return null;
   const d = details as Record<string, unknown>;
-  // Cas concret : anomalies de groupe de lettrage (paiement_partiel_a_verifier)
-  // — le compte tiers (411/401) et les autres pièces du groupe sont la seule
+  // Cas concret (type d'anomalie retiré depuis, brief v35 — conservé au
+  // cas où une future anomalie de groupe de lettrage réapparaîtrait) : le
+  // compte tiers (411/401) et les autres pièces du groupe sont la seule
   // info qui permette d'aller vérifier manuellement dans Pennylane ; le champ
   // `compte` de l'anomalie est le compte TVA, pas le compte tiers, d'où le
   // besoin de l'afficher séparément plutôt que de laisser croire que
