@@ -1636,3 +1636,37 @@ export async function enregistrerRapprochementPaiementAchat(
     details: { factureLedgerEntryId, montantFactureTotal, paiementsValides, montantTotalValide },
   });
 }
+
+// Résolution automatique (10/08, demande de Rami) : une facture sans
+// AUCUN paiement candidat n'a rien à faire décider au collaborateur —
+// on sait déjà que rien n'est déductible. Jamais confirmed_by (NULL),
+// pour distinguer clairement une résolution automatique d'une vraie
+// décision humaine dans l'historique. Idempotent via le même ON CONFLICT
+// que la résolution manuelle — un appel répété (popup rechargé) ne créé
+// jamais de doublon ni d'événement d'audit répété inutilement.
+export async function autoResoudreFactureSansCandidat(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  factureLedgerEntryId: number,
+  montantFactureTotal: number
+): Promise<void> {
+  const res = await client.query<{ xmax: string }>(
+    `INSERT INTO rapprochements_paiement_achat
+       (dossier_id, periode, facture_ledger_entry_id, montant_facture_total, paiements_valides, montant_total_valide, confirmed_by)
+     VALUES ($1, $2, $3, $4, '[]'::jsonb, 0, NULL)
+     ON CONFLICT (dossier_id, facture_ledger_entry_id) DO NOTHING
+     RETURNING xmax::text`,
+    [dossierId, periode, factureLedgerEntryId, montantFactureTotal]
+  );
+  if (res.rows.length === 0) return; // déjà résolue (manuellement ou automatiquement), rien à refaire
+
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'rapprochement_paiement_achat_auto_resolu',
+    moduleSource: 'module9_orchestrateur',
+    acteur: 'systeme',
+    details: { factureLedgerEntryId, montantFactureTotal, motif: 'aucun paiement candidat trouvé' },
+  });
+}
+
