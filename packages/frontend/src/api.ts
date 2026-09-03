@@ -255,6 +255,35 @@ export function verifierComptesNonReconnus(
   });
 }
 
+// Qualification structurée pour avoir_a_verifier (brief v37) — remplace
+// Résoudre/Justifier pour ce type précisément : avoir ou OD de
+// régularisation, jamais un commentaire libre. N'affecte jamais le
+// calcul, juste une trace de décision — la correction éventuelle passe
+// par verifierAvoirs ci-dessous, pas par cette qualification.
+export function qualifierAvoir(cabinetId: string, id: string, utilisateurId: string, type: 'avoir' | 'od'): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-avoir`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, type }),
+  });
+}
+
+// "Vérifier à nouveau" pour avoir_a_verifier (brief v37) — distinct de la
+// qualification ci-dessus : ici, "je pense l'avoir corrigé dans
+// Pennylane, vérifie et corrige le calcul si besoin". Contrairement à
+// verifierComptesNonReconnus, AJUSTE le calcul brouillon existant si le
+// débit/crédit litigieux a bien été corrigé côté Pennylane (corrections
+// > 0) — l'anomalie disparaît alors au prochain chargement.
+export function verifierAvoirs(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string; utilisateurId: string }
+): Promise<{ anomaliesOuvertes: number; corrections: number }> {
+  return request<{ anomaliesOuvertes: number; corrections: number }>(`/dossiers/${dossierId}/verifier-avoirs`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,

@@ -4,9 +4,11 @@ import {
   ApiError,
   fetchAnomalies,
   justifierAnomalie,
+  qualifierAvoir,
   qualifierEncaissement,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
+  verifierAvoirs,
   verifierComptesNonReconnus,
 } from '../api';
 import { toDateOnly } from '../dateUtils';
@@ -21,6 +23,12 @@ import { BadgeStatut } from './BadgeStatut';
 // Résoudre/Justifier — d'où le lien direct vers Conventions génériques et
 // la vérification ciblée, sans repasser par un cycle complet (brief v30).
 const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
+
+// Qualification structurée plutôt que Résoudre/Justifier — un avoir/une
+// OD de régularisation n'a pas besoin d'un commentaire libre, juste de
+// savoir laquelle des deux c'est (brief v37, couvre désormais aussi les
+// achats, pas seulement les ventes).
+const TYPE_AVOIR_A_VERIFIER = 'avoir_a_verifier';
 
 // 10 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
@@ -354,6 +362,139 @@ function VerificationComptesNonReconnus({
   );
 }
 
+// Qualification structurée pour avoir_a_verifier (brief v37) — remplace
+// Résoudre/Justifier pour ce type précisément : "Avoir" ou "OD de
+// régularisation", jamais un commentaire libre. Ne touche jamais le
+// calcul (juste une trace de décision) — distinct de "Vérifier à
+// nouveau" ci-dessous, qui lui peut ajuster le calcul.
+function QualificationAvoir({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<'avoir' | 'od' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleQualifier(type: 'avoir' | 'od') {
+    setSubmitting(type);
+    setError(null);
+    try {
+      await qualifierAvoir(cabinetId, anomalie.id, utilisateurId, type);
+      notifier(type === 'avoir' ? 'Qualifié comme avoir' : 'Qualifié comme OD de régularisation');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="actions">
+        <button onClick={() => void handleQualifier('avoir')} disabled={submitting !== null}>
+          <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
+          {submitting === 'avoir' ? '…' : 'Avoir'}
+        </button>
+        <button onClick={() => void handleQualifier('od')} className="secondary" disabled={submitting !== null}>
+          {submitting === 'od' ? '…' : 'OD de régularisation'}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
+// "Vérifier à nouveau" pour avoir_a_verifier (brief v37) — distinct de la
+// qualification ci-dessus : "je pense l'avoir corrigé dans Pennylane,
+// vérifie et corrige le calcul si besoin". Si le débit/crédit litigieux a
+// bien été corrigé, l'anomalie disparaît au prochain chargement ET le
+// calcul brouillon existant est ajusté automatiquement côté backend —
+// onChanged() ici déclenche déjà le rafraîchissement du panneau de calcul
+// (même fil que Résoudre/Justifier/qualifier, cf. brief v32).
+function VerificationAvoirs({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomaliesOuvertes, corrections } = await verifierAvoirs(cabinetId, dossierId, {
+        periodeDebut,
+        periodeFin,
+        utilisateurId,
+      });
+      notifier(
+        corrections > 0
+          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
+          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) avoir toujours ouverte(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -411,6 +552,7 @@ function AnomalieRow({
   const estOuverte = anomalie.statut === 'ouvert';
   const estEncaissement = anomalie.typeAnomalie === 'encaissement_non_affecte';
   const estCompteNonReconnu = anomalie.typeAnomalie === TYPE_COMPTE_TVA_NON_RECONNU;
+  const estAvoirAVerifier = anomalie.typeAnomalie === TYPE_AVOIR_A_VERIFIER;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -486,6 +628,19 @@ function AnomalieRow({
           </div>
         )}
 
+        {estOuverte && estAvoirAVerifier && (
+          <div className="actions">
+            <VerificationAvoirs
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
+
         {estOuverte &&
           (estEncaissement ? (
             <EncaissementQualification
@@ -494,6 +649,8 @@ function AnomalieRow({
               utilisateurId={utilisateurId}
               onChanged={onChanged}
             />
+          ) : estAvoirAVerifier ? (
+            <QualificationAvoir anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
           ) : (
             <div className="actions">
               <input
@@ -513,7 +670,7 @@ function AnomalieRow({
               </button>
             </div>
           ))}
-        {estOuverte && !estEncaissement && error && <p className="error">{error}</p>}
+        {estOuverte && !estEncaissement && !estAvoirAVerifier && error && <p className="error">{error}</p>}
       </Accordion>
     </li>
   );
