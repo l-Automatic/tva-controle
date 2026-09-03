@@ -26,6 +26,11 @@ interface CycleFormProps {
   // panneau "Calcul de la période" juste en dessous, qui affiche sinon une
   // TVA nette périmée après un ajustement fait ici.
   onAjustementChange?: () => void;
+  // Troisième porte obligatoire (brief v38), même principe que les deux
+  // précédentes mais sans payload structuré — juste un message d'erreur à
+  // reconnaître, pour rediriger vers Configuration du dossier → Parc de
+  // véhicules plutôt que d'afficher le 409 brut.
+  onParcVehiculesManquant?: (() => void) | undefined;
 }
 
 const LIBELLE_CATEGORIE: Record<string, string> = {
@@ -337,6 +342,7 @@ export function CycleForm({
   utilisateurId,
   onCycleLance,
   onAjustementChange = () => {},
+  onParcVehiculesManquant = () => {},
 }: CycleFormProps) {
   const [periodeDebut, setPeriodeDebut] = useState('');
   const [periodeFin, setPeriodeFin] = useState('');
@@ -392,6 +398,11 @@ export function CycleForm({
           setComptesACategoriser(corps.comptesACategoriser);
         } else if (corps?.facturesARapprocher) {
           setFacturesARapprocher(corps.facturesARapprocher);
+        } else if (err.message.includes('parc de véhicules')) {
+          // Troisième porte (brief v38) — pas de payload structuré à
+          // pré-remplir cette fois, juste une redirection vers l'écran de
+          // gestion du parc (Configuration du dossier → Parc de véhicules).
+          onParcVehiculesManquant();
         } else {
           setDejaValide(true);
         }

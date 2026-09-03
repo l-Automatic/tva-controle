@@ -24,6 +24,7 @@ interface CycleZoneProps {
   onSuggestionsTaux: (comptes: CompteSansTauxAssigne[], clients: CompteClientSansTauxAssigne[]) => void;
   onSuggestionsAutoliquidation: (comptes: CompteACategoriser[]) => void;
   onCompteNonReconnuClic?: (anomalie: Anomalie) => void;
+  onParcVehiculesManquant?: () => void;
 }
 
 // Paiements partiels réellement appliqués côté ventes (brief v35) —
@@ -167,6 +168,7 @@ export function CycleZone({
   onSuggestionsTaux,
   onSuggestionsAutoliquidation,
   onCompteNonReconnuClic,
+  onParcVehiculesManquant,
 }: CycleZoneProps) {
   const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[]>([]);
   const [detailsProrataCollecte, setDetailsProrataCollecte] = useState<DetailProrataCollecte[]>([]);
@@ -210,6 +212,7 @@ export function CycleZone({
             setDetailsProrataCollecte(calculerDetailsProrataCollecte(resultat.prorataAppliques, resultat.resultat.lignes));
           }}
           onAjustementChange={() => setCycleRefreshKey((k) => k + 1)}
+          onParcVehiculesManquant={onParcVehiculesManquant}
         />
         {periode && (
           <>

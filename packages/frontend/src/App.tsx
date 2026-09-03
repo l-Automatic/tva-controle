@@ -206,6 +206,15 @@ export function App() {
     setZone('configuration');
   }
 
+  // Troisième porte obligatoire avant un cycle (brief v38), même principe
+  // que la catégorisation ci-dessus mais sans données à pré-remplir — un
+  // 409 sur le parc de véhicules manquant amène directement sur l'écran
+  // de gestion du parc.
+  function allerVersParcVehicules() {
+    setSousOngletConfiguration('vehicules');
+    setZone('configuration');
+  }
+
   return (
     <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
       <Sidebar
@@ -251,6 +260,7 @@ export function App() {
                   }}
                   onSuggestionsAutoliquidation={setSuggestionsAutoliquidation}
                   onCompteNonReconnuClic={allerVersConventionsGeneriques}
+                  onParcVehiculesManquant={allerVersParcVehicules}
                 />
               )}
               {zone === 'configuration' && (
