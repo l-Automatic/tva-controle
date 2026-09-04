@@ -64,6 +64,8 @@ export {
   configurerDossierOnboarding,
   appliquerCorrectionAvoir,
   qualifierAvoir,
+  qualifierVehiculeTourisme,
+  appliquerCorrectionVehiculeTourisme,
   enregistrerRapprochementPaiementAchat,
   autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
