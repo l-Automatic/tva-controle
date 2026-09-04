@@ -54,8 +54,8 @@ beforeAll(async () => {
       [dossierId]
     );
     await client.query(
-      `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie)
-       VALUES ($1, '401CONNU', 'Fournisseur Connu SARL', 'confiance', 8)`,
+      `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie, valide_manuellement)
+       VALUES ($1, '401CONNU', 'Fournisseur Connu SARL', 'confiance', 8, true)`,
       [dossierId]
     );
     await client.query('COMMIT');
@@ -107,6 +107,23 @@ describe('chargerContexteDossier — contre la vraie base', () => {
     );
 
     expect(contexte.tiersConnus).toEqual(['401CONNU']);
+  });
+
+  it('ne compte jamais un tiers vu mais jamais validé manuellement (10/08, bug réel corrigé)', async () => {
+    await avecContexteCabinet(pool, cabinetId, (client) =>
+      client.query(
+        `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie)
+         VALUES ($1, '401JAMAISVALIDE', 'Fournisseur jamais validé', 'nouveau', 0)`,
+        [dossierId]
+      )
+    );
+
+    const contexte = await avecContexteCabinet(pool, cabinetId, (client) =>
+      chargerContexteDossier(client, dossierId)
+    );
+
+    expect(contexte.tiersConnus).not.toContain('401JAMAISVALIDE');
+    expect(contexte.tiersConnus).toContain('401CONNU'); // celui-là reste bien connu (validé)
   });
 
   it('charge les infos du dossier lui-même', async () => {
