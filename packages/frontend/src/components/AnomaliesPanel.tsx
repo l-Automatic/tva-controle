@@ -6,11 +6,13 @@ import {
   justifierAnomalie,
   qualifierAvoir,
   qualifierEncaissement,
+  qualifierImmobilisation,
   qualifierVehiculeTourisme,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   verifierAvoirs,
   verifierComptesNonReconnus,
+  verifierImmobilisation,
   verifierVehiculeTourisme,
 } from '../api';
 import { toDateOnly } from '../dateUtils';
@@ -37,6 +39,13 @@ const TYPE_AVOIR_A_VERIFIER = 'avoir_a_verifier';
 // ciblé sur les écritures d'achat (compte 2182) avec TVA effectivement
 // déduite — même famille de qualification structurée que avoir_a_verifier.
 const TYPE_VEHICULE_TOURISME_A_VERIFIER = 'immobilisation_vehicule_tourisme_a_verifier';
+
+// Même schéma que avoir_a_verifier/immobilisation_vehicule_tourisme_a_verifier
+// (brief v41), particularité : une correction ne change jamais le total de
+// TVA déductible, elle transfère un montant entre deux catégories du calcul
+// (deductible_abs -> deductible_immo), déjà affichées séparément par
+// CycleForm.tsx (LIBELLE_CATEGORIE) — rien à changer de ce côté.
+const TYPE_IMMOBILISATION_A_VERIFIER = 'immobilisation_potentielle_non_passee';
 
 // 11 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
@@ -631,6 +640,139 @@ function VerificationVehiculeTourisme({
   );
 }
 
+// Qualification structurée pour immobilisation_potentielle_non_passee
+// (brief v41) — même principe que QualificationAvoir/QualificationVehiculeTourisme :
+// ne touche jamais le calcul (juste une trace de décision), distinct de
+// "Vérifier à nouveau" ci-dessous qui lui peut ajuster le calcul.
+function QualificationImmobilisation({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<'confirme_immo' | 'ignore' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleQualifier(type: 'confirme_immo' | 'ignore') {
+    setSubmitting(type);
+    setError(null);
+    try {
+      await qualifierImmobilisation(cabinetId, anomalie.id, utilisateurId, type);
+      notifier(type === 'confirme_immo' ? 'Immobilisation confirmée' : "Qualifié comme n'étant pas une immobilisation");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="actions">
+        <button onClick={() => void handleQualifier('confirme_immo')} disabled={submitting !== null}>
+          <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
+          {submitting === 'confirme_immo' ? '…' : "C'est bien une immobilisation"}
+        </button>
+        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+          {submitting === 'ignore' ? '…' : "Ce n'est pas une immobilisation"}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
+// "Vérifier à nouveau" pour immobilisation_potentielle_non_passee (brief
+// v41) — même principe que VerificationAvoirs/VerificationVehiculeTourisme :
+// "je pense l'avoir reclassée dans Pennylane, vérifie et corrige le calcul
+// si besoin". Ici, la correction transfère un montant entre deductible_abs
+// et deductible_immo plutôt que de changer le total déductible — le toast
+// reste formulé en "correction(s) appliquée(s)" sans détailler le
+// transfert, le panneau de calcul (deux lignes déjà distinctes) suffit à le
+// rendre visible une fois rafraîchi.
+function VerificationImmobilisation({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomaliesOuvertes, corrections } = await verifierImmobilisation(cabinetId, dossierId, {
+        periodeDebut,
+        periodeFin,
+        utilisateurId,
+      });
+      notifier(
+        corrections > 0
+          ? `${corrections} correction(s) appliquée(s) au calcul — transfert charges/immobilisations effectué`
+          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) immobilisation toujours ouverte(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -690,6 +832,18 @@ function AnomalieRow({
   const estCompteNonReconnu = anomalie.typeAnomalie === TYPE_COMPTE_TVA_NON_RECONNU;
   const estAvoirAVerifier = anomalie.typeAnomalie === TYPE_AVOIR_A_VERIFIER;
   const estVehiculeTourismeAVerifier = anomalie.typeAnomalie === TYPE_VEHICULE_TOURISME_A_VERIFIER;
+  const estImmobilisationAVerifier = anomalie.typeAnomalie === TYPE_IMMOBILISATION_A_VERIFIER;
+  // Particularité de ce type (brief v41) : qualifier() passe IMMÉDIATEMENT
+  // l'anomalie en 'resolu', y compris pour 'confirme_immo' — contrairement
+  // à avoir_a_verifier/vehicule_tourisme_a_verifier, verifierImmobilisationLegere
+  // rejoue le contrôle sur les anomalies déjà 'resolu' (pas 'ouvert'), donc
+  // "Vérifier à nouveau" doit rester visible après qualification tant que
+  // la décision était 'confirme_immo' — inutile si 'ignore' (rien à corriger).
+  const resolutionImmoType =
+    estImmobilisationAVerifier && anomalie.resolution && typeof anomalie.resolution === 'object'
+      ? (anomalie.resolution as { type?: string }).type
+      : null;
+  const afficherVerificationImmobilisation = estImmobilisationAVerifier && (estOuverte || resolutionImmoType === 'confirme_immo');
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -791,6 +945,19 @@ function AnomalieRow({
           </div>
         )}
 
+        {afficherVerificationImmobilisation && (
+          <div className="actions">
+            <VerificationImmobilisation
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
+
         {estOuverte &&
           (estEncaissement ? (
             <EncaissementQualification
@@ -803,6 +970,13 @@ function AnomalieRow({
             <QualificationAvoir anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
           ) : estVehiculeTourismeAVerifier ? (
             <QualificationVehiculeTourisme
+              anomalie={anomalie}
+              cabinetId={cabinetId}
+              utilisateurId={utilisateurId}
+              onChanged={onChanged}
+            />
+          ) : estImmobilisationAVerifier ? (
+            <QualificationImmobilisation
               anomalie={anomalie}
               cabinetId={cabinetId}
               utilisateurId={utilisateurId}
@@ -827,9 +1001,12 @@ function AnomalieRow({
               </button>
             </div>
           ))}
-        {estOuverte && !estEncaissement && !estAvoirAVerifier && !estVehiculeTourismeAVerifier && error && (
-          <p className="error">{error}</p>
-        )}
+        {estOuverte &&
+          !estEncaissement &&
+          !estAvoirAVerifier &&
+          !estVehiculeTourismeAVerifier &&
+          !estImmobilisationAVerifier &&
+          error && <p className="error">{error}</p>}
       </Accordion>
     </li>
   );

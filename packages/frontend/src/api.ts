@@ -322,6 +322,44 @@ export function verifierVehiculeTourisme(
   );
 }
 
+// Qualification structurée pour immobilisation_potentielle_non_passee
+// (brief v41) — même principe que qualifierAvoir/qualifierVehiculeTourisme :
+// ne touche jamais le calcul directement. 'confirme_immo' signale qu'une
+// reclassification externe (Pennylane) est attendue, à repérer ensuite via
+// verifierImmobilisation ; 'ignore' signifie que l'achat reste
+// correctement en charge, rien à faire.
+export function qualifierImmobilisation(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  type: 'confirme_immo' | 'ignore'
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-immobilisation`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, type }),
+  });
+}
+
+// "Vérifier à nouveau" pour immobilisation_potentielle_non_passee (brief
+// v41) — particularité par rapport à verifierAvoirs/verifierVehiculeTourisme :
+// une correction ne change jamais le total de TVA déductible, elle
+// TRANSFÈRE un montant entre deductible_abs et deductible_immo (les deux
+// lignes bougent en sens inverse dans le panneau de calcul).
+export function verifierImmobilisation(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string; utilisateurId: string }
+): Promise<{ anomaliesOuvertes: number; corrections: number }> {
+  return request<{ anomaliesOuvertes: number; corrections: number }>(
+    `/dossiers/${dossierId}/verifier-immobilisation`,
+    cabinetId,
+    {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }
+  );
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,
