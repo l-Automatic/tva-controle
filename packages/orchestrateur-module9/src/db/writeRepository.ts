@@ -212,9 +212,17 @@ export class AnomalieNonQualifiableError extends Error {
 // définition correspond bien à ce que le frontend affiche déjà comme
 // "TVA collectée totale" (calculée côté frontend depuis les lignes brutes,
 // jamais vérifié directement contre cette définition backend).
-const CATEGORIES_PAR_TYPE_MONTANT: Record<'collectee_totale' | 'deductible_totale', string[]> = {
+export type TypeMontantAjustable = 'collectee_totale' | 'deductible_totale' | 'deductible_abs' | 'deductible_immo';
+
+const CATEGORIES_PAR_TYPE_MONTANT: Record<TypeMontantAjustable, string[]> = {
   collectee_totale: ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due'],
   deductible_totale: ['deductible_abs', 'deductible_immo', 'autoliquidation_deductible'],
+  // Élargi une seconde fois (10/08) — nécessaire pour le transfert
+  // deductible_abs -> deductible_immo (immobilisation_potentielle_non_passee) :
+  // le total agrégé ne change jamais dans ce cas précis, seule la
+  // répartition entre les deux catégories change.
+  deductible_abs: ['deductible_abs'],
+  deductible_immo: ['deductible_immo'],
 };
 
 // Généralisée (10/08) — gérait jusqu'ici uniquement collectee_totale
@@ -224,7 +232,7 @@ const CATEGORIES_PAR_TYPE_MONTANT: Record<'collectee_totale' | 'deductible_total
 async function calculerMontantActuelPourType(
   client: PoolClient,
   calculId: string,
-  typeMontant: 'collectee_totale' | 'deductible_totale'
+  typeMontant: TypeMontantAjustable
 ): Promise<number> {
   const ajustementExistant = await client.query<{ montant_ajuste: string }>(
     `SELECT montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = $2`,
