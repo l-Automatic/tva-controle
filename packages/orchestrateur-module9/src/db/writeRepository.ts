@@ -1755,3 +1755,66 @@ export async function qualifierAvoir(
     details: { anomalieId, type },
   });
 }
+
+// ============================================================================
+// QUALIFICATION VÉHICULE DE TOURISME (10/08)
+// ============================================================================
+
+// Résolution structurée demandée par Rami : deux choix — confirmer que
+// c'est bien un véhicule de tourisme (la TVA a été déduite à tort, une
+// correction externe dans Pennylane est attendue, suivie d'un "Vérifier
+// à nouveau" pour ajuster le calcul), ou signaler que le jugement IA
+// était faux (l'anomalie est nulle et non avenue). Contrairement à
+// qualifierAvoir, confirmer ici n'ajuste jamais le calcul directement —
+// seule la correction externe puis "Vérifier à nouveau" le fait, cf.
+// verifierVehiculeTourismeLegere.
+export async function qualifierVehiculeTourisme(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  type: 'confirme_tourisme' | 'pas_tourisme'
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = 'immobilisation_vehicule_tourisme_a_verifier' AND statut = 'ouvert'
+     RETURNING dossier_id`,
+    [anomalieId, utilisateurId, JSON.stringify({ type })]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'vehicule_tourisme_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, type },
+  });
+}
+
+// "Vérifier à nouveau" — applique le delta une fois la correction externe
+// (dans Pennylane) constatée. Contrairement à appliquerCorrectionAvoir
+// (collecte/déductible globale), ici toujours 'deductible_totale' — un
+// véhicule de tourisme est nécessairement une ligne déductible.
+export async function appliquerCorrectionVehiculeTourisme(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  delta: number,
+  description: string,
+  utilisateurId: string
+): Promise<void> {
+  if (delta === 0) return;
+
+  const calcul = await client.query<{ id: string }>(
+    `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+    [dossierId, periode]
+  );
+  const calculId = calcul.rows[0]?.id;
+  if (!calculId) return;
+
+  const montantActuel = await calculerMontantActuelPourType(client, calculId, 'deductible_totale');
+  await ajusterMontantCalcul(client, calculId, 'deductible_totale', montantActuel, montantActuel + delta, description, utilisateurId);
+}
