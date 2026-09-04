@@ -6,10 +6,12 @@ import {
   justifierAnomalie,
   qualifierAvoir,
   qualifierEncaissement,
+  qualifierVehiculeTourisme,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   verifierAvoirs,
   verifierComptesNonReconnus,
+  verifierVehiculeTourisme,
 } from '../api';
 import { toDateOnly } from '../dateUtils';
 import { ICONE_ACTION, iconeTypeAnomalie } from '../icons';
@@ -30,11 +32,16 @@ const TYPE_COMPTE_TVA_NON_RECONNU = 'compte_tva_non_reconnu';
 // achats, pas seulement les ventes).
 const TYPE_AVOIR_A_VERIFIER = 'avoir_a_verifier';
 
-// 10 des 14 types du catalogue ont un libellé dédié ici — cf.
-// CATALOGUE_ANOMALIES.md ; les 4 restants (immobilisation_vehicule_tourisme_a_verifier,
-// incoherence_taux_autoliquidation, immobilisation_sur_compte_tva_incorrect,
-// autoliquidation_incomplete) retombent sur le type brut en repli, hors
-// périmètre de ce brief (v12 ne demandait que les 4 ci-dessous).
+// Refonte complète (brief v40) : ce n'est plus un signalement systématique
+// dès qu'un véhicule de tourisme existe dans le parc, mais un jugement IA
+// ciblé sur les écritures d'achat (compte 2182) avec TVA effectivement
+// déduite — même famille de qualification structurée que avoir_a_verifier.
+const TYPE_VEHICULE_TOURISME_A_VERIFIER = 'immobilisation_vehicule_tourisme_a_verifier';
+
+// 11 des 14 types du catalogue ont un libellé dédié ici — cf.
+// CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
+// immobilisation_sur_compte_tva_incorrect, autoliquidation_incomplete)
+// retombent sur le type brut en repli, hors périmètre de ce brief.
 // ligne_tiers_introuvable et nature_operation_indeterminee retirées du
 // catalogue côté backend — résidu purement frontend retiré ici (brief
 // v33). flotte_mixte_carburant retirée pour la même raison en vérifiant
@@ -50,6 +57,7 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   compte_tva_non_reconnu: 'Compte de TVA non reconnu',
   encaissement_non_affecte: 'Encaissement non affecté',
   avoir_a_verifier: 'Avoir à vérifier',
+  immobilisation_vehicule_tourisme_a_verifier: 'Véhicule de tourisme à vérifier',
   parc_vehicules_non_renseigne: 'Parc de véhicules non renseigné',
   immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
   nouveau_tiers_a_verifier: 'Nouveau tiers à vérifier',
@@ -495,6 +503,134 @@ function VerificationAvoirs({
   );
 }
 
+// Qualification structurée pour immobilisation_vehicule_tourisme_a_verifier
+// (brief v40) — même principe que QualificationAvoir : ne touche jamais le
+// calcul (juste une trace de décision), distinct de "Vérifier à nouveau"
+// ci-dessous qui lui peut ajuster le calcul.
+function QualificationVehiculeTourisme({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<'confirme_tourisme' | 'pas_tourisme' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleQualifier(type: 'confirme_tourisme' | 'pas_tourisme') {
+    setSubmitting(type);
+    setError(null);
+    try {
+      await qualifierVehiculeTourisme(cabinetId, anomalie.id, utilisateurId, type);
+      notifier(type === 'confirme_tourisme' ? 'Véhicule de tourisme confirmé' : "Qualifié comme n'étant pas un véhicule de tourisme");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="actions">
+        <button onClick={() => void handleQualifier('confirme_tourisme')} disabled={submitting !== null}>
+          <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
+          {submitting === 'confirme_tourisme' ? '…' : 'Confirmer véhicule de tourisme'}
+        </button>
+        <button onClick={() => void handleQualifier('pas_tourisme')} className="secondary" disabled={submitting !== null}>
+          {submitting === 'pas_tourisme' ? '…' : "Ce n'est pas un véhicule de tourisme"}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
+// "Vérifier à nouveau" pour immobilisation_vehicule_tourisme_a_verifier
+// (brief v40) — même principe que VerificationAvoirs : "je pense l'avoir
+// corrigé dans Pennylane, vérifie et corrige le calcul si besoin".
+function VerificationVehiculeTourisme({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomaliesOuvertes, corrections } = await verifierVehiculeTourisme(cabinetId, dossierId, {
+        periodeDebut,
+        periodeFin,
+        utilisateurId,
+      });
+      notifier(
+        corrections > 0
+          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
+          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) véhicule de tourisme toujours ouverte(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -553,6 +689,7 @@ function AnomalieRow({
   const estEncaissement = anomalie.typeAnomalie === 'encaissement_non_affecte';
   const estCompteNonReconnu = anomalie.typeAnomalie === TYPE_COMPTE_TVA_NON_RECONNU;
   const estAvoirAVerifier = anomalie.typeAnomalie === TYPE_AVOIR_A_VERIFIER;
+  const estVehiculeTourismeAVerifier = anomalie.typeAnomalie === TYPE_VEHICULE_TOURISME_A_VERIFIER;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -641,6 +778,19 @@ function AnomalieRow({
           </div>
         )}
 
+        {estOuverte && estVehiculeTourismeAVerifier && (
+          <div className="actions">
+            <VerificationVehiculeTourisme
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
+
         {estOuverte &&
           (estEncaissement ? (
             <EncaissementQualification
@@ -651,6 +801,13 @@ function AnomalieRow({
             />
           ) : estAvoirAVerifier ? (
             <QualificationAvoir anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
+          ) : estVehiculeTourismeAVerifier ? (
+            <QualificationVehiculeTourisme
+              anomalie={anomalie}
+              cabinetId={cabinetId}
+              utilisateurId={utilisateurId}
+              onChanged={onChanged}
+            />
           ) : (
             <div className="actions">
               <input
@@ -670,7 +827,9 @@ function AnomalieRow({
               </button>
             </div>
           ))}
-        {estOuverte && !estEncaissement && !estAvoirAVerifier && error && <p className="error">{error}</p>}
+        {estOuverte && !estEncaissement && !estAvoirAVerifier && !estVehiculeTourismeAVerifier && error && (
+          <p className="error">{error}</p>
+        )}
       </Accordion>
     </li>
   );
@@ -781,15 +940,14 @@ export function AnomaliesPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId, dossierId, periode, refreshKey]);
 
-  const visibles = (
-    variant === 'cycle'
-      ? afficherTraitees
-        ? anomalies
-        : anomalies.filter((a) => a.statut === 'ouvert')
-      : anomalies
-          .filter((a) => filtreStatut === TOUS_STATUTS || a.statut === filtreStatut)
-          .filter((a) => filtreType === TOUS_TYPES || a.typeAnomalie === filtreType)
-  );
+  // Le filtre par type (filtreType) est partagé entre les deux variantes
+  // (brief v40) — auparavant réservé à 'historique'. Le filtre principal de
+  // statut reste propre à chaque variante : la case "Afficher les
+  // anomalies traitées" pour 'cycle', le menu déroulant filtreStatut pour
+  // 'historique'.
+  const visibles = anomalies
+    .filter((a) => (variant === 'cycle' ? afficherTraitees || a.statut === 'ouvert' : filtreStatut === TOUS_STATUTS || a.statut === filtreStatut))
+    .filter((a) => filtreType === TOUS_TYPES || a.typeAnomalie === filtreType);
   const nbOuvertes = anomalies.filter((a) => a.statut === 'ouvert').length;
   const idsOuvertesVisibles = visibles.filter((a) => a.statut === 'ouvert').map((a) => a.id);
 
@@ -810,30 +968,31 @@ export function AnomaliesPanel({
             Afficher les anomalies traitées
           </label>
         ) : (
-          <>
-            <select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value as StatutAnomalie)}>
-              <option value={TOUS_STATUTS}>Tous les statuts</option>
-              <option value="ouvert">Ouvertes</option>
-              <option value="resolu">Résolues</option>
-              <option value="justifie">Justifiées</option>
-            </select>
-            <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
-              <option value={TOUS_TYPES}>Tous les types</option>
-              {Object.entries(LIBELLE_TYPE_ANOMALIE).map(([type, libelle]) => (
-                <option key={type} value={type}>
-                  {libelle}
-                </option>
-              ))}
-            </select>
-            {filtreType !== TOUS_TYPES && (
-              <ResolutionMasse
-                cabinetId={cabinetId}
-                utilisateurId={utilisateurId}
-                anomalieIds={idsOuvertesVisibles}
-                onResolues={() => void charger()}
-              />
-            )}
-          </>
+          <select value={filtreStatut} onChange={(e) => setFiltreStatut(e.target.value as StatutAnomalie)}>
+            <option value={TOUS_STATUTS}>Tous les statuts</option>
+            <option value="ouvert">Ouvertes</option>
+            <option value="resolu">Résolues</option>
+            <option value="justifie">Justifiées</option>
+          </select>
+        )}
+        {/* Menu de filtrage par type — construit pour 'historique' (brief
+            v12), étendu à 'cycle' (brief v40) : même state filtreType, même
+            logique de filtrage appliquée dans `visibles` ci-dessus. */}
+        <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)}>
+          <option value={TOUS_TYPES}>Tous les types</option>
+          {Object.entries(LIBELLE_TYPE_ANOMALIE).map(([type, libelle]) => (
+            <option key={type} value={type}>
+              {libelle}
+            </option>
+          ))}
+        </select>
+        {variant !== 'cycle' && filtreType !== TOUS_TYPES && (
+          <ResolutionMasse
+            cabinetId={cabinetId}
+            utilisateurId={utilisateurId}
+            anomalieIds={idsOuvertesVisibles}
+            onResolues={() => void charger()}
+          />
         )}
         <button onClick={() => void charger()} disabled={loading}>
           <RefreshCw size={14} aria-hidden="true" />

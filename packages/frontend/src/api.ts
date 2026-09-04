@@ -285,6 +285,43 @@ export function verifierAvoirs(
   });
 }
 
+// Qualification structurée pour immobilisation_vehicule_tourisme_a_verifier
+// (brief v40) — même principe que qualifierAvoir : ne touche jamais le
+// calcul directement, juste une trace de décision. 'confirme_tourisme'
+// signale qu'une correction externe (Pennylane) est attendue, à repérer
+// ensuite via verifierVehiculeTourisme ; 'pas_tourisme' signifie que le
+// jugement IA était faux, l'anomalie est classée sans suite.
+export function qualifierVehiculeTourisme(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  type: 'confirme_tourisme' | 'pas_tourisme'
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-vehicule-tourisme`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, type }),
+  });
+}
+
+// "Vérifier à nouveau" pour immobilisation_vehicule_tourisme_a_verifier
+// (brief v40) — même principe que verifierAvoirs : ajuste le calcul
+// brouillon existant (côté déductible) si la TVA n'est plus déduite sur
+// la ligne litigieuse.
+export function verifierVehiculeTourisme(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string; utilisateurId: string }
+): Promise<{ anomaliesOuvertes: number; corrections: number }> {
+  return request<{ anomaliesOuvertes: number; corrections: number }>(
+    `/dossiers/${dossierId}/verifier-vehicule-tourisme`,
+    cabinetId,
+    {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }
+  );
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,
