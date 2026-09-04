@@ -25,6 +25,7 @@ import {
   qualifierVehiculeTourisme,
   verifierVehiculeTourismeLegere,
   qualifierImmobilisationPotentielle,
+  qualifierNouveauTiers,
   verifierImmobilisationLegere,
   AnomalieNonQualifiableError,
   ajouterConventionManuelle,
@@ -611,6 +612,34 @@ export function buildApp(pool: Pool): FastifyInstance {
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
         qualifierImmobilisationPotentielle(client, request.params.id, utilisateurId, type)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AnomalieNonQualifiableError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // Qualification pour 'nouveau_tiers_a_verifier' (10/08) : "valide" retire
+  // définitivement ce tiers de la liste des nouveaux à vérifier (jamais
+  // touché au calcul — l'anomalie reste purement informative, une vraie
+  // fraude irait bien au-delà de la seule TVA). "ignore" résout seulement
+  // cette instance précise — le tiers réapparaîtra comme nouveau au
+  // prochain cycle, rien n'ayant été vraiment tranché.
+  app.post<{
+    Params: { id: string };
+    Body: { utilisateurId: string; type: 'valide' | 'ignore' };
+  }>('/anomalies/:id/qualifier-nouveau-tiers', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { utilisateurId, type } = request.body;
+    if (type !== 'valide' && type !== 'ignore') {
+      return reply.code(400).send({ erreur: "type doit être 'valide' ou 'ignore'" });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        qualifierNouveauTiers(client, request.params.id, utilisateurId, type)
       );
       reply.code(204).send();
     } catch (err) {
