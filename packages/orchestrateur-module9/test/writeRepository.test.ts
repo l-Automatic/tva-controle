@@ -40,6 +40,7 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  qualifierNouveauTiers,
   ajouterVehiculeManuel,
   autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
@@ -2379,5 +2380,88 @@ describe('ajouterVehiculeManuel — type de carburant (10/08)', () => {
     const vehicules = await avecClient((client) => listerVehicules(client, dossierId));
     const ajoute = vehicules.find((v) => v.designation === 'Sans carburant précisé');
     expect(ajoute?.typeCarburant).toBeNull();
+  });
+});
+
+describe('qualifierNouveauTiers', () => {
+  it('"valide" marque le tiers dans tiers_reference (valide_manuellement=true)', async () => {
+    const periode = '2025-09-01';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ11', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq11-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie)
+         VALUES ($1, '401TESTVALIDE', 'Fournisseur test', 'nouveau', 0)`,
+        [dossierId]
+      )
+    );
+    const anomalieId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, compte, description, statut)
+           VALUES ($1, $2, 'nouveau_tiers_a_verifier', 'signale', '401TESTVALIDE', 'test', 'ouvert') RETURNING id`,
+          [dossierId, periode]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) => qualifierNouveauTiers(client, anomalieId, utilisateurId, 'valide'));
+
+    const tiers = await avecClient((client) =>
+      client.query<{ valide_manuellement: boolean }>(
+        `SELECT valide_manuellement FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = '401TESTVALIDE'`,
+        [dossierId]
+      )
+    );
+    expect(tiers.rows[0]?.valide_manuellement).toBe(true);
+  });
+
+  it('"ignore" résout l’anomalie mais ne touche jamais tiers_reference', async () => {
+    const periode = '2025-09-02';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ12', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq12-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO tiers_reference (dossier_id, numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie)
+         VALUES ($1, '401TESTIGNORE', 'Fournisseur test 2', 'nouveau', 0)`,
+        [dossierId]
+      )
+    );
+    const anomalieId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, compte, description, statut)
+           VALUES ($1, $2, 'nouveau_tiers_a_verifier', 'signale', '401TESTIGNORE', 'test', 'ouvert') RETURNING id`,
+          [dossierId, periode]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) => qualifierNouveauTiers(client, anomalieId, utilisateurId, 'ignore'));
+
+    const anomalie = await avecClient((client) => client.query<{ statut: string }>(`SELECT statut FROM anomalies WHERE id = $1`, [anomalieId]));
+    expect(anomalie.rows[0]?.statut).toBe('resolu');
+
+    const tiers = await avecClient((client) =>
+      client.query<{ valide_manuellement: boolean }>(
+        `SELECT valide_manuellement FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = '401TESTIGNORE'`,
+        [dossierId]
+      )
+    );
+    expect(tiers.rows[0]?.valide_manuellement).toBe(false); // jamais touché
   });
 });
