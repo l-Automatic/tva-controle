@@ -815,6 +815,34 @@ describe('qualifierEncaissementNonAffecte (compte 471)', () => {
     expect(qualifies.has(6003)).toBe(false);
   });
 
+  it('listerLedgerEntryIdsQualifies avec un type personnalisé (10/08, bug réel corrigé) : jamais mélangé avec un autre type', async () => {
+    const periode = '2025-11-06';
+    const utilisateurId = await creerUtilisateur('Q4b');
+
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, statut, traite_par, date_traitement)
+         VALUES ($1, $2, 'immobilisation_potentielle_non_passee', 'signale', '8001', 'test', 'resolu', $3, now())`,
+        [dossierId, periode, utilisateurId]
+      )
+    );
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, statut)
+         VALUES ($1, $2, 'encaissement_non_affecte', 'bloquant', '8001', 'test', 'ouvert')`,
+        [dossierId, periode]
+      )
+    );
+
+    const qualifiesImmobilisation = await avecClient((client) =>
+      listerLedgerEntryIdsQualifies(client, dossierId, 'immobilisation_potentielle_non_passee')
+    );
+    const qualifiesEncaissement = await avecClient((client) => listerLedgerEntryIdsQualifies(client, dossierId));
+
+    expect(qualifiesImmobilisation.has(8001)).toBe(true);
+    expect(qualifiesEncaissement.has(8001)).toBe(false); // même ledgerEntryId, type différent, jamais mélangé
+  });
+
   it('listerRegularisationsAIntegrer ne retourne que les qualifications "vente" de la période demandée', async () => {
     const [idVente, idHorsVente] = await creerAnomaliesEncaissement('2025-11-05', [
       { montantTTC: 1200, ledgerEntryId: 7001 },
