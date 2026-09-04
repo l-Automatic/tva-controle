@@ -15,7 +15,7 @@ import {
   determinerExigibiliteTva,
   determinerDeductibiliteCarburant,
   detecterImmobilisationManquee,
-  verifierDeductibiliteVehiculeTourisme,
+  identifierCandidatsJugementVehiculeTourisme,
   verifierCoherenceTauxAutoliquidation,
   verifierCoherenceCompteImmobilisation,
   verifierCoherenceTvaHotel,
@@ -44,6 +44,7 @@ import {
   suggererClassificationComptes,
   type SuggestionClassificationCompte,
   jugerLibellesHotel,
+  jugerLibellesVehiculeTourisme,
 } from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
@@ -506,7 +507,46 @@ export async function executerCycleTva(
   );
 
   const anomaliesImmobilisation = detecterImmobilisationManquee(ecritures, { comptesEquipement });
-  const anomaliesVehiculeTourisme = verifierDeductibiliteVehiculeTourisme(ecritures, contexteDossier);
+
+  // Véhicule de tourisme (10/08, refonte demandée par Rami) : remplace
+  // l'ancien signalement systématique de TOUTE ligne 44562 dès qu'un
+  // véhicule de tourisme existait quelque part dans le parc — bien trop
+  // large, signalait même des achats d'immobilisation sans rapport,
+  // indéfiniment. Même schéma que l'hôtel : pré-filtre déterministe
+  // (candidats = 2182 avec TVA réellement déduite, controles-module4),
+  // puis jugement LLM sur le libellé pour trancher tourisme/utilitaire.
+  // Jamais bloquant — un jugement LLM peut se tromper, décision humaine
+  // requise (cf. jugerLibellesVehiculeTourisme).
+  const candidatsVehiculeTourisme = identifierCandidatsJugementVehiculeTourisme(ecritures);
+  const anomaliesVehiculeTourisme: Anomalie[] = [];
+  if (candidatsVehiculeTourisme.length > 0 && typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
+    try {
+      const mistralClientVehicule = new MistralClient({ apiKey: mistralApiKey });
+      const jugementsVehicule = await jugerLibellesVehiculeTourisme(mistralClientVehicule, candidatsVehiculeTourisme);
+      for (const j of jugementsVehicule.filter((j) => j.estTourisme && j.confiance !== 'basse')) {
+        const ecritureConcernee = ecritures.find((e) => e.ligneTva.ledgerEntryId === j.ledgerEntryId);
+        if (!ecritureConcernee) continue;
+        anomaliesVehiculeTourisme.push({
+          type: 'immobilisation_vehicule_tourisme_a_verifier',
+          gravite: 'signale',
+          ledgerEntryId: j.ledgerEntryId,
+          compte: ecritureConcernee.ligneTva.compte,
+          description: `TVA déduite (${ecritureConcernee.ligneTva.debit} €) sur un achat identifié comme véhicule de tourisme (0% déductible, jamais 100%) : "${ecritureConcernee.ligneTva.libelle ?? '(libellé vide)'}". À confirmer.`,
+          details: {
+            libelle: ecritureConcernee.ligneTva.libelle,
+            montantDeduit: ecritureConcernee.ligneTva.debit,
+            confiance: j.confiance,
+            justification: j.justification,
+          },
+        });
+      }
+    } catch (err) {
+      if (process.env.DEBUG_CYCLE) {
+        console.error(`[DEBUG_CYCLE] échec jugement IA (véhicule tourisme) : ${String(err)}`);
+      }
+    }
+  }
+
   const anomaliesCoherenceAutoliquidation =
     compteAutoliquidationDeductible !== undefined
       ? verifierCoherenceTauxAutoliquidation(ecritures, { compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductible })
