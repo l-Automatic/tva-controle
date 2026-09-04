@@ -70,24 +70,28 @@ export async function verifierImmobilisationLegere(
       continue; // toujours au-dessus du seuil sur le même compte : rien de corrigé
     }
 
-    // N'apparaît plus comme candidate : soit reclassée en immobilisation
-    // (transfert à appliquer), soit simplement passée sous le seuil ou le
-    // compte a changé de nature — dans les deux cas, le montant original
-    // signalé n'est plus une charge à tort, on transfère.
+    // Bug réel corrigé (10/08, trouvé par Claude Code en vérifiant le
+    // brief v41) : sans marquer cette anomalie comme traitée après coup,
+    // elle restait 'resolu' indéfiniment — un second "Vérifier à nouveau"
+    // retransférait le même montant une seconde fois, sans qu'aucun
+    // changement réel n'ait eu lieu côté Pennylane. Marquée 'obsolete'
+    // dans la MÊME transaction que le transfert, pour ne jamais risquer
+    // d'appliquer l'un sans l'autre.
     const details = ancienne.details as { lignes?: { montant: number }[] } | null;
     const montantTotal = (details?.lignes ?? []).reduce((s, l) => s + l.montant, 0);
     if (montantTotal <= 0) continue;
 
-    await avecContexteCabinet(pool, params.cabinetId, (client) =>
-      appliquerTransfertImmobilisation(
+    await avecContexteCabinet(pool, params.cabinetId, async (client) => {
+      await appliquerTransfertImmobilisation(
         client,
         params.dossierId,
         params.periodeDebut,
         montantTotal,
         `Immobilisation corrigée (vérifié à nouveau) : ${montantTotal.toFixed(2)} € transférés de la TVA déductible sur charges vers la TVA déductible sur immobilisations.`,
         params.utilisateurId
-      )
-    );
+      );
+      await client.query(`UPDATE anomalies SET statut = 'obsolete' WHERE id = $1`, [ancienne.id]);
+    });
     corrections += 1;
   }
 
