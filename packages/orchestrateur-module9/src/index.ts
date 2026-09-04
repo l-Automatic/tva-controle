@@ -36,6 +36,10 @@ export {
   type ParametresVerificationVehiculeTourisme,
 } from './verifierVehiculeTourismeLegere.js';
 export {
+  verifierImmobilisationLegere,
+  type ParametresVerificationImmobilisation,
+} from './verifierImmobilisationLegere.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
@@ -69,6 +73,8 @@ export {
   appliquerCorrectionAvoir,
   qualifierAvoir,
   qualifierVehiculeTourisme,
+  qualifierImmobilisationPotentielle,
+  appliquerTransfertImmobilisation,
   appliquerCorrectionVehiculeTourisme,
   enregistrerRapprochementPaiementAchat,
   autoResoudreFactureSansCandidat,
