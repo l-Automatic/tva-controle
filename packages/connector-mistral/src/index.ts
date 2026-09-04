@@ -5,6 +5,10 @@ export {
   type SuggestionClassificationCompte,
 } from './classificationComptes.js';
 export { jugerLibellesHotel, type JugementHotel } from './jugementHotel.js';
+export {
+  jugerLibellesVehiculeTourisme,
+  type JugementVehiculeTourisme,
+} from './jugerLibellesVehiculeTourisme.js';
 export { decouvrirMotifNumerotation, type MotifNumerotation } from './decouvrirMotifNumerotation.js';
 export {
   jugerCandidatsPaiementAchat,
