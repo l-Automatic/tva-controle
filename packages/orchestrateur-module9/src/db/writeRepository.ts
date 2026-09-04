@@ -1207,7 +1207,7 @@ export class CalculPlusEnBrouillonError extends Error {
 export async function ajusterMontantCalcul(
   client: PoolClient,
   calculId: string,
-  typeMontant: 'collectee_totale' | 'deductible_totale',
+  typeMontant: TypeMontantAjustable,
   montantOriginal: number,
   montantAjuste: number,
   justification: string,
@@ -1825,4 +1825,66 @@ export async function appliquerCorrectionVehiculeTourisme(
 
   const montantActuel = await calculerMontantActuelPourType(client, calculId, 'deductible_totale');
   await ajusterMontantCalcul(client, calculId, 'deductible_totale', montantActuel, montantActuel + delta, description, utilisateurId);
+}
+
+// ============================================================================
+// IMMOBILISATION POTENTIELLE NON PASSÉE (10/08)
+// ============================================================================
+
+// Qualification structurée : confirme (une vraie immobilisation mal
+// classée, correction externe attendue puis "Vérifier à nouveau") ou
+// ignore (achat correctement en charge, l'anomalie est nulle et non
+// avenue). Jamais d'ajustement direct ici.
+export async function qualifierImmobilisationPotentielle(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  type: 'confirme_immo' | 'ignore'
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = 'immobilisation_potentielle_non_passee' AND statut = 'ouvert'
+     RETURNING dossier_id`,
+    [anomalieId, utilisateurId, JSON.stringify({ type })]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'immobilisation_potentielle_qualifiee',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, type },
+  });
+}
+
+// Transfert (pas un simple delta) : le total déductible ne change jamais
+// dans ce cas précis, seule la répartition entre les deux lignes de la
+// déclaration change — deductible_abs diminue, deductible_immo augmente,
+// du même montant.
+export async function appliquerTransfertImmobilisation(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  montant: number,
+  description: string,
+  utilisateurId: string
+): Promise<void> {
+  if (montant === 0) return;
+
+  const calcul = await client.query<{ id: string }>(
+    `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+    [dossierId, periode]
+  );
+  const calculId = calcul.rows[0]?.id;
+  if (!calculId) return;
+
+  const abs = await calculerMontantActuelPourType(client, calculId, 'deductible_abs');
+  const immo = await calculerMontantActuelPourType(client, calculId, 'deductible_immo');
+
+  await ajusterMontantCalcul(client, calculId, 'deductible_abs', abs, abs - montant, description, utilisateurId);
+  await ajusterMontantCalcul(client, calculId, 'deductible_immo', immo, immo + montant, description, utilisateurId);
 }
