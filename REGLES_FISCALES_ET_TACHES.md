@@ -701,3 +701,20 @@ Le parc obligatoire (renseigné une fois, sert pour tous les cycles
 suivants) est construit et suffisant pour l'instant. Ce raffinement est
 un chantier à part, pas commencé, à reprendre quand on y revient
 explicitement.
+
+---
+
+## Chantier futur — paramètre "dossier à taux unique" (10/08, documenté par Rami, pas commencé)
+
+Idée de Rami : toute la question "quel taux appliquer" (encaissement client
+non lettré, correction de taux appliqué, etc.) ne se pose que pour un
+dossier ayant réellement plusieurs taux de TVA collectée en usage. Pour un
+dossier à taux unique, la question ne devrait jamais se poser — le taux
+est automatiquement celui-là, aucune anomalie de ce genre ne devrait
+jamais se déclencher.
+
+Proposition : un paramètre dossier avec des cases à cocher — quels taux
+(20%, 10%, 5,5%, 2,1%) sont réellement utilisés par ce dossier. Une seule
+case cochée = taux unique, système de coche pour permettre plusieurs
+taux sinon. Pas commencé — à reprendre plus tard, pourrait simplifier
+significativement plusieurs anomalies liées au taux dans ce projet.
