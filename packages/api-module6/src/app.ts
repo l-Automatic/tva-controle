@@ -22,6 +22,8 @@ import {
   qualifierEncaissementNonAffecte,
   qualifierAvoir,
   verifierAvoirsLegere,
+  qualifierVehiculeTourisme,
+  verifierVehiculeTourismeLegere,
   AnomalieNonQualifiableError,
   ajouterConventionManuelle,
   confirmerConvention,
@@ -522,6 +524,67 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
 
     return verifierAvoirsLegere(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+      utilisateurId,
+    });
+  });
+
+  // Qualification structurée pour 'immobilisation_vehicule_tourisme_a_verifier'
+  // (10/08) : confirme (correction externe attendue, puis "Vérifier à
+  // nouveau") ou infirme (jugement IA faux, anomalie nulle et non avenue).
+  // Jamais d'ajustement direct ici — seul "Vérifier à nouveau" le fait.
+  app.post<{
+    Params: { id: string };
+    Body: { utilisateurId: string; type: 'confirme_tourisme' | 'pas_tourisme' };
+  }>('/anomalies/:id/qualifier-vehicule-tourisme', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { utilisateurId, type } = request.body;
+    if (type !== 'confirme_tourisme' && type !== 'pas_tourisme') {
+      return reply.code(400).send({ erreur: "type doit être 'confirme_tourisme' ou 'pas_tourisme'" });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        qualifierVehiculeTourisme(client, request.params.id, utilisateurId, type)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AnomalieNonQualifiableError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // "Vérifier à nouveau" pour immobilisation_vehicule_tourisme_a_verifier
+  // (10/08) — même principe que verifier-avoirs : ajuste le calcul brouillon
+  // existant si la TVA n'est plus déduite sur la ligne signalée, laisse
+  // ouvert sinon.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+  }>('/dossiers/:dossierId/verifier-vehicule-tourisme', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin, utilisateurId } = request.body;
+    if (!periodeDebut || !periodeFin || !utilisateurId) {
+      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierVehiculeTourismeLegere(pool, {
       cabinetId,
       dossierId: request.params.dossierId,
       client,
