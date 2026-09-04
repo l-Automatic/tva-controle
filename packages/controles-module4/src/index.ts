@@ -41,7 +41,10 @@ export {
   type CompteSansTauxAssigne,
   type CompteClientSansTauxAssigne,
 } from './tauxSuggestions.js';
-export { verifierDeductibiliteVehiculeTourisme } from './vehiculeTourisme.js';
+export {
+  identifierCandidatsJugementVehiculeTourisme,
+  type CandidatJugementVehiculeTourisme,
+} from './candidatsVehiculeTourisme.js';
 export {
   verifierCoherenceTauxAutoliquidation,
   type ConfigCoherenceAutoliquidation,
