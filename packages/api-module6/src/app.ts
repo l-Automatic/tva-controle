@@ -26,6 +26,7 @@ import {
   verifierVehiculeTourismeLegere,
   qualifierImmobilisationPotentielle,
   qualifierNouveauTiers,
+  qualifierEncaissementClientTaux,
   verifierImmobilisationLegere,
   AnomalieNonQualifiableError,
   ajouterConventionManuelle,
@@ -640,6 +641,37 @@ export function buildApp(pool: Pool): FastifyInstance {
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
         qualifierNouveauTiers(client, request.params.id, utilisateurId, type)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AnomalieNonQualifiableError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // Qualification pour 'encaissement_client_taux_applique' (10/08) :
+  // "bon_taux" confirme, rien à ajuster. "mauvais_taux" corrige CETTE
+  // ligne précise (nouveauTaux requis) — jamais une règle générale sur le
+  // compte client, un seul encaissement n'en est pas une base suffisante
+  // (demande explicite de Rami, cf. taux-historique-tiers/assigner pour
+  // la vraie règle générale, jamais utilisée ici).
+  app.post<{
+    Params: { id: string };
+    Body: { utilisateurId: string; type: 'bon_taux' | 'mauvais_taux'; nouveauTaux?: number };
+  }>('/anomalies/:id/qualifier-encaissement-client-taux', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { utilisateurId, type, nouveauTaux } = request.body;
+    if (type !== 'bon_taux' && type !== 'mauvais_taux') {
+      return reply.code(400).send({ erreur: "type doit être 'bon_taux' ou 'mauvais_taux'" });
+    }
+    if (type === 'mauvais_taux' && typeof nouveauTaux !== 'number') {
+      return reply.code(400).send({ erreur: 'nouveauTaux (nombre) est requis pour mauvais_taux' });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        qualifierEncaissementClientTaux(client, request.params.id, utilisateurId, type, nouveauTaux)
       );
       reply.code(204).send();
     } catch (err) {
