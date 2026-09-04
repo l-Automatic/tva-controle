@@ -1888,3 +1888,48 @@ export async function appliquerTransfertImmobilisation(
   await ajusterMontantCalcul(client, calculId, 'deductible_abs', abs, abs - montant, description, utilisateurId);
   await ajusterMontantCalcul(client, calculId, 'deductible_immo', immo, immo + montant, description, utilisateurId);
 }
+
+// ============================================================================
+// QUALIFICATION NOUVEAU TIERS (10/08)
+// ============================================================================
+
+// "Valider" retire définitivement ce tiers de la liste des nouveaux à
+// vérifier (valide_manuellement=true sur tiers_reference — cf.
+// chargerContexteDossier, tiersConnus). "Ignorer" résout seulement CETTE
+// anomalie précise, sans jamais toucher tiers_reference : le tiers
+// continuera à réapparaître comme "nouveau" à chaque cycle suivant tant
+// que personne ne le valide explicitement — demande explicite de Rami :
+// rien n'a été vraiment tranché, donc rien n'est mémorisé.
+export async function qualifierNouveauTiers(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  type: 'valide' | 'ignore'
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string; compte: string | null }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = 'nouveau_tiers_a_verifier' AND statut = 'ouvert'
+     RETURNING dossier_id, compte`,
+    [anomalieId, utilisateurId, JSON.stringify({ type })]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+
+  if (type === 'valide' && ligne.compte) {
+    await client.query(
+      `UPDATE tiers_reference SET valide_manuellement = true WHERE dossier_id = $1 AND numero_compte_tiers = $2`,
+      [ligne.dossier_id, ligne.compte]
+    );
+  }
+
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'nouveau_tiers_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, type, compte: ligne.compte },
+  });
+}
