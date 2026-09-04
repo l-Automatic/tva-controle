@@ -506,7 +506,18 @@ export async function executerCycleTva(
     contexteDossier
   );
 
-  const anomaliesImmobilisation = detecterImmobilisationManquee(ecritures, { comptesEquipement });
+  // Bug réel corrigé (10/08) : referencesDejaVerifiees n'était jamais
+  // alimenté ici — un achat de petit équipement déjà résolu/justifié se
+  // resignalait indéfiniment à chaque cycle suivant, jamais mémorisé.
+  // Même raisonnement que pour ledgerEntryIdsQualifies (encaissements),
+  // juste jamais appliqué à cette anomalie précise jusqu'ici.
+  const ledgerEntryIdsImmobilisationVerifies = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerLedgerEntryIdsQualifies(client, params.dossierId, 'immobilisation_potentielle_non_passee')
+  );
+  const anomaliesImmobilisation = detecterImmobilisationManquee(ecritures, {
+    comptesEquipement,
+    referencesDejaVerifiees: ledgerEntryIdsImmobilisationVerifies,
+  });
 
   // Véhicule de tourisme (10/08, refonte demandée par Rami) : remplace
   // l'ancien signalement systématique de TOUTE ligne 44562 dès qu'un
