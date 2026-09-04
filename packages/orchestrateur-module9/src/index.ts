@@ -74,6 +74,7 @@ export {
   qualifierAvoir,
   qualifierVehiculeTourisme,
   qualifierImmobilisationPotentielle,
+  qualifierNouveauTiers,
   appliquerTransfertImmobilisation,
   appliquerCorrectionVehiculeTourisme,
   enregistrerRapprochementPaiementAchat,
