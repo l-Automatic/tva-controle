@@ -360,6 +360,24 @@ export function verifierImmobilisation(
   );
 }
 
+// Qualification structurée pour nouveau_tiers_a_verifier (brief v42) — ne
+// touche jamais le calcul (anomalie purement informative), mais contrairement
+// aux qualifications précédentes les deux options ont un effet dans le temps
+// différent : 'valide' mémorise ce tiers définitivement (ne sera plus jamais
+// signalé, sur aucun cycle futur) ; 'ignore' ne résout que cette occurrence,
+// le même tiers réapparaîtra au prochain cycle qui le touche.
+export function qualifierNouveauTiers(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  type: 'valide' | 'ignore'
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-nouveau-tiers`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, type }),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,

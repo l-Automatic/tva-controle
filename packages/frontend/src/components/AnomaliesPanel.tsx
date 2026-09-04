@@ -7,6 +7,7 @@ import {
   qualifierAvoir,
   qualifierEncaissement,
   qualifierImmobilisation,
+  qualifierNouveauTiers,
   qualifierVehiculeTourisme,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
@@ -46,6 +47,15 @@ const TYPE_VEHICULE_TOURISME_A_VERIFIER = 'immobilisation_vehicule_tourisme_a_ve
 // (deductible_abs -> deductible_immo), déjà affichées séparément par
 // CycleForm.tsx (LIBELLE_CATEGORIE) — rien à changer de ce côté.
 const TYPE_IMMOBILISATION_A_VERIFIER = 'immobilisation_potentielle_non_passee';
+
+// Qualification structurée pour nouveau_tiers_a_verifier (brief v42) — plus
+// simple que les trois précédentes (pas de "Vérifier à nouveau", anomalie
+// purement informative) mais avec une nuance de persistance entre les deux
+// boutons : 'valide' mémorise le tiers définitivement (tiers_reference.
+// valide_manuellement, lu par tiersConnus à chaque cycle futur), 'ignore' ne
+// résout que cette occurrence — le même tiers réapparaîtra au prochain
+// cycle qui le touche, volontairement (rien n'a été tranché sur le fond).
+const TYPE_NOUVEAU_TIERS_A_VERIFIER = 'nouveau_tiers_a_verifier';
 
 // 11 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
@@ -773,6 +783,58 @@ function VerificationImmobilisation({
   );
 }
 
+// Qualification structurée pour nouveau_tiers_a_verifier (brief v42) — pas
+// de "Vérifier à nouveau" ici (anomalie purement informative, jamais liée
+// au calcul), juste les deux boutons. "Ignorer" porte un texte secondaire
+// explicite : contrairement à "Valider" (mémorisé définitivement), il ne
+// résout que cette occurrence précise — le même tiers redéclenchera
+// l'anomalie au prochain cycle qui le touche.
+function QualificationNouveauTiers({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<'valide' | 'ignore' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleQualifier(type: 'valide' | 'ignore') {
+    setSubmitting(type);
+    setError(null);
+    try {
+      await qualifierNouveauTiers(cabinetId, anomalie.id, utilisateurId, type);
+      notifier(type === 'valide' ? 'Tiers validé — ne sera plus signalé' : 'Ignoré pour cette occurrence');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="actions">
+        <button onClick={() => void handleQualifier('valide')} disabled={submitting !== null}>
+          <ICONE_ACTION.valider size={14} aria-hidden="true" />
+          {submitting === 'valide' ? '…' : 'Valider le tiers'}
+        </button>
+        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+          {submitting === 'ignore' ? '…' : 'Ignorer'}
+        </button>
+      </div>
+      <p className="reference">Ignorer : reviendra au prochain cycle si rien ne change. Valider : ne sera plus jamais signalé.</p>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -833,6 +895,7 @@ function AnomalieRow({
   const estAvoirAVerifier = anomalie.typeAnomalie === TYPE_AVOIR_A_VERIFIER;
   const estVehiculeTourismeAVerifier = anomalie.typeAnomalie === TYPE_VEHICULE_TOURISME_A_VERIFIER;
   const estImmobilisationAVerifier = anomalie.typeAnomalie === TYPE_IMMOBILISATION_A_VERIFIER;
+  const estNouveauTiersAVerifier = anomalie.typeAnomalie === TYPE_NOUVEAU_TIERS_A_VERIFIER;
   // Particularité de ce type (brief v41) : qualifier() passe IMMÉDIATEMENT
   // l'anomalie en 'resolu', y compris pour 'confirme_immo' — contrairement
   // à avoir_a_verifier/vehicule_tourisme_a_verifier, verifierImmobilisationLegere
@@ -982,6 +1045,13 @@ function AnomalieRow({
               utilisateurId={utilisateurId}
               onChanged={onChanged}
             />
+          ) : estNouveauTiersAVerifier ? (
+            <QualificationNouveauTiers
+              anomalie={anomalie}
+              cabinetId={cabinetId}
+              utilisateurId={utilisateurId}
+              onChanged={onChanged}
+            />
           ) : (
             <div className="actions">
               <input
@@ -1006,6 +1076,7 @@ function AnomalieRow({
           !estAvoirAVerifier &&
           !estVehiculeTourismeAVerifier &&
           !estImmobilisationAVerifier &&
+          !estNouveauTiersAVerifier &&
           error && <p className="error">{error}</p>}
       </Accordion>
     </li>
