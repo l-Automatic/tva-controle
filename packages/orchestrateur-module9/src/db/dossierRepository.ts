@@ -174,9 +174,17 @@ export async function chargerContexteDossier(client: PoolClient, dossierId: stri
      WHERE dossier_id = $1 AND statut = 'confirmed' AND type_bien IS NOT NULL`,
     [dossierId]
   );
-  const tiersRes = await client.query(`SELECT numero_compte_tiers FROM tiers_reference WHERE dossier_id = $1`, [
-    dossierId,
-  ]);
+  // 10/08, bug réel corrigé : filtre désormais sur valide_manuellement —
+  // sans ce filtre, N'IMPORTE QUEL tiers déjà vu une seule fois (même
+  // jamais qualifié, même ignoré) était considéré "connu" dès le cycle
+  // suivant, quoi que le collaborateur en ait fait. Demande explicite de
+  // Rami : seul un "Valider le tiers" explicite retire un tiers de la
+  // liste des nouveaux à vérifier — "Ignorer" (ou l'absence de décision)
+  // doit le faire réapparaître à chaque cycle.
+  const tiersRes = await client.query(
+    `SELECT numero_compte_tiers FROM tiers_reference WHERE dossier_id = $1 AND valide_manuellement = true`,
+    [dossierId]
+  );
   // Chantier B : taux historique par compte CLIENT (411xxx), table séparée
   // (cf. migration 009) mais fusionnée ici dans le même tauxHistorique[]
   // que les taux par compte produit/charge — TauxHistorique.compteOuTiers
