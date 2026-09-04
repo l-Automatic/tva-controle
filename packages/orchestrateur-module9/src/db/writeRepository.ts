@@ -212,7 +212,15 @@ export class AnomalieNonQualifiableError extends Error {
 // définition correspond bien à ce que le frontend affiche déjà comme
 // "TVA collectée totale" (calculée côté frontend depuis les lignes brutes,
 // jamais vérifié directement contre cette définition backend).
-export type TypeMontantAjustable = 'collectee_totale' | 'deductible_totale' | 'deductible_abs' | 'deductible_immo';
+export type TypeMontantAjustable =
+  | 'collectee_totale'
+  | 'deductible_totale'
+  | 'deductible_abs'
+  | 'deductible_immo'
+  | 'collectee_20'
+  | 'collectee_10'
+  | 'collectee_5_5'
+  | 'collectee_2_1';
 
 const CATEGORIES_PAR_TYPE_MONTANT: Record<TypeMontantAjustable, string[]> = {
   collectee_totale: ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due'],
@@ -223,6 +231,15 @@ const CATEGORIES_PAR_TYPE_MONTANT: Record<TypeMontantAjustable, string[]> = {
   // répartition entre les deux catégories change.
   deductible_abs: ['deductible_abs'],
   deductible_immo: ['deductible_immo'],
+  // Élargi une troisième fois (10/08) — transfert entre DEUX TAUX de
+  // collecte pour encaissement_client_taux_applique (ex: collectee_20 ->
+  // collectee_10) : jamais une règle générale sur le compte client (Rami :
+  // un seul encaissement n'en est pas une base suffisante), juste cette
+  // ligne précise.
+  collectee_20: ['collectee_20'],
+  collectee_10: ['collectee_10'],
+  collectee_5_5: ['collectee_5_5'],
+  collectee_2_1: ['collectee_2_1'],
 };
 
 // Généralisée (10/08) — gérait jusqu'ici uniquement collectee_totale
@@ -1931,5 +1948,125 @@ export async function qualifierNouveauTiers(
     acteur: 'utilisateur',
     acteurUtilisateurId: utilisateurId,
     details: { anomalieId, type, compte: ligne.compte },
+  });
+}
+
+// ============================================================================
+// ENCAISSEMENT CLIENT — CORRECTION DE TAUX (10/08)
+// ============================================================================
+
+const CATEGORIE_PAR_TAUX_AJUSTEMENT: Record<number, TypeMontantAjustable> = {
+  20: 'collectee_20',
+  10: 'collectee_10',
+  5.5: 'collectee_5_5',
+  2.1: 'collectee_2_1',
+};
+
+// Transfert (jamais un delta sur le total) entre DEUX taux de collecte —
+// ex: collectee_20 -> collectee_10 — pour corriger le taux appliqué sur
+// UNE écriture précise. Ne touche jamais taux_historique_tiers (une seule
+// écriture n'est pas une base suffisante pour une règle générale sur tout
+// le compte client — demande explicite de Rami) : cette correction ne
+// concerne que cette ligne, jamais mémorisée pour les prochaines.
+export async function appliquerCorrectionTauxCollecte(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  montantTTC: number,
+  ancienTaux: number,
+  nouveauTaux: number,
+  utilisateurId: string
+): Promise<void> {
+  const categorieAncienne = CATEGORIE_PAR_TAUX_AJUSTEMENT[ancienTaux];
+  const categorieNouvelle = CATEGORIE_PAR_TAUX_AJUSTEMENT[nouveauTaux];
+  if (!categorieAncienne || !categorieNouvelle) {
+    throw new Error(`Taux non reconnu (attendu : 20, 10, 5.5 ou 2.1) — reçu ${ancienTaux} -> ${nouveauTaux}.`);
+  }
+  if (ancienTaux === nouveauTaux) return; // rien à corriger
+
+  const calcul = await client.query<{ id: string }>(
+    `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+    [dossierId, periode]
+  );
+  const calculId = calcul.rows[0]?.id;
+  if (!calculId) return;
+
+  // TTC -> TVA, même formule que integrerRegularisations (calcul-module7) :
+  // montant reçu = HT + TVA = HT * (1 + taux/100).
+  const ancienneTva = montantTTC - montantTTC / (1 + ancienTaux / 100);
+  const nouvelleTva = montantTTC - montantTTC / (1 + nouveauTaux / 100);
+
+  const montantAncienneCategorie = await calculerMontantActuelPourType(client, calculId, categorieAncienne);
+  const montantNouvelleCategorie = await calculerMontantActuelPourType(client, calculId, categorieNouvelle);
+
+  const description = `Taux corrigé sur un encaissement client : ${ancienTaux}% → ${nouveauTaux}%, ${nouvelleTva.toFixed(2)} € transférés entre les deux catégories de taux (ligne précise, jamais une règle générale sur le compte).`;
+
+  await ajusterMontantCalcul(
+    client,
+    calculId,
+    categorieAncienne,
+    montantAncienneCategorie,
+    montantAncienneCategorie - ancienneTva,
+    description,
+    utilisateurId
+  );
+  await ajusterMontantCalcul(
+    client,
+    calculId,
+    categorieNouvelle,
+    montantNouvelleCategorie,
+    montantNouvelleCategorie + nouvelleTva,
+    description,
+    utilisateurId
+  );
+}
+
+// Qualification : "bon_taux" confirme simplement (rien à ajuster, le taux
+// appliqué automatiquement était déjà correct). "mauvais_taux" corrige
+// CETTE ligne précise via appliquerCorrectionTauxCollecte — jamais
+// taux_historique_tiers.
+export async function qualifierEncaissementClientTaux(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  type: 'bon_taux' | 'mauvais_taux',
+  nouveauTaux?: number
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string; periode: string; details: unknown }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = 'encaissement_client_taux_applique' AND statut = 'ouvert'
+     RETURNING dossier_id, periode, details`,
+    [anomalieId, utilisateurId, JSON.stringify({ type, nouveauTaux: nouveauTaux ?? null })]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+
+  if (type === 'mauvais_taux') {
+    if (nouveauTaux === undefined) {
+      throw new Error('nouveauTaux est requis pour qualifier un taux comme incorrect.');
+    }
+    const details = ligne.details as { montantTTC?: number; tauxApplique?: number } | null;
+    if (details?.montantTTC !== undefined && details?.tauxApplique !== undefined) {
+      await appliquerCorrectionTauxCollecte(
+        client,
+        ligne.dossier_id,
+        ligne.periode,
+        details.montantTTC,
+        details.tauxApplique,
+        nouveauTaux,
+        utilisateurId
+      );
+    }
+  }
+
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'encaissement_client_taux_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, type, nouveauTaux: nouveauTaux ?? null },
   });
 }
