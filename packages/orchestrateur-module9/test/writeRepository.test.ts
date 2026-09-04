@@ -40,6 +40,8 @@ import {
   DernierAdminCabinetError,
   synchroniserDossiersCabinet,
   configurerDossierOnboarding,
+  qualifierEncaissementClientTaux,
+  appliquerCorrectionTauxCollecte,
   qualifierNouveauTiers,
   ajouterVehiculeManuel,
   autoResoudreFactureSansCandidat,
@@ -2463,5 +2465,96 @@ describe('qualifierNouveauTiers', () => {
       )
     );
     expect(tiers.rows[0]?.valide_manuellement).toBe(false); // jamais touché
+  });
+});
+
+describe('appliquerCorrectionTauxCollecte', () => {
+  it('transfère le bon montant entre deux catégories de taux, sans jamais toucher taux_historique_tiers', async () => {
+    const periode = '2025-10-01';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ13', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq13-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 500, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2025-10-31']
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES ($1, 'collectee_20', 1000, 10)`,
+        [calculId]
+      )
+    );
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES ($1, 'collectee_10', 200, 3)`,
+        [calculId]
+      )
+    );
+
+    // 600€ TTC, appliqué à tort à 20% (100€ de TVA), devrait être 10% (54.55€ de TVA)
+    const montantTTC = 600;
+    await avecClient((client) =>
+      appliquerCorrectionTauxCollecte(client, dossierId, periode, montantTTC, 20, 10, utilisateurId)
+    );
+
+    const lignes = await avecClient((client) =>
+      client.query<{ type_montant: string; montant_ajuste: string }>(
+        `SELECT type_montant, montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 ORDER BY type_montant`,
+        [calculId]
+      )
+    );
+    const c20 = lignes.rows.find((r) => r.type_montant === 'collectee_20');
+    const c10 = lignes.rows.find((r) => r.type_montant === 'collectee_10');
+
+    const ancienneTva = montantTTC - montantTTC / 1.2; // 100
+    const nouvelleTva = montantTTC - montantTTC / 1.1; // ~54.545...
+
+    expect(Number.parseFloat(c20!.montant_ajuste)).toBeCloseTo(1000 - ancienneTva);
+    expect(Number.parseFloat(c10!.montant_ajuste)).toBeCloseTo(200 + nouvelleTva);
+
+    const tauxTiers = await avecClient((client) =>
+      client.query(`SELECT * FROM taux_historique_tiers WHERE dossier_id = $1`, [dossierId])
+    );
+    expect(tauxTiers.rows).toEqual([]); // jamais touché, confirmé
+  });
+});
+
+describe('qualifierEncaissementClientTaux', () => {
+  it('"bon_taux" résout sans jamais ajuster le calcul', async () => {
+    const periode = '2025-10-02';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ14', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq14-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+
+    const anomalieId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, description, statut, details)
+           VALUES ($1, $2, 'encaissement_client_taux_applique', 'signale', 'test', 'ouvert', $3::jsonb) RETURNING id`,
+          [dossierId, periode, JSON.stringify({ montantTTC: 600, tauxApplique: 20 })]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) => qualifierEncaissementClientTaux(client, anomalieId, utilisateurId, 'bon_taux'));
+
+    const anomalie = await avecClient((client) => client.query<{ statut: string }>(`SELECT statut FROM anomalies WHERE id = $1`, [anomalieId]));
+    expect(anomalie.rows[0]?.statut).toBe('resolu');
   });
 });
