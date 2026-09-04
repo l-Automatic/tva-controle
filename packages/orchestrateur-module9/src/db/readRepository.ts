@@ -66,12 +66,21 @@ export async function listerAnomalies(
 // encaissement déjà traité par un humain lors d'un cycle précédent : sans ce
 // filtre, la relance d'un cycle re-bloquerait systématiquement sur les mêmes
 // pièces déjà qualifiées, dans une boucle sans issue.
-export async function listerLedgerEntryIdsQualifies(client: PoolClient, dossierId: string): Promise<Set<number>> {
+// Généralisée (10/08, bug réel corrigé) — gérait jusqu'ici uniquement
+// encaissement_non_affecte, en dur. Élargie pour couvrir aussi
+// immobilisation_potentielle_non_passee : referencesDejaVerifiees n'était
+// jamais alimenté dans son appel réel (pipeline.ts), un même achat se
+// resignalait donc indéfiniment à chaque cycle, même après résolution.
+export async function listerLedgerEntryIdsQualifies(
+  client: PoolClient,
+  dossierId: string,
+  typeAnomalie: string = 'encaissement_non_affecte'
+): Promise<Set<number>> {
   const res = await client.query<{ reference_piece: string }>(
     `SELECT reference_piece FROM anomalies
-     WHERE dossier_id = $1 AND type_anomalie = 'encaissement_non_affecte'
+     WHERE dossier_id = $1 AND type_anomalie = $2
        AND statut IN ('resolu', 'justifie') AND reference_piece IS NOT NULL`,
-    [dossierId]
+    [dossierId, typeAnomalie]
   );
   return new Set(res.rows.map((r) => Number(r.reference_piece)));
 }
