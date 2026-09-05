@@ -2070,3 +2070,72 @@ export async function qualifierEncaissementClientTaux(
     details: { anomalieId, type, nouveauTaux: nouveauTaux ?? null },
   });
 }
+
+// ============================================================================
+// TVA HÔTEL — deux anomalies distinctes, même correction sous-jacente (10/08)
+// ============================================================================
+
+// tva_hotel_a_tort (bloquant, déterministe) : un seul bouton, jamais de
+// "c'est faux" — aucune ambiguïté possible (compte fournisseur dédié aux
+// hôtels), rien d'autre à faire que confirmer que la correction a bien
+// eu lieu. Retire le montant wrongly déduit de deductible_abs une fois
+// constaté corrigé, marque obsolete pour ne jamais rejouer (même bug que
+// celui trouvé sur l'immobilisation, corrigé ici dès le départ).
+export async function appliquerCorrectionTvaHotel(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  montantTva: number,
+  description: string,
+  utilisateurId: string
+): Promise<void> {
+  if (montantTva <= 0) return;
+
+  const calcul = await client.query<{ id: string }>(
+    `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+    [dossierId, periode]
+  );
+  const calculId = calcul.rows[0]?.id;
+  if (!calculId) return;
+
+  const montantActuel = await calculerMontantActuelPourType(client, calculId, 'deductible_abs');
+  await ajusterMontantCalcul(
+    client,
+    calculId,
+    'deductible_abs',
+    montantActuel,
+    montantActuel - montantTva,
+    description,
+    utilisateurId
+  );
+}
+
+// Qualification pour tva_hotel_a_verifier uniquement (jugement IA, donc
+// une vraie possibilité d'erreur) : "confirme" ou "ignore" (le jugement
+// IA était faux). tva_hotel_a_tort (déterministe) n'a jamais besoin de
+// cette qualification — juste "Vérifier à nouveau" directement.
+export async function qualifierTvaHotel(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  type: 'confirme' | 'ignore'
+): Promise<void> {
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = 'tva_hotel_a_verifier' AND statut = 'ouvert'
+     RETURNING dossier_id`,
+    [anomalieId, utilisateurId, JSON.stringify({ type })]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'tva_hotel_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, type },
+  });
+}
