@@ -2470,7 +2470,7 @@ describe('qualifierNouveauTiers', () => {
 
 describe('appliquerCorrectionTauxCollecte', () => {
   it('transfère le bon montant entre deux catégories de taux, sans jamais toucher taux_historique_tiers', async () => {
-    const periode = '2025-10-01';
+    const periode = '2026-03-01';
     const utilisateurId = (
       await avecClient((client) =>
         client.query<{ id: string }>(
@@ -2485,7 +2485,7 @@ describe('appliquerCorrectionTauxCollecte', () => {
         client.query<{ id: string }>(
           `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
            VALUES ($1, $2, $3, 500, 'a_decaisser') RETURNING id`,
-          [dossierId, periode, '2025-10-31']
+          [dossierId, periode, '2026-03-31']
         )
       )
     ).rows[0]!.id;
