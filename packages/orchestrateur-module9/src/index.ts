@@ -77,6 +77,8 @@ export {
   qualifierNouveauTiers,
   qualifierEncaissementClientTaux,
   appliquerCorrectionTauxCollecte,
+  appliquerCorrectionTvaHotel,
+  qualifierTvaHotel,
   appliquerTransfertImmobilisation,
   appliquerCorrectionVehiculeTourisme,
   enregistrerRapprochementPaiementAchat,
