@@ -498,6 +498,32 @@ export interface AjustementCalcul {
   createdAt: string;
 }
 
+// Détail persistant par catégorie (brief v44) — comble un trou réel : les
+// transferts entre deux catégories précises (immobilisation v41, taux de
+// collecte v43) n'avaient jusqu'ici aucune trace visible après coup, en
+// dehors du tableau transitoire de CycleForm.tsx affiché juste après un
+// "Lancer le cycle" (lignes brutes du pipeline, jamais les ajustements
+// ultérieurs). GET /calculs/:calculId/detail retourne toujours ces 8
+// lignes, même à 0 — `ajuste: true` signifie que le montant reflète un
+// ajustement manuel plutôt que la simple somme brute du cycle.
+export const CATEGORIES_DETAIL_CALCUL = [
+  'collectee_20',
+  'collectee_10',
+  'collectee_5_5',
+  'collectee_2_1',
+  'deductible_abs',
+  'deductible_immo',
+  'autoliquidation_due',
+  'autoliquidation_deductible',
+] as const;
+export type CategorieDetailCalcul = (typeof CATEGORIES_DETAIL_CALCUL)[number];
+
+export interface DetailCalculLigne {
+  categorie: CategorieDetailCalcul;
+  montant: number;
+  ajuste: boolean;
+}
+
 // --- Authentification (brief v25) — remplace l'ancienne identité saisie à
 // la main (cabinetId/utilisateurId tapés dans le volet latéral) par une
 // vraie connexion email/mot de passe. Le jeton dure 12h, aucun

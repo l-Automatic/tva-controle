@@ -5,6 +5,7 @@ import type {
   Calcul,
   CompteACategoriser,
   ConfigurationOnboarding,
+  DetailCalculLigne,
   Dossier,
   DossierComplet,
   ElementATraiter,
@@ -398,6 +399,36 @@ export function qualifierEncaissementClientTaux(
   });
 }
 
+// Qualification structurée pour tva_hotel_a_verifier (brief v44) — jugement
+// IA, signalé. Jamais utilisée pour tva_hotel_a_tort (déterministe,
+// bloquant, aucune ambiguïté possible : un seul bouton "Vérifier à
+// nouveau", pas de qualification préalable).
+export function qualifierTvaHotel(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  type: 'confirme' | 'ignore'
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-tva-hotel`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, type }),
+  });
+}
+
+// "Vérifier à nouveau" pour les DEUX types tva_hotel_a_tort et
+// tva_hotel_a_verifier (brief v44) — même route, gère les deux en un seul
+// appel côté backend.
+export function verifierTvaHotel(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string; utilisateurId: string }
+): Promise<{ anomaliesOuvertes: number; corrections: number }> {
+  return request<{ anomaliesOuvertes: number; corrections: number }>(`/dossiers/${dossierId}/verifier-tva-hotel`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,
@@ -696,6 +727,17 @@ export function rejeterCalcul(
 // calculs encore 'brouillon' côté backend (409 sinon).
 export function fetchAjustementsCalcul(cabinetId: string, calculId: string): Promise<AjustementCalcul[]> {
   return request<AjustementCalcul[]>(`/calculs/${calculId}/ajustements`, cabinetId);
+}
+
+// Détail persistant par catégorie (brief v44) — toujours 8 lignes, même à
+// 0 ; `ajuste: true` signifie que le montant reflète un ajustement manuel
+// (avoir, véhicule tourisme, immobilisation, taux collecte...) plutôt que
+// la simple somme brute du cycle. Comble le trou laissé par
+// fetchAjustementsCalcul ci-dessus, qui ne connaît que les deux totaux
+// agrégés collectee_totale/deductible_totale — invisible pour un
+// transfert entre deux catégories précises.
+export function fetchDetailCalcul(cabinetId: string, calculId: string): Promise<DetailCalculLigne[]> {
+  return request<DetailCalculLigne[]>(`/calculs/${calculId}/detail`, cabinetId);
 }
 
 export function ajusterMontantCalcul(

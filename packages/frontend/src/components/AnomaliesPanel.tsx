@@ -9,12 +9,14 @@ import {
   qualifierEncaissementClientTaux,
   qualifierImmobilisation,
   qualifierNouveauTiers,
+  qualifierTvaHotel,
   qualifierVehiculeTourisme,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
   verifierAvoirs,
   verifierComptesNonReconnus,
   verifierImmobilisation,
+  verifierTvaHotel,
   verifierVehiculeTourisme,
 } from '../api';
 import { toDateOnly } from '../dateUtils';
@@ -66,6 +68,16 @@ const TYPE_NOUVEAU_TIERS_A_VERIFIER = 'nouveau_tiers_a_verifier';
 // client (écran "Taux historique" séparé), l'anomalie se représentera sur
 // un futur encaissement non lettré du même client si rien n'est changé là.
 const TYPE_ENCAISSEMENT_CLIENT_TAUX = 'encaissement_client_taux_applique';
+
+// TVA hôtel (brief v44) — deux anomalies, deux circuits différents pour le
+// même contrôle de cohérence. tva_hotel_a_tort (déterministe, bloquant,
+// compte fournisseur dédié aux hôtels) : aucune ambiguïté possible, donc
+// aucune qualification — seulement "Vérifier à nouveau". tva_hotel_a_verifier
+// (jugement IA, signalé) : qualification structurée d'abord (comme
+// vehicule_tourisme/immobilisation), puis le MÊME bouton "Vérifier à
+// nouveau" une fois confirmé — une seule route backend gère les deux types.
+const TYPE_TVA_HOTEL_A_TORT = 'tva_hotel_a_tort';
+const TYPE_TVA_HOTEL_A_VERIFIER = 'tva_hotel_a_verifier';
 
 // 11 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
@@ -946,6 +958,138 @@ function QualificationEncaissementClientTaux({
   );
 }
 
+// Qualification structurée pour tva_hotel_a_verifier uniquement (brief
+// v44) — jamais utilisée pour tva_hotel_a_tort. Même principe que
+// QualificationVehiculeTourisme/QualificationImmobilisation : ne touche
+// jamais le calcul, juste une trace de décision, avant "Vérifier à
+// nouveau" ci-dessous.
+function QualificationTvaHotel({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<'confirme' | 'ignore' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleQualifier(type: 'confirme' | 'ignore') {
+    setSubmitting(type);
+    setError(null);
+    try {
+      await qualifierTvaHotel(cabinetId, anomalie.id, utilisateurId, type);
+      notifier(type === 'confirme' ? 'TVA hôtel à vérifier confirmée' : 'Ignoré — jugement IA écarté');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="actions">
+        <button onClick={() => void handleQualifier('confirme')} disabled={submitting !== null}>
+          <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
+          {submitting === 'confirme' ? '…' : 'Confirmer'}
+        </button>
+        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+          {submitting === 'ignore' ? '…' : 'Ignorer'}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
+// "Vérifier à nouveau" partagé par tva_hotel_a_tort ET tva_hotel_a_verifier
+// (brief v44) — même route backend, gère les deux types en un seul appel.
+// Pour tva_hotel_a_tort, affiché directement sans qualification préalable
+// (cf. gating dans AnomalieRow) ; pour tva_hotel_a_verifier, affiché
+// seulement une fois 'confirme' (même particularité que
+// VerificationImmobilisation, brief v41).
+function VerificationTvaHotel({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomaliesOuvertes, corrections } = await verifierTvaHotel(cabinetId, dossierId, {
+        periodeDebut,
+        periodeFin,
+        utilisateurId,
+      });
+      notifier(
+        corrections > 0
+          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
+          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) TVA hôtel toujours ouverte(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -1019,6 +1163,23 @@ function AnomalieRow({
       ? (anomalie.resolution as { type?: string }).type
       : null;
   const afficherVerificationImmobilisation = estImmobilisationAVerifier && (estOuverte || resolutionImmoType === 'confirme_immo');
+  const estTvaHotelATort = anomalie.typeAnomalie === TYPE_TVA_HOTEL_A_TORT;
+  const estTvaHotelAVerifier = anomalie.typeAnomalie === TYPE_TVA_HOTEL_A_VERIFIER;
+  // Contrairement à immobilisation_potentielle_non_passee (brief v41), le
+  // brief est explicite ici : "deux boutons D'ABORD... PUIS le même bouton
+  // 'Vérifier à nouveau' une fois confirmé" — pour tva_hotel_a_verifier,
+  // "Vérifier à nouveau" n'apparaît qu'après 'confirme' (jamais avant, et
+  // jamais après 'ignore', rien à corriger). Cohérent avec le backend :
+  // verifierTvaHotelLegere ne rejoue le contrôle sur les anomalies
+  // tva_hotel_a_verifier que si statut='resolu' (déjà confirmées), jamais
+  // sur les 'ouvert'. tva_hotel_a_tort n'a lui aucune qualification —
+  // "Vérifier à nouveau" est visible dès que l'anomalie est ouverte.
+  const resolutionTvaHotelType =
+    estTvaHotelAVerifier && anomalie.resolution && typeof anomalie.resolution === 'object'
+      ? (anomalie.resolution as { type?: string }).type
+      : null;
+  const afficherVerificationTvaHotel =
+    (estTvaHotelATort && estOuverte) || (estTvaHotelAVerifier && resolutionTvaHotelType === 'confirme');
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -1133,8 +1294,21 @@ function AnomalieRow({
           </div>
         )}
 
+        {afficherVerificationTvaHotel && (
+          <div className="actions">
+            <VerificationTvaHotel
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
+
         {estOuverte &&
-          (estEncaissement ? (
+          (estTvaHotelATort ? null : estEncaissement ? (
             <EncaissementQualification
               anomalie={anomalie}
               cabinetId={cabinetId}
@@ -1171,6 +1345,8 @@ function AnomalieRow({
               utilisateurId={utilisateurId}
               onChanged={onChanged}
             />
+          ) : estTvaHotelAVerifier ? (
+            <QualificationTvaHotel anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
           ) : (
             <div className="actions">
               <input
@@ -1197,6 +1373,8 @@ function AnomalieRow({
           !estImmobilisationAVerifier &&
           !estNouveauTiersAVerifier &&
           !estEncaissementClientTaux &&
+          !estTvaHotelATort &&
+          !estTvaHotelAVerifier &&
           error && <p className="error">{error}</p>}
       </Accordion>
     </li>

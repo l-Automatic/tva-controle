@@ -33,7 +33,7 @@ interface CycleFormProps {
   onParcVehiculesManquant?: (() => void) | undefined;
 }
 
-const LIBELLE_CATEGORIE: Record<string, string> = {
+export const LIBELLE_CATEGORIE: Record<string, string> = {
   collectee_20: 'Collectée 20 %',
   collectee_10: 'Collectée 10 %',
   collectee_5_5: 'Collectée 5,5 %',

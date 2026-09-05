@@ -763,6 +763,14 @@ button:focus-visible {
   color: var(--neutral);
 }
 
+/* Ligne de détail de calcul dont le montant reflète un ajustement manuel
+   plutôt que la somme brute du cycle (brief v44). */
+.badge-ajuste {
+  margin-left: 0.4rem;
+  background: var(--warning-soft-bg);
+  color: var(--warning);
+}
+
 .niveau-confiance-nouveau {
   background: var(--neutral-soft-bg);
   color: var(--neutral);

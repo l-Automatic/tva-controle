@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { ApiError, fetchAjustementsCalcul, fetchCalculs, rejeterCalcul, validerCalcul } from '../api';
+import { ApiError, fetchAjustementsCalcul, fetchCalculs, fetchDetailCalcul, rejeterCalcul, validerCalcul } from '../api';
 import { formatDate } from '../dateUtils';
 import { ICONE_ACTION } from '../icons';
 import { useToast } from '../toast';
-import type { AjustementCalcul, Calcul, StatutCalcul } from '../types';
+import type { AjustementCalcul, Calcul, DetailCalculLigne, StatutCalcul } from '../types';
 import { BadgeStatut } from './BadgeStatut';
+import { LIBELLE_CATEGORIE } from './CycleForm';
 
 interface CalculsPanelProps {
   cabinetId: string;
@@ -64,6 +65,7 @@ export function CalculRow({
   const [error, setError] = useState<string | null>(null);
   const [conflit, setConflit] = useState(false);
   const [ajustements, setAjustements] = useState<AjustementCalcul[]>([]);
+  const [detailLignes, setDetailLignes] = useState<DetailCalculLigne[]>([]);
   const notifier = useToast();
 
   // Recalcul pur affichage (brief v23) : le formulaire d'ajustement lui-même
@@ -78,6 +80,20 @@ export function CalculRow({
       fetchAjustementsCalcul(cabinetId, calcul.id)
         .then(setAjustements)
         .catch(() => setAjustements([]));
+    }
+  }, [cabinetId, calcul.id, refreshKey]);
+
+  // Détail persistant par catégorie (brief v44) — comble un trou réel :
+  // sans ceci, un transfert entre deux catégories précises (immobilisation
+  // v41, taux de collecte v43) n'avait plus aucune trace visible dès que le
+  // tableau transitoire de CycleForm.tsx (affiché seulement juste après
+  // "Lancer le cycle") disparaissait de l'écran — un collaborateur qui
+  // rechargeait la page ne voyait plus jamais le résultat de sa correction.
+  useEffect(() => {
+    if (cabinetId && calcul.id) {
+      fetchDetailCalcul(cabinetId, calcul.id)
+        .then(setDetailLignes)
+        .catch(() => setDetailLignes([]));
     }
   }, [cabinetId, calcul.id, refreshKey]);
 
@@ -161,6 +177,27 @@ export function CalculRow({
         <strong>{formatMontant(tvaNetteAffichee)}</strong>
         {aUnAjustementActif && <span className="reference"> (montants ajustés manuellement)</span>}
       </p>
+      {detailLignes.length > 0 && (
+        <table className="table-lignes-calcul">
+          <thead>
+            <tr>
+              <th>Catégorie</th>
+              <th>Montant</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detailLignes.map((d) => (
+              <tr key={d.categorie}>
+                <td>{LIBELLE_CATEGORIE[d.categorie] ?? d.categorie}</td>
+                <td>
+                  {formatMontant(d.montant)}
+                  {d.ajuste && <span className="badge badge-ajuste">Ajusté</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {estBrouillon && estIncomplet && <MessageCalculIncomplet nombre={calcul.anomaliesBloquantesOuvertes} />}
 
       {estBrouillon ? (
