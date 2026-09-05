@@ -116,6 +116,8 @@ export {
   listerTauxHistorique,
   listerTauxHistoriqueTiers,
   listerCalculs,
+  chargerDetailCalcul,
+  type LigneDetailCalcul,
   listerAuditLog,
   listerAuditLogPourExport,
   listerLedgerEntryIdsQualifies,
