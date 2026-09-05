@@ -16,6 +16,7 @@ import {
   verifierAvoirs,
   verifierComptesNonReconnus,
   verifierImmobilisation,
+  verifierNumerotation,
   verifierTvaHotel,
   verifierVehiculeTourisme,
 } from '../api';
@@ -78,6 +79,17 @@ const TYPE_ENCAISSEMENT_CLIENT_TAUX = 'encaissement_client_taux_applique';
 // nouveau" une fois confirmé — une seule route backend gère les deux types.
 const TYPE_TVA_HOTEL_A_TORT = 'tva_hotel_a_tort';
 const TYPE_TVA_HOTEL_A_VERIFIER = 'tva_hotel_a_verifier';
+
+// trou_numerotation_facture / doublon_numerotation_facture (brief v45) —
+// consolidées : au plus une anomalie de chaque type par cycle, listant
+// tous les numéros concernés (details.manquants / details.doublons). Pas
+// de qualification structurée ici : "Ignorer" reste le bouton Résoudre
+// générique déjà existant (aucune mémoire spécifique nécessaire, chaque
+// cycle redétecte tout depuis zéro) — seul "Vérifier à nouveau" est
+// nouveau, ajouté EN PLUS du bloc Résoudre/Justifier plutôt qu'à sa place
+// (contrairement aux qualifications structurées des briefs précédents).
+const TYPE_TROU_NUMEROTATION = 'trou_numerotation_facture';
+const TYPE_DOUBLON_NUMEROTATION = 'doublon_numerotation_facture';
 
 // 11 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
@@ -1090,6 +1102,84 @@ function VerificationTvaHotel({
   );
 }
 
+// "Vérifier à nouveau" pour trou_numerotation_facture ET
+// doublon_numerotation_facture (brief v45) — même route pour les deux
+// types, réponse {trouOuvert, doublonOuvert} : on ne lit que le booléen
+// correspondant au type de CETTE anomalie pour le toast, l'autre type
+// n'est pas concerné par cette carte précise. Additif : rendu à côté du
+// bloc Résoudre/Justifier générique, jamais à sa place (cf. estCompteNonReconnu).
+function VerificationNumerotation({
+  cabinetId,
+  dossierId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+  const estDoublon = anomalie.typeAnomalie === TYPE_DOUBLON_NUMEROTATION;
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { trouOuvert, doublonOuvert } = await verifierNumerotation(cabinetId, dossierId, { periodeDebut, periodeFin });
+      const toujoursOuvert = estDoublon ? doublonOuvert : trouOuvert;
+      notifier(
+        toujoursOuvert
+          ? `Anomalie toujours ouverte — des ${estDoublon ? 'doublons' : 'numéros manquants'} subsistent sur cette période`
+          : `Tous les ${estDoublon ? 'doublons' : 'numéros manquants'} ont été corrigés — anomalie levée`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -1180,6 +1270,8 @@ function AnomalieRow({
       : null;
   const afficherVerificationTvaHotel =
     (estTvaHotelATort && estOuverte) || (estTvaHotelAVerifier && resolutionTvaHotelType === 'confirme');
+  const estTrouOuDoublonNumerotation =
+    anomalie.typeAnomalie === TYPE_TROU_NUMEROTATION || anomalie.typeAnomalie === TYPE_DOUBLON_NUMEROTATION;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -1246,6 +1338,18 @@ function AnomalieRow({
               </button>
             )}
             <VerificationComptesNonReconnus
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
+
+        {estOuverte && estTrouOuDoublonNumerotation && (
+          <div className="actions">
+            <VerificationNumerotation
               cabinetId={cabinetId}
               dossierId={dossierId}
               anomalie={anomalie}

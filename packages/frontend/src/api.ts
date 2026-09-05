@@ -429,6 +429,24 @@ export function verifierTvaHotel(
   });
 }
 
+// "Vérifier à nouveau" pour trou_numerotation_facture ET doublon_numerotation_facture
+// (brief v45) — même route pour les deux types (consolidés, au plus une
+// anomalie de chaque par cycle). Pas de qualification/mémoire nécessaire
+// ici : "Ignorer" est déjà couvert par le Résoudre générique, chaque cycle
+// redétecte tout depuis zéro. Rejoue la détection sur des données
+// fraîches — pas de utilisateurId, contrairement aux autres routes de
+// vérification (rien n'est jamais qualifié manuellement ici).
+export function verifierNumerotation(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string }
+): Promise<{ trouOuvert: boolean; doublonOuvert: boolean }> {
+  return request<{ trouOuvert: boolean; doublonOuvert: boolean }>(`/dossiers/${dossierId}/verifier-numerotation`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,
