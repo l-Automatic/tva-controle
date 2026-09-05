@@ -2480,6 +2480,13 @@ describe('appliquerCorrectionTauxCollecte', () => {
       )
     ).rows[0]!.id;
 
+    // Compte avant coup — le dossier partagé de ce fichier de test a déjà
+    // d'autres lignes taux_historique_tiers créées par d'autres tests,
+    // donc on compare l'évolution du compte, pas une table vide.
+    const avant = await avecClient((client) =>
+      client.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM taux_historique_tiers WHERE dossier_id = $1`, [dossierId])
+    );
+
     const calculId = (
       await avecClient((client) =>
         client.query<{ id: string }>(
@@ -2523,10 +2530,10 @@ describe('appliquerCorrectionTauxCollecte', () => {
     expect(Number.parseFloat(c20!.montant_ajuste)).toBeCloseTo(1000 - ancienneTva);
     expect(Number.parseFloat(c10!.montant_ajuste)).toBeCloseTo(200 + nouvelleTva);
 
-    const tauxTiers = await avecClient((client) =>
-      client.query(`SELECT * FROM taux_historique_tiers WHERE dossier_id = $1`, [dossierId])
+    const apres = await avecClient((client) =>
+      client.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM taux_historique_tiers WHERE dossier_id = $1`, [dossierId])
     );
-    expect(tauxTiers.rows).toEqual([]); // jamais touché, confirmé
+    expect(apres.rows[0]!.n).toBe(avant.rows[0]!.n); // jamais touché, confirmé
   });
 });
 
