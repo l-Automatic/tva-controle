@@ -50,7 +50,7 @@ describe('detecterTrousNumerotation', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('trou_numerotation_facture');
     expect(anomalies[0]?.gravite).toBe('signale'); // jamais bloquant
-    expect(anomalies[0]?.details).toMatchObject({ manquants: 1 });
+    expect(anomalies[0]?.details).toMatchObject({ manquants: [2] });
   });
 
   it('signale un trou de plusieurs numéros manquants d’un coup', () => {
@@ -59,7 +59,19 @@ describe('detecterTrousNumerotation', () => {
       { ledgerEntryId: 5, numeroPiece: 'FA-2025-005' },
     ];
     const anomalies = detecterTrousNumerotation(factures, motif);
-    expect(anomalies[0]?.details).toMatchObject({ manquants: 3 });
+    expect(anomalies[0]?.details).toMatchObject({ manquants: [2, 3, 4] });
+  });
+
+  it('consolide (10/08, demande de Rami) plusieurs trous DISTINCTS de la période en une seule anomalie, listant tous les numéros manquants', () => {
+    const factures = [
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
+      { ledgerEntryId: 4, numeroPiece: 'FA-2025-004' }, // 002, 003 manquants
+      { ledgerEntryId: 9, numeroPiece: 'FA-2025-009' }, // 005 à 008 manquants
+    ];
+    const anomalies = detecterTrousNumerotation(factures, motif);
+    const trous = anomalies.filter((a) => a.type === 'trou_numerotation_facture');
+    expect(trous).toHaveLength(1); // une seule anomalie, pas une par trou distinct
+    expect(trous[0]?.details).toMatchObject({ manquants: [2, 3, 5, 6, 7, 8] });
   });
 
   it('ignore les libellés qui ne correspondent pas au motif, sans planter', () => {
@@ -95,10 +107,10 @@ describe('detecterTrousNumerotation', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('doublon_numerotation_facture');
     expect(anomalies[0]?.gravite).toBe('signale');
-    expect(anomalies[0]?.details).toMatchObject({ numero: 2, ledgerEntryIds: [2, 3] });
+    expect(anomalies[0]?.details).toMatchObject({ doublons: [{ numero: 2, ledgerEntryIds: [2, 3] }] });
   });
 
-  it('regroupe un même numéro utilisé 3 fois en une seule anomalie', () => {
+  it('regroupe un même numéro utilisé 3 fois dans le même doublon (pas 3 entrées distinctes)', () => {
     const factures = [
       { ledgerEntryId: 1, numeroPiece: 'FA-2025-005' },
       { ledgerEntryId: 2, numeroPiece: 'FA-2025-005' },
@@ -106,7 +118,22 @@ describe('detecterTrousNumerotation', () => {
     ];
     const anomalies = detecterTrousNumerotation(factures, motif);
     expect(anomalies).toHaveLength(1);
-    expect((anomalies[0]?.details as { ledgerEntryIds: number[] }).ledgerEntryIds).toHaveLength(3);
+    const doublons = (anomalies[0]?.details as { doublons: { ledgerEntryIds: number[] }[] }).doublons;
+    expect(doublons).toHaveLength(1);
+    expect(doublons[0]?.ledgerEntryIds).toHaveLength(3);
+  });
+
+  it('consolide (10/08) plusieurs numéros DIFFÉRENTS dupliqués en une seule anomalie', () => {
+    const factures = [
+      { ledgerEntryId: 1, numeroPiece: 'FA-2025-001' },
+      { ledgerEntryId: 2, numeroPiece: 'FA-2025-001' }, // doublon du 001
+      { ledgerEntryId: 3, numeroPiece: 'FA-2025-002' },
+      { ledgerEntryId: 4, numeroPiece: 'FA-2025-002' }, // doublon du 002
+    ];
+    const anomalies = detecterTrousNumerotation(factures, motif);
+    const doublonsAnomalies = anomalies.filter((a) => a.type === 'doublon_numerotation_facture');
+    expect(doublonsAnomalies).toHaveLength(1); // une seule anomalie, pas une par numéro dupliqué
+    expect((doublonsAnomalies[0]?.details as { doublons: unknown[] }).doublons).toHaveLength(2);
   });
 
   it('détecte à la fois un doublon et un trou dans le même jeu de données', () => {
@@ -120,3 +147,4 @@ describe('detecterTrousNumerotation', () => {
     expect(anomalies.some((a) => a.type === 'trou_numerotation_facture')).toBe(true);
   });
 });
+
