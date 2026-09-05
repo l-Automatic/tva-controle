@@ -449,13 +449,19 @@ export async function executerCycleTva(
       const mistralClientHotel = new MistralClient({ apiKey: mistralApiKey });
       const jugements = await jugerLibellesHotel(mistralClientHotel, candidatsJugementHotel);
       for (const j of jugements.filter((j) => j.estHotel)) {
+        // Bug réel corrigé (10/08) : montantTva jamais stocké — sans ça,
+        // le futur mécanisme de correction ("Vérifier à nouveau") n'aurait
+        // aucun moyen de savoir combien retirer de la TVA déductible une
+        // fois la correction constatée.
+        const ecritureConcernee = ecritures.find((e) => e.ligneTva.ledgerEntryId === j.ledgerEntryId);
+        const montantTva = ecritureConcernee ? Math.abs(ecritureConcernee.ligneTva.debit - ecritureConcernee.ligneTva.credit) : 0;
         anomaliesJugementHotel.push({
           type: 'tva_hotel_a_verifier',
           gravite: 'signale',
           ledgerEntryId: j.ledgerEntryId,
           compte: '44566',
           description: `Le libellé de cette écriture ressemble à une facture d'hôtel (${j.justification}) — si confirmé, la TVA n'est pas déductible. À vérifier manuellement.`,
-          details: { confiance: j.confiance, justification: j.justification },
+          details: { confiance: j.confiance, justification: j.justification, montantTva },
         });
       }
     } catch (err) {
