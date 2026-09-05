@@ -35,6 +35,16 @@ export function extraireNumeroSequence(numeroPiece: string, motif: MotifNumerota
 // travail de contrôle, il n'empêche pas de calculer la TVA. Même principe
 // appliqué aux doublons (10/08) — un numéro de facture réutilisé deux fois
 // est tout aussi informatif qu'un trou, jamais bloquant.
+//
+// Consolidé (10/08, demande de Rami) : AU PLUS une anomalie de chaque type
+// par appel, listant TOUS les numéros concernés — plutôt qu'une anomalie
+// séparée par trou ou par numéro dupliqué. Objectif explicite : que le
+// collaborateur voie en un coup d'œil tout ce qui manque pour interroger
+// le client, au lieu d'un signalement éclaté. Chaque cycle redétecte
+// entièrement depuis zéro (aucune mémoire d'un "Ignorer" passé) — un
+// numéro toujours manquant d'une période à l'autre réapparaît
+// naturellement dans la nouvelle anomalie consolidée, sans rien à
+// construire de spécial pour ça.
 export function detecterTrousNumerotation(
   factures: { ledgerEntryId: number; numeroPiece: string | null }[],
   motif: MotifNumerotationConfirme
@@ -48,56 +58,58 @@ export function detecterTrousNumerotation(
   }
 
   const anomalies: Anomalie[] = [];
+  const formater = (n: number) => `${motif.prefixe}${String(n).padStart(motif.nombreChiffres ?? 0, '0')}${motif.suffixe}`;
 
-  // Doublons (10/08) : un même numéro utilisé sur plusieurs pièces
-  // distinctes — regroupé par numéro, une seule anomalie même si le
-  // numéro apparaît 3 fois ou plus, avec toutes les pièces concernées.
+  // Doublons : un même numéro utilisé sur plusieurs pièces distinctes —
+  // TOUS les numéros dupliqués regroupés en une seule anomalie.
   const parNumero = new Map<number, number[]>();
   for (const n of numeros) {
     const liste = parNumero.get(n.numero) ?? [];
     liste.push(n.ledgerEntryId);
     parNumero.set(n.numero, liste);
   }
-  for (const [numero, ledgerEntryIds] of parNumero) {
-    if (ledgerEntryIds.length < 2) continue;
+  const doublons = [...parNumero.entries()]
+    .filter(([, ledgerEntryIds]) => ledgerEntryIds.length >= 2)
+    .map(([numero, ledgerEntryIds]) => ({ numero, ledgerEntryIds }));
+
+  if (doublons.length > 0) {
     anomalies.push({
       type: 'doublon_numerotation_facture',
       gravite: 'signale',
-      ledgerEntryId: ledgerEntryIds[0]!,
+      ledgerEntryId: doublons[0]!.ledgerEntryIds[0]!,
       compte: '',
       description:
-        `Le numéro de facture ${motif.prefixe}${String(numero).padStart(motif.nombreChiffres ?? 0, '0')}${motif.suffixe} ` +
-        `apparaît sur ${ledgerEntryIds.length} pièces distinctes — à vérifier (vraie facture dupliquée, ou ` +
-        `numéro réutilisé à tort).`,
-      details: { numero, ledgerEntryIds },
+        `${doublons.length} numéro(s) de facture utilisé(s) plusieurs fois : ` +
+        `${doublons.map((d) => formater(d.numero)).join(', ')} — à vérifier (vraie facture dupliquée, ` +
+        `ou numéro réutilisé à tort).`,
+      details: { doublons },
     });
   }
 
-  // Trous : comparaison des numéros distincts triés (les doublons ne
-  // créent pas de faux trou entre eux, puisqu'un même numéro ne compte
-  // qu'une fois dans cette comparaison).
+  // Trous : TOUS les numéros manquants entre le plus petit et le plus
+  // grand numéro distinct rencontré, regroupés en une seule anomalie
+  // (les doublons ne créent pas de faux trou entre eux, puisqu'un même
+  // numéro ne compte qu'une fois dans cette comparaison).
   const numerosDistincts = [...new Set(numeros.map((n) => n.numero))].sort((a, b) => a - b);
-  if (numerosDistincts.length < 2) return anomalies;
-
-  const ledgerEntryIdParNumero = new Map(numeros.map((n) => [n.numero, n.ledgerEntryId]));
-
+  const manquants: number[] = [];
   for (let i = 1; i < numerosDistincts.length; i++) {
     const precedent = numerosDistincts[i - 1]!;
     const courant = numerosDistincts[i]!;
-    const ecart = courant - precedent;
-    if (ecart <= 1) continue;
+    for (let n = precedent + 1; n < courant; n++) manquants.push(n);
+  }
 
-    const manquants = ecart - 1;
+  if (manquants.length > 0) {
+    const dernierNumero = numerosDistincts[numerosDistincts.length - 1]!;
+    const ledgerEntryIdRef = numeros.find((n) => n.numero === dernierNumero)!.ledgerEntryId;
     anomalies.push({
       type: 'trou_numerotation_facture',
       gravite: 'signale',
-      ledgerEntryId: ledgerEntryIdParNumero.get(courant)!,
+      ledgerEntryId: ledgerEntryIdRef,
       compte: '',
       description:
-        `${manquants} numéro(s) de facture manquant(s) entre ${motif.prefixe}${String(precedent).padStart(motif.nombreChiffres ?? 0, '0')}${motif.suffixe} ` +
-        `et ${motif.prefixe}${String(courant).padStart(motif.nombreChiffres ?? 0, '0')}${motif.suffixe} — ` +
+        `${manquants.length} numéro(s) de facture manquant(s) : ${manquants.map(formater).join(', ')} — ` +
         `à vérifier (facture non comptabilisée, ou numéro sauté volontairement).`,
-      details: { numeroPrecedent: precedent, numeroCourant: courant, manquants },
+      details: { manquants },
     });
   }
 
