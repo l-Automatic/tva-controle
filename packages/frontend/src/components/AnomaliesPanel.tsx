@@ -6,6 +6,7 @@ import {
   justifierAnomalie,
   qualifierAvoir,
   qualifierEncaissement,
+  qualifierEncaissementClientTaux,
   qualifierImmobilisation,
   qualifierNouveauTiers,
   qualifierVehiculeTourisme,
@@ -56,6 +57,15 @@ const TYPE_IMMOBILISATION_A_VERIFIER = 'immobilisation_potentielle_non_passee';
 // résout que cette occurrence — le même tiers réapparaîtra au prochain
 // cycle qui le touche, volontairement (rien n'a été tranché sur le fond).
 const TYPE_NOUVEAU_TIERS_A_VERIFIER = 'nouveau_tiers_a_verifier';
+
+// Qualification structurée pour encaissement_client_taux_applique (brief
+// v43) — 'bon_taux' résout sans toucher au calcul ; 'mauvais_taux' transfère
+// un montant entre les deux catégories de taux concernées (collectee_20/
+// 10/5_5/2_1) à partir du nouveau taux saisi. Correction ponctuelle sur
+// cette seule ligne — ne change jamais le taux historique retenu pour ce
+// client (écran "Taux historique" séparé), l'anomalie se représentera sur
+// un futur encaissement non lettré du même client si rien n'est changé là.
+const TYPE_ENCAISSEMENT_CLIENT_TAUX = 'encaissement_client_taux_applique';
 
 // 11 des 14 types du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
@@ -835,6 +845,107 @@ function QualificationNouveauTiers({
   );
 }
 
+// Qualification structurée pour encaissement_client_taux_applique (brief
+// v43) — pas de "Vérifier à nouveau" (résolu immédiatement dans les deux
+// cas, comme nouveau_tiers_a_verifier). "Le taux est faux" révèle un
+// second temps (choix du bon taux) avant confirmation, même schéma que le
+// choix "Lié à une vente" de EncaissementQualification ci-dessus. Texte
+// secondaire explicite : correction ponctuelle sur cette seule ligne,
+// jamais mémorisée pour les cycles futurs de ce client.
+function QualificationEncaissementClientTaux({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [decision, setDecision] = useState<'mauvais_taux' | null>(null);
+  const [nouveauTaux, setNouveauTaux] = useState('');
+  const [submitting, setSubmitting] = useState<'bon_taux' | 'mauvais_taux' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleBonTaux() {
+    setSubmitting('bon_taux');
+    setError(null);
+    try {
+      await qualifierEncaissementClientTaux(cabinetId, anomalie.id, utilisateurId, { type: 'bon_taux' });
+      notifier('Taux confirmé — aucun changement au calcul');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function handleMauvaisTaux() {
+    if (!nouveauTaux) {
+      setError('Sélectionnez le taux correct');
+      return;
+    }
+    setSubmitting('mauvais_taux');
+    setError(null);
+    try {
+      await qualifierEncaissementClientTaux(cabinetId, anomalie.id, utilisateurId, {
+        type: 'mauvais_taux',
+        nouveauTaux: Number.parseFloat(nouveauTaux),
+      });
+      notifier('Taux corrigé — montant transféré entre les deux catégories du calcul');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      {decision === null && (
+        <div className="actions">
+          <button onClick={() => void handleBonTaux()} disabled={submitting !== null}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
+            {submitting === 'bon_taux' ? '…' : "C'est le bon taux"}
+          </button>
+          <button onClick={() => setDecision('mauvais_taux')} className="secondary" disabled={submitting !== null}>
+            Le taux est faux
+          </button>
+        </div>
+      )}
+
+      {decision === 'mauvais_taux' && (
+        <div className="actions">
+          <select value={nouveauTaux} onChange={(e) => setNouveauTaux(e.target.value)} disabled={submitting !== null}>
+            <option value="">Taux correct…</option>
+            {TAUX_TVA.map((t) => (
+              <option key={t} value={t}>
+                {t.replace('.', ',')} %
+              </option>
+            ))}
+          </select>
+          <button onClick={() => void handleMauvaisTaux()} disabled={submitting !== null}>
+            <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
+            {submitting === 'mauvais_taux' ? '…' : 'Confirmer'}
+          </button>
+          <button onClick={() => setDecision(null)} className="secondary" disabled={submitting !== null}>
+            Annuler
+          </button>
+        </div>
+      )}
+      <p className="reference">
+        Correction ponctuelle sur cette ligne uniquement — ne change pas le taux historique retenu pour ce
+        client, l'anomalie se représentera sur un futur encaissement non lettré du même client.
+      </p>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -896,6 +1007,7 @@ function AnomalieRow({
   const estVehiculeTourismeAVerifier = anomalie.typeAnomalie === TYPE_VEHICULE_TOURISME_A_VERIFIER;
   const estImmobilisationAVerifier = anomalie.typeAnomalie === TYPE_IMMOBILISATION_A_VERIFIER;
   const estNouveauTiersAVerifier = anomalie.typeAnomalie === TYPE_NOUVEAU_TIERS_A_VERIFIER;
+  const estEncaissementClientTaux = anomalie.typeAnomalie === TYPE_ENCAISSEMENT_CLIENT_TAUX;
   // Particularité de ce type (brief v41) : qualifier() passe IMMÉDIATEMENT
   // l'anomalie en 'resolu', y compris pour 'confirme_immo' — contrairement
   // à avoir_a_verifier/vehicule_tourisme_a_verifier, verifierImmobilisationLegere
@@ -1052,6 +1164,13 @@ function AnomalieRow({
               utilisateurId={utilisateurId}
               onChanged={onChanged}
             />
+          ) : estEncaissementClientTaux ? (
+            <QualificationEncaissementClientTaux
+              anomalie={anomalie}
+              cabinetId={cabinetId}
+              utilisateurId={utilisateurId}
+              onChanged={onChanged}
+            />
           ) : (
             <div className="actions">
               <input
@@ -1077,6 +1196,7 @@ function AnomalieRow({
           !estVehiculeTourismeAVerifier &&
           !estImmobilisationAVerifier &&
           !estNouveauTiersAVerifier &&
+          !estEncaissementClientTaux &&
           error && <p className="error">{error}</p>}
       </Accordion>
     </li>

@@ -378,6 +378,26 @@ export function qualifierNouveauTiers(
   });
 }
 
+// Qualification structurée pour encaissement_client_taux_applique (brief
+// v43) — 'bon_taux' résout sans toucher au calcul (le taux automatique
+// était déjà correct) ; 'mauvais_taux' transfère un montant entre les deux
+// catégories de taux concernées dans le calcul brouillon, à partir du
+// nouveau taux saisi. Correction ponctuelle sur cette ligne précise
+// uniquement — ne change jamais le taux historique retenu pour ce client
+// (écran séparé), l'anomalie se représentera sur un futur encaissement non
+// lettré du même client.
+export function qualifierEncaissementClientTaux(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  params: { type: 'bon_taux' } | { type: 'mauvais_taux'; nouveauTaux: number }
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-encaissement-client-taux`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, ...params }),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,
