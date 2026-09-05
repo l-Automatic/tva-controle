@@ -277,6 +277,53 @@ export async function listerCalculs(client: PoolClient, dossierId: string): Prom
   }));
 }
 
+const TOUTES_CATEGORIES = [
+  'collectee_20',
+  'collectee_10',
+  'collectee_5_5',
+  'collectee_2_1',
+  'deductible_abs',
+  'deductible_immo',
+  'autoliquidation_due',
+  'autoliquidation_deductible',
+] as const;
+
+export interface LigneDetailCalcul {
+  categorie: (typeof TOUTES_CATEGORIES)[number];
+  montant: number;
+  ajuste: boolean; // true = un ajustement existe pour cette catégorie précise
+}
+
+// Détail persistant, catégorie par catégorie, d'un calcul — avec les
+// ajustements déjà appliqués (10/08, bug réel trouvé par Claude Code en
+// vérifiant le brief v43) : jusqu'ici, seule la réponse transitoire du
+// lancement de cycle montrait un détail par catégorie — rien de
+// persistant après un rechargement de page. Sans cette route, les
+// transferts entre catégories (immobilisation v41, taux de collecte v43)
+// n'avaient aucune surface d'affichage durable une fois qualifiés.
+export async function chargerDetailCalcul(client: PoolClient, calculId: string): Promise<LigneDetailCalcul[]> {
+  const brutRes = await client.query<{ categorie: string; total: string }>(
+    `SELECT categorie, SUM(montant) AS total FROM calculs_tva_lignes WHERE calcul_id = $1 GROUP BY categorie`,
+    [calculId]
+  );
+  const brutParCategorie = new Map(brutRes.rows.map((r) => [r.categorie, Number.parseFloat(r.total)]));
+
+  const ajustementsRes = await client.query<{ type_montant: string; montant_ajuste: string }>(
+    `SELECT type_montant, montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1`,
+    [calculId]
+  );
+  const ajustementParType = new Map(ajustementsRes.rows.map((r) => [r.type_montant, Number.parseFloat(r.montant_ajuste)]));
+
+  return TOUTES_CATEGORIES.map((categorie) => {
+    const ajuste = ajustementParType.get(categorie);
+    return {
+      categorie,
+      montant: ajuste ?? brutParCategorie.get(categorie) ?? 0,
+      ajuste: ajuste !== undefined,
+    };
+  });
+}
+
 // ============================================================================
 // AUDIT (Module 10)
 // ============================================================================
