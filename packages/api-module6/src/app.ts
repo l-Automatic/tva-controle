@@ -56,6 +56,7 @@ import {
   listerConventions,
   listerTauxHistorique,
   listerCalculs,
+  chargerDetailCalcul,
   listerAuditLog,
   listerAuditLogPourExport,
   CalculDejaValideError,
@@ -1019,6 +1020,13 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/calculs', async (request) => {
     const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => listerCalculs(client, request.params.dossierId));
+  });
+
+  // Détail persistant par catégorie, ajustements déjà appliqués (10/08) —
+  // manquait jusqu'ici, cf. chargerDetailCalcul.
+  app.get<{ Params: { calculId: string } }>('/calculs/:calculId/detail', async (request) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    return avecContexteCabinet(pool, cabinetId, (client) => chargerDetailCalcul(client, request.params.calculId));
   });
 
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
