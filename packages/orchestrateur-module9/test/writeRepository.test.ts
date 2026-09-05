@@ -57,6 +57,7 @@ import {
   listerTauxHistorique,
   listerTauxHistoriqueTiers,
   listerCalculs,
+  chargerDetailCalcul,
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
   listerParametresCabinet,
@@ -2563,5 +2564,57 @@ describe('qualifierEncaissementClientTaux', () => {
 
     const anomalie = await avecClient((client) => client.query<{ statut: string }>(`SELECT statut FROM anomalies WHERE id = $1`, [anomalieId]));
     expect(anomalie.rows[0]?.statut).toBe('resolu');
+  });
+});
+
+describe('chargerDetailCalcul', () => {
+  it('donne le montant brut pour une catégorie sans ajustement, et le montant ajusté pour celle qui en a un', async () => {
+    const periode = '2026-04-01';
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 1000, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2026-04-30']
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES
+           ($1, 'collectee_20', 800, 5), ($1, 'deductible_abs', 300, 2)`,
+        [calculId]
+      )
+    );
+
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ15', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq15-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO ajustements_calcul (calcul_id, type_montant, montant_original, montant_ajuste, justification, created_by)
+         VALUES ($1, 'deductible_abs', 300, 250, 'test', $2)`,
+        [calculId, utilisateurId]
+      )
+    );
+
+    const detail = await avecClient((client) => chargerDetailCalcul(client, calculId));
+
+    const collectee20 = detail.find((l) => l.categorie === 'collectee_20');
+    const deductibleAbs = detail.find((l) => l.categorie === 'deductible_abs');
+    const collectee10 = detail.find((l) => l.categorie === 'collectee_10');
+
+    expect(collectee20?.montant).toBe(800);
+    expect(collectee20?.ajuste).toBe(false);
+    expect(deductibleAbs?.montant).toBe(250); // ajusté, pas 300
+    expect(deductibleAbs?.ajuste).toBe(true);
+    expect(collectee10?.montant).toBe(0); // jamais alimentée
+    expect(collectee10?.ajuste).toBe(false);
+    expect(detail).toHaveLength(8); // toutes les catégories, même à 0
   });
 });
