@@ -39,6 +39,7 @@ export {
   verifierImmobilisationLegere,
   type ParametresVerificationImmobilisation,
 } from './verifierImmobilisationLegere.js';
+export { verifierTvaHotelLegere, type ParametresVerificationTvaHotel } from './verifierTvaHotelLegere.js';
 export {
   enregistrerEvenementAudit,
   type EvenementAudit,
