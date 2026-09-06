@@ -1,7 +1,11 @@
 import type { Pool } from 'pg';
 import type { IPennylaneApiClient } from '@tva-controle/connector-pennylane';
 import { fetchTrialBalance, filterComptesParPrefixe, fetchEcrituresTvaCompletes } from '@tva-controle/connector-pennylane';
-import { identifierComptesACategoriser, type CompteACategoriser } from '@tva-controle/controles-module4';
+import {
+  identifierComptesACategoriser,
+  identifierComptesServiceSansSousCategorieAutoliquidation,
+  type CompteACategoriser,
+} from '@tva-controle/controles-module4';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionListe } from './db/dossierRepository.js';
 
@@ -16,6 +20,14 @@ import { chargerContexteDossier, conventionListe } from './db/dossierRepository.
 // contrôles — appelable à tout moment, y compris comme porte d'entrée
 // obligatoire avant le lancement d'un cycle (cf. app.ts, route
 // POST /dossiers/:dossierId/cycles).
+//
+// Étendue le même jour pour couvrir aussi la sous-catégorisation
+// autoliquidation (comptes_charge_autoliquidation) — demande de Rami en
+// creusant autoliquidation_incomplete : cette sous-catégorisation
+// n'avait jusqu'ici QUE la suggestion IA enfouie dans le résultat du
+// cycle complet, jamais de vraie porte. Sans elle, comptesChargeAutoliquidation
+// retombait silencieusement sur une liste vide, et autoliquidation_incomplete
+// ne se déclenchait jamais, même en cas de vraie contrepartie manquante.
 export interface ParametresVerificationCategorisation {
   cabinetId: string;
   dossierId: string;
@@ -24,10 +36,15 @@ export interface ParametresVerificationCategorisation {
   periodeFin: string;
 }
 
+export interface ResultatVerificationCategorisation {
+  comptesACategoriser: CompteACategoriser[];
+  comptesServiceSansSousCategorieAutoliquidation: CompteACategoriser[];
+}
+
 export async function verifierComptesACategoriser(
   pool: Pool,
   params: ParametresVerificationCategorisation
-): Promise<CompteACategoriser[]> {
+): Promise<ResultatVerificationCategorisation> {
   const contexteDossier = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     chargerContexteDossier(client, params.dossierId)
   );
@@ -47,13 +64,24 @@ export async function verifierComptesACategoriser(
     periodeFin: params.periodeFin,
   });
 
-  return identifierComptesACategoriser(ecritures, {
+  const comptesChargeService = conventionListe(contexteDossier, 'comptes_charge_service') ?? [];
+
+  const comptesACategoriser = identifierComptesACategoriser(ecritures, {
     comptesVenteService: conventionListe(contexteDossier, 'comptes_vente_service') ?? [],
-    comptesChargeService: conventionListe(contexteDossier, 'comptes_charge_service') ?? [],
+    comptesChargeService,
     comptesEquipement: conventionListe(contexteDossier, 'comptes_equipement') ?? [],
     comptesCarburant: conventionListe(contexteDossier, 'comptes_carburant') ?? [],
     comptesCadeaux: conventionListe(contexteDossier, 'comptes_cadeaux') ?? [],
     comptesImmobilisation: conventionListe(contexteDossier, 'comptes_immobilisation') ?? [],
     comptesSansCategorie: conventionListe(contexteDossier, 'comptes_sans_categorie') ?? [],
   });
+
+  const comptesServiceSansSousCategorieAutoliquidation = identifierComptesServiceSansSousCategorieAutoliquidation(
+    ecritures,
+    comptesChargeService,
+    conventionListe(contexteDossier, 'comptes_charge_autoliquidation') ?? [],
+    conventionListe(contexteDossier, 'comptes_charge_autoliquidation_rejetee') ?? []
+  );
+
+  return { comptesACategoriser, comptesServiceSansSousCategorieAutoliquidation };
 }
