@@ -17,6 +17,7 @@ import {
   verifierParcVehicules,
   verifierComptesTvaAConfirmer,
   verifierAutoliquidationLegere,
+  verifierImmobilisationTvaLegere,
   enregistrerRapprochementPaiementAchat,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
@@ -812,6 +813,40 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
 
     return verifierAutoliquidationLegere(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+  });
+
+  // "Vérifier à nouveau" pour immobilisation_sur_compte_tva_incorrect
+  // (10/08) — un seul bouton, pas de qualification préalable, même
+  // famille que tva_hotel_a_tort et autoliquidation. Aucun ajustement du
+  // calcul.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string };
+  }>('/dossiers/:dossierId/verifier-immobilisation-tva', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin } = request.body;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierImmobilisationTvaLegere(pool, {
       cabinetId,
       dossierId: request.params.dossierId,
       client,
