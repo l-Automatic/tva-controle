@@ -59,6 +59,7 @@ export {
   type ConfigExhaustiviteAutoliquidation,
 } from './exhaustiviteAutoliquidation.js';
 export { verifierCoherenceTvaHotel } from './coherenceHotel.js';
+export { verifierCoherenceTauxProduit } from './coherenceTauxProduit.js';
 export {
   chercherDansReferentiel,
   REFERENTIEL_COMPTES_CHARGE,
