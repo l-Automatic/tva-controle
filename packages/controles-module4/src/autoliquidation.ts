@@ -2,14 +2,21 @@ import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
 
 // Vérifie, pour chaque pièce, que la TVA due autoliquidée (compte "due") a
 // bien sa contrepartie déductible (compte "déductible") avec un montant
-// identique — et inversement. Les comptes par défaut correspondent au
-// dossier sandbox observé ; c'est une convention par dossier à terme
-// (Module 2 bis / conventions_dossier), pas une constante universelle —
-// d'où les paramètres plutôt que des valeurs codées en dur dans la logique.
+// identique — et inversement. Les comptes sont une convention par dossier
+// (Module 2 bis / conventions_dossier), jamais une constante universelle.
+//
+// Bug réel corrigé (10/08, trouvé par Rami) : cette fonction avait des
+// valeurs par défaut codées en dur ('4454'/'445664') — sans confirmation
+// explicite du dossier, elle tournait quand même dessus, en parallèle de
+// compte_tva_non_reconnu qui bloque correctement tant que rien n'est
+// confirmé. Un dossier n'ayant JAMAIS confirmé son compte d'autoliquidation
+// pouvait donc voir surgir un faux positif de déséquilibre, basé sur une
+// présomption jamais validée par personne. Retiré : plus aucune valeur par
+// défaut, l'appelant doit fournir les deux comptes explicitement.
 export function verifierAutoliquidationEquilibree(
   ecritures: EcritureTvaComplete[],
-  compteDue = '4454',
-  compteDeductible = '445664',
+  compteDue: string,
+  compteDeductible: string,
   toleranceMontant = 0.01
 ): Anomalie[] {
   const anomalies: Anomalie[] = [];
