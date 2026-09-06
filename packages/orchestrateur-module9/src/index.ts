@@ -53,6 +53,10 @@ export {
   type ParametresVerificationAutoliquidation,
 } from './verifierAutoliquidationLegere.js';
 export {
+  verifierImmobilisationTvaLegere,
+  type ParametresVerificationImmobilisationTva,
+} from './verifierImmobilisationTvaLegere.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
