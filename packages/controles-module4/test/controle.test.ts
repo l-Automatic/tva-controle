@@ -275,7 +275,10 @@ describe('executerPreControles — intégration des trois contrôles', () => {
       autresLignes: [],
     });
 
-    const anomalies = executerPreControles([ecritureAvoir, ecritureAutoliquidationSeule]);
+    const anomalies = executerPreControles([ecritureAvoir, ecritureAutoliquidationSeule], {
+      compteAutoliquidationDue: '4454',
+      compteAutoliquidationDeductible: '445664',
+    });
 
     const types = anomalies.map((a) => a.type).sort();
     expect(types).toContain('avoir_a_verifier');
