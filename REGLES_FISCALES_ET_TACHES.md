@@ -718,3 +718,15 @@ Proposition : un paramètre dossier avec des cases à cocher — quels taux
 case cochée = taux unique, système de coche pour permettre plusieurs
 taux sinon. Pas commencé — à reprendre plus tard, pourrait simplifier
 significativement plusieurs anomalies liées au taux dans ce projet.
+
+---
+
+## Note liée au paramètre "dossier à taux unique" (10/08)
+
+Le futur contrôle de cohérence taux collecte/compte produit (nouveau,
+en cours de construction ce jour — compare le taux implicite de chaque
+compte produit à son taux dominant historique, bloquant) devra être
+désactivé pour tout dossier paramétré en taux unique une fois ce
+paramètre construit — la question ne se pose pas s'il n'y a qu'un seul
+taux possible sur le dossier. À ne pas oublier lors de la construction
+du paramètre taux unique.
