@@ -65,6 +65,10 @@ export {
   type ParametresVerificationTauxAutoliquidation,
 } from './verifierCoherenceTauxAutoliquidationLegere.js';
 export {
+  verifierCadeauClientLegere,
+  type ParametresVerificationCadeauClient,
+} from './verifierCadeauClientLegere.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
