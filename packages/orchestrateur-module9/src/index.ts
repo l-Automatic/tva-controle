@@ -45,6 +45,10 @@ export {
   type ParametresVerificationNumerotation,
 } from './verifierNumerotationLegere.js';
 export {
+  verifierComptesTvaAConfirmer,
+  type ParametresVerificationComptesTva,
+} from './verifierComptesTvaAConfirmer.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
