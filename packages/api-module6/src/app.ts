@@ -1412,17 +1412,27 @@ export function buildApp(pool: Pool): FastifyInstance {
     // plusieurs écritures à la fois sur la période — recalculer
     // rétroactivement serait bien plus lourd que d'empêcher le problème à
     // la source. Vérification légère, sans LLM ni les autres contrôles.
-    const comptesACategoriser = await verifierComptesACategoriser(pool, {
+    const resultatCategorisation = await verifierComptesACategoriser(pool, {
       cabinetId,
       dossierId: request.params.dossierId,
       client,
       periodeDebut,
       periodeFin,
     });
-    if (comptesACategoriser.length > 0) {
+    if (resultatCategorisation.comptesACategoriser.length > 0) {
       return reply.code(409).send({
-        erreur: `${comptesACategoriser.length} compte(s) doivent être catégorisés (bien ou service) avant de pouvoir lancer un cycle sur cette période.`,
-        comptesACategoriser,
+        erreur: `${resultatCategorisation.comptesACategoriser.length} compte(s) doivent être catégorisés (bien ou service) avant de pouvoir lancer un cycle sur cette période.`,
+        comptesACategoriser: resultatCategorisation.comptesACategoriser,
+      });
+    }
+    // Même porte, étendue le même jour (10/08) : la sous-catégorisation
+    // autoliquidation, jusqu'ici seulement une suggestion enfouie dans le
+    // résultat du cycle complet — jamais une vraie porte. Sans elle,
+    // autoliquidation_incomplete pouvait rester silencieuse indéfiniment.
+    if (resultatCategorisation.comptesServiceSansSousCategorieAutoliquidation.length > 0) {
+      return reply.code(409).send({
+        erreur: `${resultatCategorisation.comptesServiceSansSousCategorieAutoliquidation.length} compte(s) de charge doivent être confirmés comme liés (ou non) à l'autoliquidation avant de pouvoir lancer un cycle sur cette période.`,
+        comptesServiceSansSousCategorieAutoliquidation: resultatCategorisation.comptesServiceSansSousCategorieAutoliquidation,
       });
     }
 
