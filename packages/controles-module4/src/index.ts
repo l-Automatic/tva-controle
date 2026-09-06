@@ -61,6 +61,10 @@ export {
 export { verifierCoherenceTvaHotel } from './coherenceHotel.js';
 export { verifierCoherenceTauxProduit } from './coherenceTauxProduit.js';
 export {
+  detecterCadeauClientSeuilDepasse,
+  type ConfigCadeauClient,
+} from './cadeauClient.js';
+export {
   chercherDansReferentiel,
   REFERENTIEL_COMPTES_CHARGE,
   type EntreeReferentielCompte,
