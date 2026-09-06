@@ -183,7 +183,7 @@ describe('verifierAutoliquidationEquilibree', () => {
       },
     });
 
-    const anomalies = verifierAutoliquidationEquilibree([ligneDeductible, ligneDue]);
+    const anomalies = verifierAutoliquidationEquilibree([ligneDeductible, ligneDue], '4454', '445664');
     expect(anomalies).toEqual([]);
   });
 
@@ -191,7 +191,7 @@ describe('verifierAutoliquidationEquilibree', () => {
     const ligneDue = construireEcriture({
       ligneTva: { ...construireEcriture().ligneTva, compte: '4454', credit: 500, debit: 0 },
     });
-    const anomalies = verifierAutoliquidationEquilibree([ligneDue]);
+    const anomalies = verifierAutoliquidationEquilibree([ligneDue], '4454', '445664');
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.type).toBe('autoliquidation_desequilibree');
     expect(anomalies[0]?.gravite).toBe('bloquant');
@@ -214,9 +214,21 @@ describe('verifierAutoliquidationEquilibree', () => {
       },
     });
 
-    const anomalies = verifierAutoliquidationEquilibree([ligneDue, ligneDeductible]);
+    const anomalies = verifierAutoliquidationEquilibree([ligneDue, ligneDeductible], '4454', '445664');
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.details).toEqual({ montantDue: 500, montantDeductible: 480 });
+  });
+
+  it('bug réel corrigé (10/08, trouvé par Rami) : executerPreControles ne tourne JAMAIS ce contrôle sans confirmation explicite des deux comptes — plus de faux positif basé sur une présomption', () => {
+    // 4454 avec mouvement, mais compteAutoliquidationDue jamais confirmé
+    // dans la config (comme un dossier qui n'a encore rien renseigné).
+    const ligneDue = construireEcriture({
+      ligneTva: { ...construireEcriture().ligneTva, compte: '4454', credit: 500, debit: 0 },
+    });
+    const anomalies = executerPreControles([ligneDue], {}); // aucun compte confirmé
+    expect(anomalies.some((a) => a.type === 'autoliquidation_desequilibree')).toBe(false);
+    // À la place, compte_tva_non_reconnu doit bloquer — jamais de silence.
+    expect(anomalies.some((a) => a.type === 'compte_tva_non_reconnu')).toBe(true);
   });
 });
 
