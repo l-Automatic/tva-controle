@@ -785,8 +785,11 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   // "Vérifier à nouveau" pour autoliquidation_desequilibree (10/08) — un
   // seul bouton, pas de qualification préalable, couvre BTP et intracom
-  // en un seul appel. Aucun ajustement du calcul (anomalie purement
-  // bloquante, jamais un impact sur le montant lui-même).
+  // "Vérifier à nouveau" pour autoliquidation_desequilibree ET
+  // autoliquidation_incomplete (10/08) — un seul bouton, pas de
+  // qualification préalable, couvre BTP et intracom en un seul appel.
+  // Aucun ajustement du calcul (anomalies purement bloquantes, jamais un
+  // impact sur le montant lui-même).
   app.post<{
     Params: { dossierId: string };
     Body: { periodeDebut: string; periodeFin: string };
