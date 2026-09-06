@@ -25,6 +25,7 @@ import {
   verifierExhaustiviteAutoliquidation,
   type ProrataApplique,
   verifierAbsenceTvaLivraisonIntracom,
+  verifierCoherenceTauxProduit,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -597,6 +598,21 @@ export async function executerCycleTva(
       : [];
   const anomaliesLivraisonIntracom = verifierAbsenceTvaLivraisonIntracom(ecritures, comptesVenteIntracomExoneree);
 
+  // Cohérence taux collecte/compte produit (10/08, demande de Rami) —
+  // distinct de verifierCoherenceTauxCollecte et analyserTauxHistorique,
+  // qui sont tous deux indexés sur le compte de TVA collectée (44571x),
+  // jamais sur le compte produit (7xxx). Ici le regroupement se fait sur
+  // le compte produit lui-même — fonctionne même si le dossier utilise un
+  // compte 44571 générique pour toute sa collecte, ce que les deux autres
+  // contrôles ne peuvent pas couvrir.
+  //
+  // TODO (documenté REGLES_FISCALES_ET_TACHES.md) : une fois le paramètre
+  // "dossier à taux unique" construit, ce contrôle ne doit JAMAIS tourner
+  // pour un tel dossier — la question ne se pose pas s'il n'y a qu'un
+  // seul taux possible. Pas encore de garde ici, le paramètre n'existe
+  // pas encore.
+  const anomaliesCoherenceTauxProduit = verifierCoherenceTauxProduit(ecritures);
+
 
   // Trous de numérotation de facture (10/08) — n'applique que si un motif
   // a déjà été confirmé (via l'endpoint dédié
@@ -704,6 +720,7 @@ export async function executerCycleTva(
     ...anomaliesCoherenceAutoliquidationIntracom,
     ...anomaliesExhaustiviteAutoliquidationIntracom,
     ...anomaliesLivraisonIntracom,
+    ...anomaliesCoherenceTauxProduit,
     ...anomaliesHotel,
     ...anomaliesJugementHotel,
     ...anomaliesNumerotation,
