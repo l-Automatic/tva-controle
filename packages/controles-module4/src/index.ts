@@ -106,11 +106,19 @@ export function executerPreControles(
       0.5,
       config.contexteDossier
     ),
-    ...verifierAutoliquidationEquilibree(
-      ecritures,
-      config.compteAutoliquidationDue,
-      config.compteAutoliquidationDeductible
-    ),
+    // BTP : vérification séparée, seulement si les deux comptes sont
+    // confirmés — plus de valeur par défaut depuis le 10/08 (bug réel
+    // corrigé, trouvé par Rami : sans confirmation, un faux positif de
+    // déséquilibre pouvait surgir en parallèle de compte_tva_non_reconnu,
+    // basé sur une présomption jamais validée par personne). Même garde
+    // exactement que l'intracom juste en dessous.
+    ...(config.compteAutoliquidationDue && config.compteAutoliquidationDeductible
+      ? verifierAutoliquidationEquilibree(
+          ecritures,
+          config.compteAutoliquidationDue,
+          config.compteAutoliquidationDeductible
+        )
+      : []),
     // TVA intracom : vérification séparée, seulement si les deux comptes
     // sont confirmés (pas de valeur par défaut sensée ici, contrairement
     // au BTP — passer undefined ferait tourner verifierAutoliquidationEquilibree
