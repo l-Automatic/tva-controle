@@ -57,6 +57,10 @@ export {
   type ParametresVerificationImmobilisationTva,
 } from './verifierImmobilisationTvaLegere.js';
 export {
+  verifierCoherenceTauxProduitLegere,
+  type ParametresVerificationTauxProduit,
+} from './verifierCoherenceTauxProduitLegere.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
