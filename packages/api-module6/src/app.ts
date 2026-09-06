@@ -18,6 +18,7 @@ import {
   verifierComptesTvaAConfirmer,
   verifierAutoliquidationLegere,
   verifierImmobilisationTvaLegere,
+  verifierCoherenceTauxProduitLegere,
   enregistrerRapprochementPaiementAchat,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
@@ -847,6 +848,38 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
 
     return verifierImmobilisationTvaLegere(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+  });
+
+  // "Vérifier à nouveau" pour incoherence_taux_produit (10/08) — un seul
+  // bouton, pas de qualification préalable. Aucun ajustement du calcul.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string };
+  }>('/dossiers/:dossierId/verifier-taux-produit', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin } = request.body;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierCoherenceTauxProduitLegere(pool, {
       cabinetId,
       dossierId: request.params.dossierId,
       client,
