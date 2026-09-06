@@ -26,6 +26,7 @@ import {
   type ProrataApplique,
   verifierAbsenceTvaLivraisonIntracom,
   verifierCoherenceTauxProduit,
+  detecterCadeauClientSeuilDepasse,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
@@ -613,6 +614,12 @@ export async function executerCycleTva(
   // pas encore.
   const anomaliesCoherenceTauxProduit = verifierCoherenceTauxProduit(ecritures);
 
+  // Cadeau client au-delà du seuil légal (10/08, demande de Rami) : le
+  // suivi par bénéficiaire/an est un vrai angle mort (aucune notion de
+  // bénéficiaire dans nos données), volontairement ignoré — une seule
+  // transaction qui dépasse déjà le seuil suffit, jamais un faux positif.
+  const anomaliesCadeauClient = detecterCadeauClientSeuilDepasse(ecritures, { comptesCadeaux });
+
 
   // Trous de numérotation de facture (10/08) — n'applique que si un motif
   // a déjà été confirmé (via l'endpoint dédié
@@ -721,6 +728,7 @@ export async function executerCycleTva(
     ...anomaliesExhaustiviteAutoliquidationIntracom,
     ...anomaliesLivraisonIntracom,
     ...anomaliesCoherenceTauxProduit,
+    ...anomaliesCadeauClient,
     ...anomaliesHotel,
     ...anomaliesJugementHotel,
     ...anomaliesNumerotation,
