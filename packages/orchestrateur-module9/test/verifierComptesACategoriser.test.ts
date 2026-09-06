@@ -54,7 +54,7 @@ function fakeFetchBalanceVide(): typeof fetch {
 }
 
 describe('verifierComptesACategoriser', () => {
-  it('retourne une liste vide quand la balance ne montre aucun compte TVA avec mouvement (rien à catégoriser)', async () => {
+  it('retourne les deux listes vides quand la balance ne montre aucun compte TVA avec mouvement (rien à catégoriser)', async () => {
     const client = new PennylaneClient({ token: 'x', fetchImpl: fakeFetchBalanceVide() });
 
     const resultat = await verifierComptesACategoriser(pool, {
@@ -65,6 +65,9 @@ describe('verifierComptesACategoriser', () => {
       periodeFin: '2025-03-31',
     });
 
-    expect(resultat).toEqual([]);
+    // 10/08 : format étendu à deux champs, couvre aussi la
+    // sous-catégorisation autoliquidation (comptesChargeAutoliquidation),
+    // jusqu'ici seulement une suggestion enfouie dans le cycle complet.
+    expect(resultat).toEqual({ comptesACategoriser: [], comptesServiceSansSousCategorieAutoliquidation: [] });
   });
 });
