@@ -2,6 +2,7 @@ import type { EcritureTvaComplete, Anomalie, ContexteDossier } from '@tva-contro
 import { TAUX_NOMINAL_PAR_DEFAUT } from './types.js';
 import { verifierCoherenceTauxCollecte } from './coherenceTaux.js';
 import { verifierAutoliquidationEquilibree } from './autoliquidation.js';
+export { verifierAutoliquidationEquilibree } from './autoliquidation.js';
 import { verifierAvoirs } from './avoirs.js';
 export { verifierAvoirs } from './avoirs.js';
 import { detecterComptesTvaNonReconnus } from './comptesNonReconnus.js';
