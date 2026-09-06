@@ -49,6 +49,10 @@ export {
   type ParametresVerificationComptesTva,
 } from './verifierComptesTvaAConfirmer.js';
 export {
+  verifierAutoliquidationLegere,
+  type ParametresVerificationAutoliquidation,
+} from './verifierAutoliquidationLegere.js';
+export {
   enregistrerEvenementAudit,
   type EvenementAudit,
   enregistrerAnomalies,
