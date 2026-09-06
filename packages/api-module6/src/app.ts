@@ -15,6 +15,7 @@ import {
   verifierComptesACategoriser,
   preparerRapprochementsPaiementAchat,
   verifierParcVehicules,
+  verifierComptesTvaAConfirmer,
   enregistrerRapprochementPaiementAchat,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
@@ -1233,6 +1234,39 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
+  // --- Comptes TVA à confirmer, sans passer par un cycle complet (10/08) ---
+  // Pour l'écran dédié — consultable à tout moment, pas seulement en
+  // réaction au 409 du lancement de cycle (cf. le verrou juste au-dessus).
+  app.get<{ Params: { dossierId: string }; Querystring: { periodeDebut: string; periodeFin: string } }>(
+    '/dossiers/:dossierId/comptes-tva-a-confirmer',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      const { periodeDebut, periodeFin } = request.query;
+      if (!periodeDebut || !periodeFin) {
+        return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+      }
+
+      let client;
+      try {
+        client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+      } catch (err) {
+        if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+        if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+          return reply.code(400).send({ erreur: err.message });
+        }
+        throw err;
+      }
+
+      return verifierComptesTvaAConfirmer(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        client,
+        periodeDebut,
+        periodeFin,
+      });
+    }
+  );
+
   // --- Rapprochement des paiements achats (10/08) — remplace complètement
   // l'ancien mécanisme automatique. Contenu du popup : factures de service
   // non payées, avec leurs paiements candidats sur toute la fenêtre de
@@ -1393,6 +1427,26 @@ export function buildApp(pool: Pool): FastifyInstance {
       return reply.code(409).send({
         erreur:
           'Le parc de véhicules doit être renseigné avant de pouvoir lancer un cycle sur cette période (au moins une écriture touche un compte carburant).',
+      });
+    }
+
+    // Quatrième verrou, même jour (10/08) : les comptes de la famille TVA
+    // avec du mouvement doivent tous être confirmés (collecte, déductible,
+    // autoliquidation BTP/intracom...) avant de pouvoir lancer un cycle —
+    // même principe exactement que les trois précédents. Remplace
+    // l'ancien mécanisme réactif (compte_tva_non_reconnu, bloquant mais
+    // sans guider vers la bonne action) par une porte proactive.
+    const comptesTvaAConfirmer = await verifierComptesTvaAConfirmer(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+    if (comptesTvaAConfirmer.length > 0) {
+      return reply.code(409).send({
+        erreur: `${comptesTvaAConfirmer.length} compte(s) de la famille TVA doivent être confirmés avant de pouvoir lancer un cycle sur cette période.`,
+        comptesTvaAConfirmer,
       });
     }
 
