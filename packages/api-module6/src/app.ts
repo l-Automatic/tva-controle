@@ -16,6 +16,7 @@ import {
   preparerRapprochementsPaiementAchat,
   verifierParcVehicules,
   verifierComptesTvaAConfirmer,
+  verifierAutoliquidationLegere,
   enregistrerRapprochementPaiementAchat,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
@@ -774,6 +775,40 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
 
     return verifierNumerotationLegere(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+    });
+  });
+
+  // "Vérifier à nouveau" pour autoliquidation_desequilibree (10/08) — un
+  // seul bouton, pas de qualification préalable, couvre BTP et intracom
+  // en un seul appel. Aucun ajustement du calcul (anomalie purement
+  // bloquante, jamais un impact sur le montant lui-même).
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string };
+  }>('/dossiers/:dossierId/verifier-autoliquidation', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin } = request.body;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierAutoliquidationLegere(pool, {
       cabinetId,
       dossierId: request.params.dossierId,
       client,
