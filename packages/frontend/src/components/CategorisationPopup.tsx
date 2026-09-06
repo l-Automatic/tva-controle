@@ -10,6 +10,11 @@ interface CategorisationPopupProps {
   dossierId: string;
   utilisateurId: string;
   comptes: CompteACategoriser[];
+  // Second motif de blocage (brief v46) — comptes de charge service déjà
+  // catégorisés, mais dont le lien avec l'autoliquidation (sous-traitance)
+  // n'a jamais été tranché. Optionnel : les appelants pré-v46 (aucun ici en
+  // pratique, mais gardé simple) n'ont qu'à ne pas le passer.
+  comptesSousCategorieAutoliquidation?: CompteACategoriser[];
   onClose: () => void;
 }
 
@@ -111,6 +116,63 @@ function CompteCard({
   );
 }
 
+// Sous-catégorisation autoliquidation (brief v46) — deuxième motif de
+// blocage distinct de la catégorisation ci-dessus : ce compte est déjà
+// catégorisé en charge de service, mais son lien avec l'autoliquidation
+// (sous-traitance) n'a jamais été tranché. Deux choix seulement, pas un
+// menu déroulant à 6 entrées — même geste ajouterConvention+confirmerConvention
+// que CompteCard, clés distinctes (comptes_charge_autoliquidation /
+// comptes_charge_autoliquidation_rejetee).
+function CompteSousCategorieAutoliquidationCard({
+  compte,
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  onTraite,
+}: {
+  compte: CompteACategoriser;
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  onTraite: () => void;
+}) {
+  const [enCours, setEnCours] = useState<'lie' | 'non_lie' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleChoix(lie: boolean) {
+    setEnCours(lie ? 'lie' : 'non_lie');
+    setError(null);
+    const cle = lie ? 'comptes_charge_autoliquidation' : 'comptes_charge_autoliquidation_rejetee';
+    try {
+      const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, cle, [compte.compte]);
+      await confirmerConvention(cabinetId, id, utilisateurId);
+      notifier(`Compte ${compte.compte} — ${lie ? 'lié à l\'autoliquidation' : 'non lié à l\'autoliquidation'}`);
+      onTraite();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : `Échec de l'enregistrement du compte ${compte.compte}`);
+    } finally {
+      setEnCours(null);
+    }
+  }
+
+  return (
+    <li className="card">
+      <p className="label">Compte {compte.compte}</p>
+      {compte.exemplesLibelle.length > 0 && <p className="reference">{compte.exemplesLibelle.join(' · ')}</p>}
+      {error && <p className="error">{error}</p>}
+      <div className="popup-choix">
+        <button disabled={enCours !== null} onClick={() => void handleChoix(true)}>
+          {enCours === 'lie' ? '…' : "Lié à l'autoliquidation (sous-traitance)"}
+        </button>
+        <button className="secondary" disabled={enCours !== null} onClick={() => void handleChoix(false)}>
+          {enCours === 'non_lie' ? '…' : 'Non lié'}
+        </button>
+      </div>
+    </li>
+  );
+}
+
 // Comptes produit/charge mouvementés sur la période mais absents des 6
 // conventions — proposés nus si aucune suggestion IA n'est disponible pour
 // ce compte (cf. brief v2 section 5 ; 5ᵉ catégorie "cadeaux clients" en v6,
@@ -123,12 +185,18 @@ export function CategorisationPopup({
   dossierId,
   utilisateurId,
   comptes: comptesInitiaux,
+  comptesSousCategorieAutoliquidation: comptesSousCategorieInitiaux = [],
   onClose,
 }: CategorisationPopupProps) {
   const [comptes, setComptes] = useState(comptesInitiaux);
+  const [comptesSousCategorie, setComptesSousCategorie] = useState(comptesSousCategorieInitiaux);
 
   function retirer(compte: string) {
     setComptes((prev) => prev.filter((c) => c.compte !== compte));
+  }
+
+  function retirerSousCategorie(compte: string) {
+    setComptesSousCategorie((prev) => prev.filter((c) => c.compte !== compte));
   }
 
   return (
@@ -159,6 +227,29 @@ export function CategorisationPopup({
               />
             ))}
           </ul>
+        )}
+
+        {comptesSousCategorie.length > 0 && (
+          <>
+            <div className="panel-separateur" />
+            <h2>Sous-catégorisation autoliquidation ({comptesSousCategorie.length})</h2>
+            <p className="reference">
+              Ces comptes de charge de service sont déjà catégorisés, mais leur lien avec l'autoliquidation
+              (sous-traitance) n'a jamais été tranché.
+            </p>
+            <ul className="card-list">
+              {comptesSousCategorie.map((c) => (
+                <CompteSousCategorieAutoliquidationCard
+                  key={c.compte}
+                  compte={c}
+                  cabinetId={cabinetId}
+                  dossierId={dossierId}
+                  utilisateurId={utilisateurId}
+                  onTraite={() => retirerSousCategorie(c.compte)}
+                />
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </div>

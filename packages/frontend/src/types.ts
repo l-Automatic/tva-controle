@@ -130,6 +130,29 @@ export interface CompteACategoriser {
   suggestionIA?: SuggestionIA;
 }
 
+// GET /dossiers/:dossierId/comptes-a-categoriser retourne désormais un objet
+// à deux champs (brief v46) — comptesServiceSansSousCategorieAutoliquidation
+// est un second motif de blocage distinct (sous-traitance liée ou non à
+// l'autoliquidation), même forme d'item que comptesACategoriser.
+export interface ResultatComptesACategoriser {
+  comptesACategoriser: CompteACategoriser[];
+  comptesServiceSansSousCategorieAutoliquidation: CompteACategoriser[];
+}
+
+// GET /dossiers/:dossierId/comptes-tva-a-confirmer (brief v46, 4e porte
+// obligatoire) — réutilise le détecteur de compte_tva_non_reconnu en mode
+// "requête pure" (jamais persisté), pour un écran dédié où chaque compte
+// reçoit un rôle explicite (dû/déductible, BTP/intracom) avant de pouvoir
+// lancer un cycle.
+export interface CompteTvaAConfirmer {
+  type: string;
+  gravite: GraviteAnomalie;
+  ledgerEntryId: number;
+  compte: string;
+  description: string;
+  details?: { nbEcritures?: number; references?: number[]; exemplesLibelle?: string[] };
+}
+
 // --- Rapprochement des paiements achats (brief v34) — deux portes
 // obligatoires avant un cycle, avec la catégorisation ci-dessus : POST
 // /dossiers/:dossierId/cycles refuse désormais (409) tant qu'il reste des

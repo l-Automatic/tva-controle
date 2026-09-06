@@ -215,6 +215,14 @@ export function App() {
     setZone('configuration');
   }
 
+  // Quatrième porte obligatoire avant un cycle (brief v46), même principe
+  // que le parc de véhicules ci-dessus — un 409 sur les comptes TVA à
+  // confirmer amène directement sur l'écran dédié.
+  function allerVersComptesTvaAConfirmer() {
+    setSousOngletConfiguration('comptesTva');
+    setZone('configuration');
+  }
+
   return (
     <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
       <Sidebar
@@ -261,6 +269,7 @@ export function App() {
                   onSuggestionsAutoliquidation={setSuggestionsAutoliquidation}
                   onCompteNonReconnuClic={allerVersConventionsGeneriques}
                   onParcVehiculesManquant={allerVersParcVehicules}
+                  onComptesTvaAConfirmerManquant={allerVersComptesTvaAConfirmer}
                 />
               )}
               {zone === 'configuration' && (

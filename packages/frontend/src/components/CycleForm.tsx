@@ -9,7 +9,15 @@ import {
   retirerAjustementCalcul,
 } from '../api';
 import { useToast } from '../toast';
-import type { AjustementCalcul, CompteACategoriser, FactureARapprocher, LigneCalcul, ResultatCycle, TypeMontantAjustement } from '../types';
+import type {
+  AjustementCalcul,
+  CompteACategoriser,
+  CompteTvaAConfirmer,
+  FactureARapprocher,
+  LigneCalcul,
+  ResultatCycle,
+  TypeMontantAjustement,
+} from '../types';
 import { MessageCalculIncomplet } from './CalculsPanel';
 import { CategorisationPopup } from './CategorisationPopup';
 import { CycleLoadingPopup } from './CycleLoadingPopup';
@@ -31,6 +39,11 @@ interface CycleFormProps {
   // reconnaître, pour rediriger vers Configuration du dossier → Parc de
   // véhicules plutôt que d'afficher le 409 brut.
   onParcVehiculesManquant?: (() => void) | undefined;
+  // Quatrième porte obligatoire (brief v46) — comme le parc de véhicules,
+  // pas de payload à pré-remplir ici (l'écran dédié Configuration du
+  // dossier → Comptes TVA à confirmer refait l'appel lui-même), juste une
+  // redirection sur 409 avec comptesTvaAConfirmer.
+  onComptesTvaAConfirmerManquant?: (() => void) | undefined;
 }
 
 export const LIBELLE_CATEGORIE: Record<string, string> = {
@@ -343,6 +356,7 @@ export function CycleForm({
   onCycleLance,
   onAjustementChange = () => {},
   onParcVehiculesManquant = () => {},
+  onComptesTvaAConfirmerManquant = () => {},
 }: CycleFormProps) {
   const [periodeDebut, setPeriodeDebut] = useState('');
   const [periodeFin, setPeriodeFin] = useState('');
@@ -357,7 +371,13 @@ export function CycleForm({
   // soit directement (boutons "Vérifier…", consultable à tout moment, pas
   // seulement en réaction à un 409), soit pré-remplis depuis le corps d'un
   // 409 de lancerCycle, sans second appel réseau.
-  const [comptesACategoriser, setComptesACategoriser] = useState<CompteACategoriser[] | null>(null);
+  // Objet à deux champs depuis brief v46 (comptesServiceSansSousCategorieAutoliquidation
+  // en plus de comptesACategoriser) — un seul état plutôt que deux, la
+  // popup montre les deux sections quand l'une ou l'autre est non vide.
+  const [categorisation, setCategorisation] = useState<{
+    comptesACategoriser: CompteACategoriser[];
+    comptesServiceSansSousCategorieAutoliquidation: CompteACategoriser[];
+  } | null>(null);
   const [facturesARapprocher, setFacturesARapprocher] = useState<FactureARapprocher[] | null>(null);
   const [verificationEnCours, setVerificationEnCours] = useState<'categorisation' | 'rapprochement' | null>(null);
   const notifier = useToast();
@@ -392,12 +412,27 @@ export function CycleForm({
       setPhasePopup(null);
       if (err instanceof ApiError && err.status === 409) {
         const corps = err.corps as
-          | { comptesACategoriser?: CompteACategoriser[]; facturesARapprocher?: FactureARapprocher[] }
+          | {
+              comptesACategoriser?: CompteACategoriser[];
+              comptesServiceSansSousCategorieAutoliquidation?: CompteACategoriser[];
+              comptesTvaAConfirmer?: CompteTvaAConfirmer[];
+              facturesARapprocher?: FactureARapprocher[];
+            }
           | undefined;
-        if (corps?.comptesACategoriser) {
-          setComptesACategoriser(corps.comptesACategoriser);
+        if (corps?.comptesACategoriser || corps?.comptesServiceSansSousCategorieAutoliquidation) {
+          // Les deux motifs de blocage de la même porte (brief v46) —
+          // jamais les deux à la fois dans un seul 409 (la route s'arrête au
+          // premier détecté), mais la popup les affiche toujours ensemble.
+          setCategorisation({
+            comptesACategoriser: corps.comptesACategoriser ?? [],
+            comptesServiceSansSousCategorieAutoliquidation: corps.comptesServiceSansSousCategorieAutoliquidation ?? [],
+          });
         } else if (corps?.facturesARapprocher) {
           setFacturesARapprocher(corps.facturesARapprocher);
+        } else if (corps?.comptesTvaAConfirmer) {
+          // Quatrième porte (brief v46) — comme le parc de véhicules, pas de
+          // payload à pré-remplir : l'écran dédié refait l'appel lui-même.
+          onComptesTvaAConfirmerManquant();
         } else if (err.message.includes('parc de véhicules')) {
           // Troisième porte (brief v38) — pas de payload structuré à
           // pré-remplir cette fois, juste une redirection vers l'écran de
@@ -423,11 +458,11 @@ export function CycleForm({
     setVerificationEnCours('categorisation');
     setError(null);
     try {
-      const comptes = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
-      if (comptes.length === 0) {
+      const resultat = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
+      if (resultat.comptesACategoriser.length === 0 && resultat.comptesServiceSansSousCategorieAutoliquidation.length === 0) {
         notifier('Aucun compte à catégoriser pour cette période');
       } else {
-        setComptesACategoriser(comptes);
+        setCategorisation(resultat);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la vérification de la catégorisation');
@@ -506,13 +541,14 @@ export function CycleForm({
         />
       )}
       {phasePopup && <CycleLoadingPopup phase={phasePopup} messageSucces={messageSucces} />}
-      {comptesACategoriser && (
+      {categorisation && (
         <CategorisationPopup
           cabinetId={cabinetId}
           dossierId={dossierId}
           utilisateurId={utilisateurId}
-          comptes={comptesACategoriser}
-          onClose={() => setComptesACategoriser(null)}
+          comptes={categorisation.comptesACategoriser}
+          comptesSousCategorieAutoliquidation={categorisation.comptesServiceSansSousCategorieAutoliquidation}
+          onClose={() => setCategorisation(null)}
         />
       )}
       {facturesARapprocher && (

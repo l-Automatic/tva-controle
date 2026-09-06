@@ -4,6 +4,7 @@ import type {
   AuditEvenement,
   Calcul,
   CompteACategoriser,
+  CompteTvaAConfirmer,
   ConfigurationOnboarding,
   DetailCalculLigne,
   Dossier,
@@ -17,6 +18,7 @@ import type {
   ParametresRapprochementPaiementAchat,
   Proposition,
   QualificationEncaissement,
+  ResultatComptesACategoriser,
   ResultatCycle,
   ResultatSynchronisationDossiers,
   Role,
@@ -447,6 +449,28 @@ export function verifierNumerotation(
   });
 }
 
+// Quatre routes "Vérifier à nouveau" (brief v46), toutes le même principe :
+// erreurs de saisie certaines ou déductions statistiques, jamais une
+// question à trancher — un seul bouton, pas de qualification préalable,
+// aucun ajustement du calcul. Réponse {anomaliesOuvertes} seulement (pas de
+// champ "corrections", contrairement aux mécanismes de transfert
+// précédents). verifierAutoliquidation couvre à elle seule
+// autoliquidation_desequilibree ET autoliquidation_incomplete.
+function verifierSansQualification(
+  route: string
+): (cabinetId: string, dossierId: string, params: { periodeDebut: string; periodeFin: string }) => Promise<{ anomaliesOuvertes: number }> {
+  return (cabinetId, dossierId, params) =>
+    request<{ anomaliesOuvertes: number }>(`/dossiers/${dossierId}/${route}`, cabinetId, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+}
+
+export const verifierAutoliquidation = verifierSansQualification('verifier-autoliquidation');
+export const verifierImmobilisationTva = verifierSansQualification('verifier-immobilisation-tva');
+export const verifierTauxProduit = verifierSansQualification('verifier-taux-produit');
+export const verifierCoherenceTauxAutoliquidation = verifierSansQualification('verifier-coherence-taux-autoliquidation');
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,
@@ -660,14 +684,29 @@ export function lancerCycle(
 
 // Consultable à tout moment, pas seulement en réaction à un 409 (brief
 // v34) — vérification légère sans passer par un cycle complet.
+// Réponse à deux champs (brief v46) — comptesServiceSansSousCategorieAutoliquidation
+// est un second motif de blocage distinct, plus seulement comptesACategoriser.
 export function fetchComptesACategoriser(
   cabinetId: string,
   dossierId: string,
   periodeDebut: string,
   periodeFin: string
-): Promise<CompteACategoriser[]> {
+): Promise<ResultatComptesACategoriser> {
   const params = new URLSearchParams({ periodeDebut, periodeFin });
-  return request<CompteACategoriser[]>(`/dossiers/${dossierId}/comptes-a-categoriser?${params}`, cabinetId);
+  return request<ResultatComptesACategoriser>(`/dossiers/${dossierId}/comptes-a-categoriser?${params}`, cabinetId);
+}
+
+// Écran dédié "comptes TVA à confirmer" (brief v46, 4e porte obligatoire) —
+// consultable à tout moment, pas seulement en réaction au 409 du lancement
+// de cycle, même principe que fetchComptesACategoriser ci-dessus.
+export function fetchComptesTvaAConfirmer(
+  cabinetId: string,
+  dossierId: string,
+  periodeDebut: string,
+  periodeFin: string
+): Promise<CompteTvaAConfirmer[]> {
+  const params = new URLSearchParams({ periodeDebut, periodeFin });
+  return request<CompteTvaAConfirmer[]>(`/dossiers/${dossierId}/comptes-tva-a-confirmer?${params}`, cabinetId);
 }
 
 export function fetchRapprochementsPaiementAchat(

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AnalyseMotifNumerotationPanel, RECOMMANDATION_PERIODE, formatMotifNumerotation } from '../AnalyseMotifNumerotationPanel';
+import { ComptesTvaAConfirmerPanel } from '../ComptesTvaAConfirmerPanel';
 import { ConventionsComptesPanel } from '../ConventionsComptesPanel';
 import { IdentiteDossierPanel } from '../IdentiteDossierPanel';
 import { MotifNumerotationCandidatPanel } from '../MotifNumerotationCandidatPanel';
@@ -20,7 +21,14 @@ import {
   type Proposition,
 } from '../../types';
 
-export type SousOngletConfiguration = 'identite' | 'comptes' | 'generiques' | 'taux' | 'tauxAssigne' | 'vehicules';
+export type SousOngletConfiguration =
+  | 'identite'
+  | 'comptes'
+  | 'generiques'
+  | 'taux'
+  | 'tauxAssigne'
+  | 'vehicules'
+  | 'comptesTva';
 
 interface ConfigurationZoneProps {
   cabinetId: string;
@@ -72,6 +80,12 @@ const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: stri
     libelle: 'Parc de véhicules',
     description:
       'Renseigne les véhicules du dossier — détermine la déductibilité du carburant (tourisme/utilitaire) et signale les flottes mixtes.',
+  },
+  {
+    id: 'comptesTva',
+    libelle: 'Comptes TVA à confirmer',
+    description:
+      "Confirme le rôle des comptes de la famille TVA (445xx) mouvementés (dû/déductible, BTP ou intracom) — bloque le lancement d'un cycle tant qu'ils ne sont pas tous confirmés.",
   },
 ];
 
@@ -197,6 +211,9 @@ export function ConfigurationZone({
       )}
       {sousOnglet === 'vehicules' && (
         <VehiculesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      )}
+      {sousOnglet === 'comptesTva' && (
+        <ComptesTvaAConfirmerPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       )}
       </div>
     </div>

@@ -13,10 +13,14 @@ import {
   qualifierVehiculeTourisme,
   resoudreAnomalie,
   resoudreAnomaliesEnMasse,
+  verifierAutoliquidation,
   verifierAvoirs,
+  verifierCoherenceTauxAutoliquidation,
   verifierComptesNonReconnus,
   verifierImmobilisation,
+  verifierImmobilisationTva,
   verifierNumerotation,
+  verifierTauxProduit,
   verifierTvaHotel,
   verifierVehiculeTourisme,
 } from '../api';
@@ -91,10 +95,22 @@ const TYPE_TVA_HOTEL_A_VERIFIER = 'tva_hotel_a_verifier';
 const TYPE_TROU_NUMEROTATION = 'trou_numerotation_facture';
 const TYPE_DOUBLON_NUMEROTATION = 'doublon_numerotation_facture';
 
-// 11 des 14 types du catalogue ont un libellé dédié ici — cf.
-// CATALOGUE_ANOMALIES.md ; les 3 restants (incoherence_taux_autoliquidation,
-// immobilisation_sur_compte_tva_incorrect, autoliquidation_incomplete)
-// retombent sur le type brut en repli, hors périmètre de ce brief.
+// Quatre nouveaux types (brief v46) — même principe partout : erreurs de
+// saisie certaines ou déductions statistiques, jamais une question à
+// trancher. Contrairement au trou/doublon de numérotation ci-dessus,
+// "Vérifier à nouveau" REMPLACE entièrement Résoudre/Justifier (comme
+// tva_hotel_a_tort, brief v44) plutôt que de s'y ajouter — aucune
+// ambiguïté à commenter ou justifier ici.
+const TYPE_AUTOLIQUIDATION_DESEQUILIBREE = 'autoliquidation_desequilibree';
+const TYPE_AUTOLIQUIDATION_INCOMPLETE = 'autoliquidation_incomplete';
+const TYPE_IMMOBILISATION_TVA_INCORRECT = 'immobilisation_sur_compte_tva_incorrect';
+const TYPE_INCOHERENCE_TAUX_PRODUIT = 'incoherence_taux_produit';
+const TYPE_INCOHERENCE_TAUX_AUTOLIQUIDATION = 'incoherence_taux_autoliquidation';
+
+// Tous les types actifs du catalogue ont un libellé dédié ici — cf.
+// CATALOGUE_ANOMALIES.md. tva_sur_livraison_intracom_exoneree existe dans
+// le code mais reste volontairement hors périmètre (décision explicite,
+// brief v46) — jamais ajouté ici, retombe sur le type brut en repli.
 // ligne_tiers_introuvable et nature_operation_indeterminee retirées du
 // catalogue côté backend — résidu purement frontend retiré ici (brief
 // v33). flotte_mixte_carburant retirée pour la même raison en vérifiant
@@ -105,7 +121,12 @@ const TYPE_DOUBLON_NUMEROTATION = 'doublon_numerotation_facture';
 // en brief v36 — les deux dernières ne sont plus des anomalies du tout,
 // remplacées par le champ prorataAppliques d'un cycle (affiché dans le
 // panneau de calcul pour sens='collecte', déjà visible dans le popup de
-// rapprochement pour sens='deductible').
+// rapprochement pour sens='deductible'). Cinq types ajoutés en brief v46
+// (autoliquidation_desequilibree, autoliquidation_incomplete,
+// immobilisation_sur_compte_tva_incorrect, incoherence_taux_autoliquidation,
+// incoherence_taux_produit) — actifs dans le cycle réel depuis longtemps
+// pour certains, mais absents à tort de ce menu jusqu'ici (le commentaire
+// précédent n'en citait que 3 sur 5, lui-même déjà obsolète).
 const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   compte_tva_non_reconnu: 'Compte de TVA non reconnu',
   encaissement_non_affecte: 'Encaissement non affecté',
@@ -119,6 +140,11 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   tva_hotel_a_tort: 'TVA hôtel déduite à tort',
   trou_numerotation_facture: 'Trou dans la numérotation des factures',
   doublon_numerotation_facture: 'Doublon de numérotation de facture',
+  autoliquidation_desequilibree: 'Autoliquidation déséquilibrée',
+  autoliquidation_incomplete: 'Autoliquidation incomplète',
+  immobilisation_sur_compte_tva_incorrect: 'Immobilisation sur compte de TVA incorrect',
+  incoherence_taux_autoliquidation: 'Incohérence de taux — autoliquidation',
+  incoherence_taux_produit: 'Incohérence de taux — compte produit',
 };
 
 interface AnomaliesPanelProps {
@@ -1180,6 +1206,91 @@ function VerificationNumerotation({
   );
 }
 
+// "Vérifier à nouveau" générique pour les 4 routes du brief v46 — les
+// quatre partagent exactement la même mécanique (periodeDebut/periodeFin
+// seulement, réponse {anomaliesOuvertes}, aucun ajustement du calcul),
+// contrairement aux mécanismes de transfert des briefs précédents où
+// chacun avait sa propre nuance de toast/gating. Un seul composant
+// paramétré par la fonction d'appel et le libellé du toast, plutôt que
+// quatre composants presque identiques.
+function VerificationSimple({
+  cabinetId,
+  dossierId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+  verifier,
+  nomAnomalie,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+  verifier: (
+    cabinetId: string,
+    dossierId: string,
+    params: { periodeDebut: string; periodeFin: string }
+  ) => Promise<{ anomaliesOuvertes: number }>;
+  nomAnomalie: string;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomaliesOuvertes } = await verifier(cabinetId, dossierId, { periodeDebut, periodeFin });
+      notifier(
+        anomaliesOuvertes === 0
+          ? `Anomalie ${nomAnomalie} levée — plus rien à signaler sur cette période`
+          : `${anomaliesOuvertes} anomalie(s) ${nomAnomalie} toujours ouverte(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function AnomalieRow({
   anomalie,
   cabinetId,
@@ -1272,6 +1383,16 @@ function AnomalieRow({
     (estTvaHotelATort && estOuverte) || (estTvaHotelAVerifier && resolutionTvaHotelType === 'confirme');
   const estTrouOuDoublonNumerotation =
     anomalie.typeAnomalie === TYPE_TROU_NUMEROTATION || anomalie.typeAnomalie === TYPE_DOUBLON_NUMEROTATION;
+  const estAutoliquidationDesequilibreeOuIncomplete =
+    anomalie.typeAnomalie === TYPE_AUTOLIQUIDATION_DESEQUILIBREE || anomalie.typeAnomalie === TYPE_AUTOLIQUIDATION_INCOMPLETE;
+  const estImmobilisationTvaIncorrect = anomalie.typeAnomalie === TYPE_IMMOBILISATION_TVA_INCORRECT;
+  const estIncoherenceTauxProduit = anomalie.typeAnomalie === TYPE_INCOHERENCE_TAUX_PRODUIT;
+  const estIncoherenceTauxAutoliquidation = anomalie.typeAnomalie === TYPE_INCOHERENCE_TAUX_AUTOLIQUIDATION;
+  const estVerificationSimple =
+    estAutoliquidationDesequilibreeOuIncomplete ||
+    estImmobilisationTvaIncorrect ||
+    estIncoherenceTauxProduit ||
+    estIncoherenceTauxAutoliquidation;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -1359,6 +1480,36 @@ function AnomalieRow({
           </div>
         )}
 
+        {estOuverte && estVerificationSimple && (
+          <div className="actions">
+            <VerificationSimple
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+              verifier={
+                estAutoliquidationDesequilibreeOuIncomplete
+                  ? verifierAutoliquidation
+                  : estImmobilisationTvaIncorrect
+                    ? verifierImmobilisationTva
+                    : estIncoherenceTauxProduit
+                      ? verifierTauxProduit
+                      : verifierCoherenceTauxAutoliquidation
+              }
+              nomAnomalie={
+                estAutoliquidationDesequilibreeOuIncomplete
+                  ? 'autoliquidation'
+                  : estImmobilisationTvaIncorrect
+                    ? 'immobilisation sur compte TVA incorrect'
+                    : estIncoherenceTauxProduit
+                      ? 'incohérence taux produit'
+                      : 'incohérence taux autoliquidation'
+              }
+            />
+          </div>
+        )}
+
         {estOuverte && estAvoirAVerifier && (
           <div className="actions">
             <VerificationAvoirs
@@ -1412,7 +1563,7 @@ function AnomalieRow({
         )}
 
         {estOuverte &&
-          (estTvaHotelATort ? null : estEncaissement ? (
+          (estTvaHotelATort || estVerificationSimple ? null : estEncaissement ? (
             <EncaissementQualification
               anomalie={anomalie}
               cabinetId={cabinetId}
@@ -1479,6 +1630,7 @@ function AnomalieRow({
           !estEncaissementClientTaux &&
           !estTvaHotelATort &&
           !estTvaHotelAVerifier &&
+          !estVerificationSimple &&
           error && <p className="error">{error}</p>}
       </Accordion>
     </li>
