@@ -7,6 +7,14 @@ export interface ComptesConnus {
   comptesCarburant: string[];
   comptesCadeaux?: string[];
   comptesImmobilisation?: string[];
+  // Frais véhicule de tourisme (10/08) — entretien/réparations et
+  // location/crédit-bail, chacune sa propre subdivision quand elle existe
+  // (le cabinet en crée une dès qu'il y a plusieurs véhicules à suivre).
+  // Distinctes l'une de l'autre : entretien reste 0% déductible même sur
+  // un véhicule détenu en pleine propriété, location suit la même règle,
+  // mais les comptes PCG concernés sont différents (615x vs 612/613).
+  comptesEntretienVehicule?: string[];
+  comptesLocationVehicule?: string[];
   // Bug réel corrigé le 10/08 : un compte marqué "aucune de celles-là"
   // dans le popup n'était jamais mémorisé nulle part — donc redétecté à
   // l'identique à chaque cycle suivant, indéfiniment. Ce n'est PAS une
@@ -45,6 +53,8 @@ export function identifierComptesACategoriser(
     ...connus.comptesCarburant,
     ...(connus.comptesCadeaux ?? []),
     ...(connus.comptesImmobilisation ?? []),
+    ...(connus.comptesEntretienVehicule ?? []),
+    ...(connus.comptesLocationVehicule ?? []),
   ];
   const comptesSansCategorieExacts = new Set(connus.comptesSansCategorie ?? []);
 
