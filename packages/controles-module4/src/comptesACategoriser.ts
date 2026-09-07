@@ -15,6 +15,12 @@ export interface ComptesConnus {
   // mais les comptes PCG concernés sont différents (615x vs 612/613).
   comptesEntretienVehicule?: string[];
   comptesLocationVehicule?: string[];
+  // Ligne 6 CA3 (10/08, chantier déclaration) — exportations hors UE.
+  // Comme comptesVenteIntracomExoneree, jamais une porte obligatoire :
+  // n'affecte que l'affichage déclaratif, jamais le calcul de TVA
+  // lui-même. Rare pour les dossiers de ce projet selon Rami — une
+  // catégorie optionnelle, pas un motif de blocage de cycle.
+  comptesVenteExport?: string[];
   // Bug réel corrigé le 10/08 : un compte marqué "aucune de celles-là"
   // dans le popup n'était jamais mémorisé nulle part — donc redétecté à
   // l'identique à chaque cycle suivant, indéfiniment. Ce n'est PAS une
@@ -55,6 +61,7 @@ export function identifierComptesACategoriser(
     ...(connus.comptesImmobilisation ?? []),
     ...(connus.comptesEntretienVehicule ?? []),
     ...(connus.comptesLocationVehicule ?? []),
+    ...(connus.comptesVenteExport ?? []),
   ];
   const comptesSansCategorieExacts = new Set(connus.comptesSansCategorie ?? []);
 
