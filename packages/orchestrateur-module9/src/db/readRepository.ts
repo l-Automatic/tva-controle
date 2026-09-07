@@ -777,30 +777,31 @@ export interface DeclarationCalcul {
   ligne07IntracomExoneree: number; // livraisons intracom exonérées HT — corrigé le 10/08 (était ligne06IntracomExonere)
   ligne08DeductibleAbs: number; // 44566 + 445662 + 445664, fusionnés (confirmé par Rami)
   ligne09DeductibleImmo: number; // 44562 (+ 445622 le cas échéant, non séparé pour l'instant)
+  // Ligne 10 (10/08, phase 2) — null si le paramètre dossier
+  // date_debut_exercice n'est pas encore défini, jamais confondu avec un
+  // crédit réellement nul (0). Le frontend affiche "pas encore
+  // disponible" uniquement si null, "0 €" si la valeur vaut vraiment 0.
+  ligne10CreditAnterieur: number | null;
   solde: { sens: 'a_decaisser' | 'credit'; montant: number };
-  // Lignes dont on ne calcule pas encore le montant (10/08, chantier en
-  // cours, seule la phase 2 — crédit antérieur — reste à faire) — jamais
-  // un zéro silencieux, le frontend doit afficher "pas encore disponible".
-  disponible: {
-    ligne10CreditAnterieur: false;
-  };
 }
 
 // Traduit notre détail par catégorie (chargerDetailCalcul) en lignes de
-// déclaration CA3 — lignes 1/2/3/4/6/7/8/9/solde (10/08). Réutilise
+// déclaration CA3 — toutes les lignes 1 à 10 (10/08). Réutilise
 // chargerDetailCalcul plutôt que de recalculer, jamais deux sources de
-// vérité pour le même montant. Les catégories base_ht_* sont lues
-// séparément, volontairement absentes de TOUTES_CATEGORIES/chargerDetailCalcul
-// (jamais sujettes à ajustement manuel, pas leur place dans le panneau de
-// calcul persistant — uniquement pertinentes pour cet onglet Déclaration).
+// vérité pour le même montant. Les catégories base_ht_*/credit_tva_anterieur
+// sont lues séparément, volontairement absentes de
+// TOUTES_CATEGORIES/chargerDetailCalcul (jamais sujettes à ajustement
+// manuel, pas leur place dans le panneau de calcul persistant —
+// uniquement pertinentes pour cet onglet Déclaration).
 // Arrondi à l'euro le plus proche (10/08, décision de méthode avec
 // Rami) — chaque ligne individuelle est arrondie EN PREMIER, puis tout
 // total ou solde se calcule comme la somme des lignes déjà arrondies
 // affichées, jamais un arrondi indépendant du total. Sans cette règle,
 // un collaborateur qui vérifie à la main (ligne 1 = somme des taux de la
-// ligne 2, solde = ligne1+ligne4+BTP−ligne8−ligne9) pourrait retomber sur
-// un montant différent d'1€ de ce qui est affiché à l'écran — jamais une
-// vraie erreur, juste deux arrondis indépendants qui divergent.
+// ligne 2, solde = ligne1+ligne4+BTP−ligne8−ligne9−ligne10) pourrait
+// retomber sur un montant différent d'1€ de ce qui est affiché à
+// l'écran — jamais une vraie erreur, juste deux arrondis indépendants
+// qui divergent.
 function arrondirEuro(montant: number): number {
   return Math.round(montant);
 }
@@ -814,7 +815,7 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
     `SELECT categorie, SUM(montant) AS total FROM calculs_tva_lignes
      WHERE calcul_id = $1 AND categorie IN (
        'base_ht_20', 'base_ht_10', 'base_ht_5_5', 'base_ht_2_1',
-       'base_ht_export', 'base_ht_intracom_exoneree'
+       'base_ht_export', 'base_ht_intracom_exoneree', 'credit_tva_anterieur'
      )
      GROUP BY categorie`,
     [calculId]
@@ -835,6 +836,9 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
   };
   const ligne06Export = mBaseHt('base_ht_export');
   const ligne07IntracomExoneree = mBaseHt('base_ht_intracom_exoneree');
+  // null si la ligne n'a jamais été persistée (paramètre dossier absent
+  // au moment du cycle) — has() distingue "absente" de "vaut 0".
+  const ligne10CreditAnterieur = baseHtParCategorie.has('credit_tva_anterieur') ? mBaseHt('credit_tva_anterieur') : null;
 
   const ligne02ParTaux = {
     taux20: m('collectee_20'),
@@ -858,8 +862,17 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
   // du montant net brut calculé séparément — garantit que
   // ligne1+ligne4+BTP−ligne8−ligne9 (calcul à la main depuis ce qui est
   // affiché) redonne exactement ce solde.
+  // Ligne 10 soustraite du solde uniquement si disponible (paramètre
+  // date_debut_exercice défini) — sinon le solde affiché resterait
+  // incomplet sans que personne ne le sache. null traité comme 0 ici,
+  // mais reste bien affiché comme "pas encore disponible" séparément.
   const montantNet =
-    ligne01CollecteTotal + ligne04DueIntracom + autresOperationsImposablesBtp - ligne08DeductibleAbs - ligne09DeductibleImmo;
+    ligne01CollecteTotal +
+    ligne04DueIntracom +
+    autresOperationsImposablesBtp -
+    ligne08DeductibleAbs -
+    ligne09DeductibleImmo -
+    (ligne10CreditAnterieur ?? 0);
 
   return {
     ligne01CollecteTotal,
@@ -871,9 +884,7 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
     ligne07IntracomExoneree,
     ligne08DeductibleAbs,
     ligne09DeductibleImmo,
+    ligne10CreditAnterieur,
     solde: { sens: montantNet >= 0 ? 'a_decaisser' : 'credit', montant: Math.abs(montantNet) },
-    disponible: {
-      ligne10CreditAnterieur: false,
-    },
   };
 }
