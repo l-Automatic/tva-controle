@@ -10,7 +10,13 @@ export type CategorieLigneCalcul =
   | 'collectee_2_1'
   | 'deductible_abs'
   | 'deductible_immo'
-  | 'autoliquidation_due'
+  // Séparées (10/08, demande de Rami — chantier déclaration CA3) : la
+  // ligne 4 (intracom) et les "autres opérations imposables" (BTP, art.
+  // 283-2 nonies CGI) sont deux cases différentes du formulaire. Le
+  // déductible, lui, reste fusionné (confirmé par Rami) — 44566 + 445662 +
+  // 445664 vont tous à la même ligne 20/8, aucune raison de les séparer.
+  | 'autoliquidation_due_btp'
+  | 'autoliquidation_due_intracom'
   | 'autoliquidation_deductible';
 
 export interface LigneCalculTva {
@@ -48,11 +54,13 @@ export interface ConfigCalculTva {
   contexteDossier?: ContexteDossier;
   compteAutoliquidationDue?: string;
   compteAutoliquidationDeductible?: string;
-  // TVA intracom (10/08) — deuxième paire d'autoliquidation, réutilise les
-  // mêmes catégories 'autoliquidation_due'/'autoliquidation_deductible'
-  // que le BTP (les deux s'annulent identiquement dans le calcul final,
-  // pas besoin de catégories séparées) — seule la reconnaissance du compte
-  // change.
+  // TVA intracom (10/08) — deuxième paire d'autoliquidation. Le dû est
+  // désormais séparé du BTP en deux catégories distinctes (10/08, second
+  // correctif — chantier déclaration CA3 : la ligne 4 intracom et les
+  // "autres opérations imposables" BTP sont deux cases différentes du
+  // formulaire), le déductible reste fusionné (les deux s'annulent
+  // identiquement dans le calcul net, aucune raison de le séparer) —
+  // seule la reconnaissance du compte change.
   compteAutoliquidationDueIntracom?: string;
   compteAutoliquidationDeductibleIntracom?: string;
   // Taux appliqué pour extraire la TVA du montant porté sur les comptes
@@ -159,7 +167,9 @@ export function calculerTva(
     // (régularisation) sans traitement particulier.
     if (compte === compteDue || compte === compteDueIntracom) {
       const tva = netSensCredit - netSensCredit / (1 + tauxAutoliquidation / 100);
-      ajouter('autoliquidation_due', tva, ledgerEntryId);
+      // Séparé (10/08) : la ligne 4 (intracom) et les "autres opérations
+      // imposables" (BTP) sont deux cases différentes de la déclaration.
+      ajouter(compte === compteDueIntracom ? 'autoliquidation_due_intracom' : 'autoliquidation_due_btp', tva, ledgerEntryId);
       continue;
     }
     if (compte === compteDeductible || compte === compteDeductibleIntracom) {
@@ -275,7 +285,7 @@ export function calculerTva(
 
   const collecte = sommeCategories(lignes, ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1']);
   const deductible = sommeCategories(lignes, ['deductible_abs', 'deductible_immo']);
-  const autoliquidationDue = sommeCategories(lignes, ['autoliquidation_due']);
+  const autoliquidationDue = sommeCategories(lignes, ['autoliquidation_due_btp', 'autoliquidation_due_intracom']);
   const autoliquidationDeductible = sommeCategories(lignes, ['autoliquidation_deductible']);
 
   // Autoliquidation : due et déductible s'annulent par construction si équilibrées
@@ -353,7 +363,7 @@ export function integrerRegularisations(
 
   const collecte = sommeCategories(lignes, ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1']);
   const deductible = sommeCategories(lignes, ['deductible_abs', 'deductible_immo']);
-  const autoliquidationDue = sommeCategories(lignes, ['autoliquidation_due']);
+  const autoliquidationDue = sommeCategories(lignes, ['autoliquidation_due_btp', 'autoliquidation_due_intracom']);
   const autoliquidationDeductible = sommeCategories(lignes, ['autoliquidation_deductible']);
   const tvaNette = arrondir(collecte - deductible + autoliquidationDue - autoliquidationDeductible);
 
