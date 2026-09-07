@@ -1,4 +1,5 @@
 import type { EcritureTvaComplete, Anomalie } from '@tva-controle/core';
+import type { StatutExigibilite } from './exigibilite.js';
 
 const TAUX_OFFICIELS = [2.1, 5.5, 10, 20];
 
@@ -108,8 +109,24 @@ export interface BaseHtParTaux {
 // — une vente exonérée (export, intracom) n'a par nature aucune ligne de
 // collecte, elle est donc naturellement exclue ici et comptée séparément
 // (lignes 5/6, chantier à part, pas encore construit).
-export function agregerBaseHtParTaux(ecritures: EcritureTvaComplete[]): BaseHtParTaux {
+//
+// Bug réel corrigé avant même d'être poussé (10/08, trouvé en préparant
+// pipeline.test.ts) : cette fonction ignorait entièrement l'exigibilité —
+// une facture non encore lettrée (TVA sur encaissement, pas encore
+// exigible) était comptée dans la base HT alors que calculerTva l'exclut
+// correctement de collectee_20. Corrigé en reproduisant EXACTEMENT le
+// même filtre que calcul.ts : statutExig.exigible === false -> exclue
+// entièrement, statutExig.prorataExigible défini -> montant réduit au
+// prorata (paiement partiel authentique), absence de statut -> compte
+// hors périmètre du contrôle, inclus normalement. Sans cette
+// correspondance stricte, la ligne 3 de la déclaration ne refléterait pas
+// exactement ce qui compose réellement la ligne 1/collectee_20.
+export function agregerBaseHtParTaux(
+  ecritures: EcritureTvaComplete[],
+  statutsExigibilite: StatutExigibilite[] = []
+): BaseHtParTaux {
   const parTaux = { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 };
+  const exigibiliteParPiece = new Map(statutsExigibilite.map((s) => [`${s.ledgerEntryId}:${s.compte}`, s]));
 
   for (const ecriture of ecritures) {
     if (!ecriture.ligneTva.compte.startsWith('44571')) continue;
@@ -118,10 +135,20 @@ export function agregerBaseHtParTaux(ecritures: EcritureTvaComplete[]): BaseHtPa
     if (!ligneProduit) continue;
 
     const montantTva = Math.abs(ecriture.ligneTva.debit - ecriture.ligneTva.credit);
-    const baseHt = Math.abs(ligneProduit.debit - ligneProduit.credit);
-    if (baseHt === 0) continue;
+    const baseHtOriginale = Math.abs(ligneProduit.debit - ligneProduit.credit);
+    if (baseHtOriginale === 0) continue;
 
-    const taux = normaliserTaux((montantTva / baseHt) * 100);
+    // Même clé, même logique EXACTE que calcul.ts — une ligne non exigible
+    // n'a jamais sa place dans la base HT taxable de la période.
+    const cle = `${ecriture.ligneTva.ledgerEntryId}:${ecriture.ligneTva.compte}`;
+    const statutExig = exigibiliteParPiece.get(cle);
+    if (statutExig && !statutExig.exigible) continue;
+    // Le taux se calcule toujours sur les montants pleins (le taux ne
+    // change jamais à cause d'un paiement partiel) — seul le montant
+    // sommé est réduit au prorata ensuite.
+    const taux = normaliserTaux((montantTva / baseHtOriginale) * 100);
+    const baseHt = statutExig?.prorataExigible !== undefined ? baseHtOriginale * statutExig.prorataExigible : baseHtOriginale;
+
     if (taux === 20) parTaux.taux20 += baseHt;
     else if (taux === 10) parTaux.taux10 += baseHt;
     else if (taux === 5.5) parTaux.taux5_5 += baseHt;
