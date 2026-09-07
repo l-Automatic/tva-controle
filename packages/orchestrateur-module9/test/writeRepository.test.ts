@@ -60,6 +60,7 @@ import {
   listerTauxHistoriqueTiers,
   listerCalculs,
   chargerDetailCalcul,
+  chargerDeclarationCalcul,
   listerLedgerEntryIdsQualifies,
   listerRegularisationsAIntegrer,
   listerParametresCabinet,
@@ -2693,5 +2694,76 @@ describe('appliquerCorrectionFraisVehicule', () => {
       )
     );
     expect(Number.parseFloat(ajustement.rows[0]!.montant_ajuste)).toBe(1120); // 1200 - 80
+  });
+});
+
+describe('chargerDeclarationCalcul', () => {
+  it('agrège correctement les lignes 1/2/4/8/9 et calcule le solde, marque le reste indisponible', async () => {
+    const periode = '2026-06-01';
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 999, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2026-06-30']
+        )
+      )
+    ).rows[0]!.id;
+    const lignes: [string, number][] = [
+      ['collectee_20', 1000],
+      ['collectee_10', 200],
+      ['autoliquidation_due_intracom', 50],
+      ['autoliquidation_due_btp', 30],
+      ['deductible_abs', 600],
+      ['autoliquidation_deductible', 80], // BTP + intracom fusionnés
+      ['deductible_immo', 100],
+    ];
+    for (const [categorie, montant] of lignes) {
+      await avecClient((client) =>
+        client.query(
+          `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES ($1, $2, $3, 1)`,
+          [calculId, categorie, montant]
+        )
+      );
+    }
+
+    const declaration = await avecClient((client) => chargerDeclarationCalcul(client, calculId));
+
+    expect(declaration.ligne01CollecteTotal).toBe(1200); // 1000 + 200
+    expect(declaration.ligne02ParTaux).toEqual({ taux20: 1000, taux10: 200, taux5_5: 0, taux2_1: 0 });
+    expect(declaration.ligne04DueIntracom).toBe(50);
+    expect(declaration.autresOperationsImposablesBtp).toBe(30);
+    expect(declaration.ligne08DeductibleAbs).toBe(680); // 600 + 80
+    expect(declaration.ligne09DeductibleImmo).toBe(100);
+    // solde = (1200 + 50 + 30) - (680 + 100) = 500
+    expect(declaration.solde).toEqual({ sens: 'a_decaisser', montant: 500 });
+    expect(declaration.disponible).toEqual({
+      ligne03BaseHt: false,
+      ligne05Export: false,
+      ligne06IntracomExonere: false,
+      ligne10CreditAnterieur: false,
+    });
+  });
+
+  it('donne un solde en credit (montant negatif) si le deductible depasse le collecte', async () => {
+    const periode = '2026-06-02';
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 0, 'credit') RETURNING id`,
+          [dossierId, periode, '2026-06-30']
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES ($1, 'deductible_abs', 500, 1)`,
+        [calculId]
+      )
+    );
+
+    const declaration = await avecClient((client) => chargerDeclarationCalcul(client, calculId));
+    expect(declaration.solde).toEqual({ sens: 'credit', montant: 500 });
   });
 });
