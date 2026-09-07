@@ -2773,4 +2773,38 @@ describe('chargerDeclarationCalcul', () => {
     const declaration = await avecClient((client) => chargerDeclarationCalcul(client, calculId));
     expect(declaration.solde).toEqual({ sens: 'credit', montant: 500 });
   });
+
+  it('arrondit chaque ligne AVANT de sommer — total et solde toujours cohérents avec le détail affiché', async () => {
+    const periode = '2026-06-03';
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 0, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2026-06-30']
+        )
+      )
+    ).rows[0]!.id;
+    // Volontairement des décimales qui arrondissent chacune vers le haut
+    // (.5 pile) — si le total était arrondi séparément depuis la somme
+    // brute (1000.5 + 200.5 = 1201.0), on obtiendrait 1201, alors que la
+    // somme des deux lignes déjà arrondies (1001 + 201) donne 1202 — les
+    // deux méthodes divergent volontairement ici pour bien prouver que
+    // c'est la seconde qui est utilisée.
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES
+           ($1, 'collectee_20', 1000.5, 1), ($1, 'collectee_10', 200.5, 1)`,
+        [calculId]
+      )
+    );
+
+    const declaration = await avecClient((client) => chargerDeclarationCalcul(client, calculId));
+
+    expect(declaration.ligne02ParTaux.taux20).toBe(1001); // 1000.5 arrondi
+    expect(declaration.ligne02ParTaux.taux10).toBe(201); // 200.5 arrondi
+    // Le total doit être la somme des deux lignes DÉJÀ arrondies (1202),
+    // jamais un arrondi séparé de la somme brute (qui donnerait 1201).
+    expect(declaration.ligne01CollecteTotal).toBe(1202);
+  });
 });
