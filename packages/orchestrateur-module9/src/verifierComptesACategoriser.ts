@@ -66,6 +66,11 @@ export async function verifierComptesACategoriser(
 
   const comptesChargeService = conventionListe(contexteDossier, 'comptes_charge_service') ?? [];
 
+  // Bug réel corrigé (10/08, signalé par Claude Code pour comptesVenteExport,
+  // élargi en vérifiant : comptesEntretienVehicule et comptesLocationVehicule
+  // manquaient aussi ici) — sans ces trois listes, un compte confirmé sous
+  // l'une de ces catégories n'était jamais exclu de "à catégoriser", donc
+  // re-proposé indéfiniment dans le popup principal malgré la confirmation.
   const comptesACategoriser = identifierComptesACategoriser(ecritures, {
     comptesVenteService: conventionListe(contexteDossier, 'comptes_vente_service') ?? [],
     comptesChargeService,
@@ -73,6 +78,9 @@ export async function verifierComptesACategoriser(
     comptesCarburant: conventionListe(contexteDossier, 'comptes_carburant') ?? [],
     comptesCadeaux: conventionListe(contexteDossier, 'comptes_cadeaux') ?? [],
     comptesImmobilisation: conventionListe(contexteDossier, 'comptes_immobilisation') ?? [],
+    comptesEntretienVehicule: conventionListe(contexteDossier, 'comptes_entretien_vehicule') ?? [],
+    comptesLocationVehicule: conventionListe(contexteDossier, 'comptes_location_vehicule') ?? [],
+    comptesVenteExport: conventionListe(contexteDossier, 'comptes_vente_export') ?? [],
     comptesSansCategorie: conventionListe(contexteDossier, 'comptes_sans_categorie') ?? [],
   });
 
