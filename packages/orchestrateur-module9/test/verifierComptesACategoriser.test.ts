@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import pg from 'pg';
 import { PennylaneClient } from '@tva-controle/connector-pennylane';
-import { creerPool } from '../src/db/pool.js';
+import { creerPool, avecContexteCabinet } from '../src/db/pool.js';
 import { verifierComptesACategoriser } from '../src/verifierComptesACategoriser.js';
 
 const CONNECTION_STRING =
@@ -69,5 +69,81 @@ describe('verifierComptesACategoriser', () => {
     // sous-catégorisation autoliquidation (comptesChargeAutoliquidation),
     // jusqu'ici seulement une suggestion enfouie dans le cycle complet.
     expect(resultat).toEqual({ comptesACategoriser: [], comptesServiceSansSousCategorieAutoliquidation: [] });
+  });
+
+  it('bug réel corrigé (10/08, signalé par Claude Code) : un compte confirmé comptesEntretienVehicule/LocationVehicule/VenteExport est bien exclu de comptesACategoriser', async () => {
+    await avecContexteCabinet(pool, CABINET_ID, (client) =>
+      client.query(
+        `INSERT INTO conventions_dossier (dossier_id, cle, valeur, statut, source)
+         VALUES ($1, 'comptes_entretien_vehicule', '["615500"]'::jsonb, 'confirmed', 'onboarding')`,
+        [DOSSIER_ID]
+      )
+    );
+
+    const fetchImpl = (async (rawUrl: string) => {
+      const url = new URL(rawUrl);
+      if (url.pathname.includes('trial_balance') || url.pathname.includes('general_balance')) {
+        return new Response(
+          JSON.stringify({
+            items: [{ number: '445666', debit: 0, credit: 0 }, { number: '44566', debit: 100, credit: 0 }],
+            has_more: false,
+            next_cursor: null,
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.pathname.includes('ledger_entry_lines')) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 1,
+                debit: '100',
+                credit: '0',
+                label: 'Entretien véhicule',
+                date: '2025-03-15',
+                created_at: '2025-03-15',
+                updated_at: '2025-03-15',
+                journal: { id: 1, url: 'x' },
+                ledger_account: { id: 1, number: '44566', url: 'x' },
+                ledger_entry: { id: 1 },
+                lettered_ledger_entry_lines: { ids: [], url: 'x' },
+              },
+              {
+                id: 2,
+                debit: '0',
+                credit: '100',
+                label: 'Entretien véhicule',
+                date: '2025-03-15',
+                created_at: '2025-03-15',
+                updated_at: '2025-03-15',
+                journal: { id: 1, url: 'x' },
+                ledger_account: { id: 2, number: '615500', url: 'x' },
+                ledger_entry: { id: 1 },
+                lettered_ledger_entry_lines: { ids: [], url: 'x' },
+              },
+            ],
+            has_more: false,
+            next_cursor: null,
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ items: [], has_more: false, next_cursor: null }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const client = new PennylaneClient({ token: 'x', fetchImpl });
+
+    const resultat = await verifierComptesACategoriser(pool, {
+      cabinetId: CABINET_ID,
+      dossierId: DOSSIER_ID,
+      client,
+      periodeDebut: '2025-03-01',
+      periodeFin: '2025-03-31',
+    });
+
+    // Le compte 615500 (confirmé comptesEntretienVehicule) ne doit JAMAIS
+    // apparaître dans comptesACategoriser — c'était le bug.
+    expect(resultat.comptesACategoriser.some((c) => c.compte === '615500')).toBe(false);
   });
 });
