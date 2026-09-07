@@ -17,6 +17,7 @@ import {
   determinerDeductibiliteCarburant,
   detecterImmobilisationManquee,
   identifierCandidatsJugementVehiculeTourisme,
+  identifierCandidatsFraisVehicule,
   verifierCoherenceTauxAutoliquidation,
   verifierCoherenceCompteImmobilisation,
   verifierCoherenceTvaHotel,
@@ -49,6 +50,7 @@ import {
   type SuggestionClassificationCompte,
   jugerLibellesHotel,
   jugerLibellesVehiculeTourisme,
+  jugerVehiculeIdentifieDansLibelle,
 } from '@tva-controle/connector-mistral';
 import type { Anomalie } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
@@ -168,6 +170,70 @@ function fusionnerSuggestions(
   });
 }
 
+// Fonction partagée entretien/location véhicule tourisme (10/08) — même
+// mécanisme exactement pour les deux, juste un type d'anomalie et une
+// liste de comptes différents. Contrairement aux autres jugements LLM de
+// ce projet, chaque candidat devient TOUJOURS une anomalie (le fait est
+// déjà certain) — seule la gravité varie selon la confiance.
+async function construireAnomaliesFraisVehicule(
+  ecritures: EcritureTvaComplete[],
+  comptesConcernes: string[],
+  typeAnomalie: string,
+  mistralApiKey: string | undefined
+): Promise<Anomalie[]> {
+  if (comptesConcernes.length === 0) return [];
+
+  const candidats = identifierCandidatsFraisVehicule(ecritures, comptesConcernes);
+  if (candidats.length === 0) return [];
+
+  const anomalies: Anomalie[] = [];
+
+  for (const candidat of candidats) {
+    const ecritureConcernee = ecritures.find((e) => e.ligneTva.ledgerEntryId === candidat.ledgerEntryId);
+    if (!ecritureConcernee) continue;
+
+    let vehiculeIdentifie = false;
+    let confiance: 'haute' | 'moyenne' | 'basse' = 'basse';
+    let justification = '';
+
+    if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
+      try {
+        const mistralClient = new MistralClient({ apiKey: mistralApiKey });
+        const jugements = await jugerVehiculeIdentifieDansLibelle(mistralClient, [candidat]);
+        const jugement = jugements[0];
+        if (jugement) {
+          vehiculeIdentifie = jugement.vehiculeIdentifie;
+          confiance = jugement.confiance;
+          justification = jugement.justification;
+        }
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec jugement IA (frais véhicule) : ${String(err)}`);
+        }
+      }
+    }
+
+    anomalies.push({
+      type: typeAnomalie,
+      gravite: vehiculeIdentifie ? 'bloquant' : 'signale',
+      ledgerEntryId: candidat.ledgerEntryId,
+      compte: candidat.compte,
+      description: vehiculeIdentifie
+        ? `TVA déduite (${ecritureConcernee.ligneTva.debit.toFixed(2)} €) sur un frais lié à un véhicule identifié dans le libellé ("${candidat.libelle ?? ''}") — 0% déductible sur une flotte 100% tourisme. À corriger.`
+        : `TVA déduite (${ecritureConcernee.ligneTva.debit.toFixed(2)} €) sur ce compte, sur une flotte 100% tourisme (0% déductible) — libellé sans indication exploitable ("${candidat.libelle ?? '(libellé vide)'}"). À vérifier.`,
+      details: {
+        libelle: candidat.libelle,
+        montantDeduit: ecritureConcernee.ligneTva.debit,
+        vehiculeIdentifie,
+        confiance,
+        justification,
+      },
+    });
+  }
+
+  return anomalies;
+}
+
 export async function executerCycleTva(
   pool: Pool,
   params: ParametresCycleTva
@@ -232,6 +298,8 @@ export async function executerCycleTva(
     params.comptesCadeauxOverride ?? conventionListe(contexteDossier, 'comptes_cadeaux') ?? [];
   const comptesImmobilisation =
     params.comptesImmobilisationOverride ?? conventionListe(contexteDossier, 'comptes_immobilisation') ?? [];
+  const comptesEntretienVehicule = conventionListe(contexteDossier, 'comptes_entretien_vehicule') ?? [];
+  const comptesLocationVehicule = conventionListe(contexteDossier, 'comptes_location_vehicule') ?? [];
   const comptesSansCategorie = conventionListe(contexteDossier, 'comptes_sans_categorie') ?? [];
   const comptesAttentePrefixes =
     params.comptesAttenteOverride ?? conventionListe(contexteDossier, 'comptes_attente') ?? ['471'];
@@ -568,6 +636,39 @@ export async function executerCycleTva(
     }
   }
 
+  // Frais entretien/location véhicule de tourisme (10/08, demande de Rami)
+  // — même schéma que hôtel/véhicule tourisme : pré-filtre déterministe
+  // (candidats = compte confirmé avec TVA réellement déduite,
+  // controles-module4), puis jugement LLM sur le libellé. DIFFÉRENCE
+  // IMPORTANTE avec les autres jugements LLM de ce projet : ici, chaque
+  // candidat devient TOUJOURS une anomalie (le fait sous-jacent est déjà
+  // certain — flotte 100% tourisme + TVA déduite sur ce compte = toujours
+  // 0% déductible, jamais une nuance) — seule la GRAVITÉ varie selon la
+  // confiance du jugement : bloquant si un véhicule est identifié dans le
+  // libellé (quasi certain), signalé sinon (moins de certitude). Jamais
+  // sur une flotte mixte — impossible de savoir sans plus d'info à quel
+  // véhicule précis (tourisme ou utilitaire) une facture se rapporte.
+  const flotteTourismeUniquement =
+    contexteDossier.parcVehicules.length > 0 &&
+    contexteDossier.parcVehicules.every((v) => v.type === 'vehicule_tourisme');
+
+  const anomaliesEntretienVehicule = flotteTourismeUniquement
+    ? await construireAnomaliesFraisVehicule(
+        ecritures,
+        comptesEntretienVehicule,
+        'entretien_vehicule_tourisme_deduit_a_tort',
+        mistralApiKey
+      )
+    : [];
+  const anomaliesLocationVehicule = flotteTourismeUniquement
+    ? await construireAnomaliesFraisVehicule(
+        ecritures,
+        comptesLocationVehicule,
+        'location_vehicule_tourisme_deduite_a_tort',
+        mistralApiKey
+      )
+    : [];
+
   const anomaliesCoherenceAutoliquidation =
     compteAutoliquidationDeductible !== undefined
       ? verifierCoherenceTauxAutoliquidation(ecritures, { compteTvaDeductibleAutoliquidee: compteAutoliquidationDeductible })
@@ -755,6 +856,8 @@ export async function executerCycleTva(
     ...anomaliesLivraisonIntracom,
     ...anomaliesCoherenceTauxProduit,
     ...anomaliesCadeauClient,
+    ...anomaliesEntretienVehicule,
+    ...anomaliesLocationVehicule,
     ...anomaliesHotel,
     ...anomaliesJugementHotel,
     ...anomaliesNumerotation,
