@@ -1091,11 +1091,20 @@ export async function executerCycleTva(
       ['base_ht_2_1', baseHtParTaux.parTaux.taux2_1],
       ['base_ht_export', baseHtExport],
       ['base_ht_intracom_exoneree', baseHtIntracomExoneree],
-      ['credit_tva_anterieur', creditTvaAnterieur],
     ] as const
   )
     .filter(([, montant]) => montant !== 0)
     .map(([categorie, montant]) => ({ categorie, montant, referencesPieces: [] }));
+  // credit_tva_anterieur est traitée à part (10/08) : contrairement aux
+  // autres lignes ci-dessus, un montant à zéro est une vraie réponse
+  // (aucun crédit à reporter) — jamais confondu avec "pas encore
+  // calculée" (paramètre date_debut_exercice absent). Persistée
+  // uniquement si le paramètre est bien défini, peu importe la valeur
+  // obtenue (y compris zéro) — c'est la présence de la ligne elle-même
+  // qui signale au frontend que c'est disponible.
+  if (typeof dateDebutExerciceBrut === 'string') {
+    lignesBaseHt.push({ categorie: 'credit_tva_anterieur', montant: creditTvaAnterieur, referencesPieces: [] });
+  }
   resultat.lignes.push(...lignesBaseHt);
 
   if (process.env.DEBUG_CYCLE) {
