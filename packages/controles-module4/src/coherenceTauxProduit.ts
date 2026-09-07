@@ -88,3 +88,51 @@ export function verifierCoherenceTauxProduit(ecritures: EcritureTvaComplete[]): 
 
   return anomalies;
 }
+
+export interface BaseHtParTaux {
+  total: number;
+  parTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
+}
+
+// Agrège la base HT du chiffre d'affaires taxable, par taux — ligne 3 de
+// la CA3 (10/08, chantier déclaration). Réutilise exactement la même
+// extraction de lignes que verifierCoherenceTauxProduit (compte produit +
+// taux implicite propre à CHAQUE ligne, jamais le taux dominant "corrigé"
+// — la déclaration doit refléter ce qui a réellement été saisi, pas une
+// version lissée). Le contrôle de cohérence "total = somme des détails"
+// exigé par Rami est garanti PAR CONSTRUCTION ici : les deux viennent de
+// la même donnée de base, jamais deux calculs séparés qui pourraient
+// diverger.
+//
+// N'inclut que les ventes AVEC une ligne 44571x associée (donc taxables)
+// — une vente exonérée (export, intracom) n'a par nature aucune ligne de
+// collecte, elle est donc naturellement exclue ici et comptée séparément
+// (lignes 5/6, chantier à part, pas encore construit).
+export function agregerBaseHtParTaux(ecritures: EcritureTvaComplete[]): BaseHtParTaux {
+  const parTaux = { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 };
+
+  for (const ecriture of ecritures) {
+    if (!ecriture.ligneTva.compte.startsWith('44571')) continue;
+
+    const ligneProduit = ecriture.autresLignes[0];
+    if (!ligneProduit) continue;
+
+    const montantTva = Math.abs(ecriture.ligneTva.debit - ecriture.ligneTva.credit);
+    const baseHt = Math.abs(ligneProduit.debit - ligneProduit.credit);
+    if (baseHt === 0) continue;
+
+    const taux = normaliserTaux((montantTva / baseHt) * 100);
+    if (taux === 20) parTaux.taux20 += baseHt;
+    else if (taux === 10) parTaux.taux10 += baseHt;
+    else if (taux === 5.5) parTaux.taux5_5 += baseHt;
+    else if (taux === 2.1) parTaux.taux2_1 += baseHt;
+    // Taux non officiel (déjà signalé par verifierCoherenceTauxProduit
+    // le cas échéant) : exclu ici plutôt que compté sous un taux
+    // arbitraire — le total resterait alors inférieur à la vraie somme
+    // tant que l'anomalie n'est pas corrigée, jamais un chiffre faux
+    // silencieux.
+  }
+
+  const total = parTaux.taux20 + parTaux.taux10 + parTaux.taux5_5 + parTaux.taux2_1;
+  return { total, parTaux };
+}
