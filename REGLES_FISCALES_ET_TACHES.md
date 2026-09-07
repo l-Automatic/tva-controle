@@ -730,3 +730,17 @@ désactivé pour tout dossier paramétré en taux unique une fois ce
 paramètre construit — la question ne se pose pas s'il n'y a qu'un seul
 taux possible sur le dossier. À ne pas oublier lors de la construction
 du paramètre taux unique.
+
+---
+
+## Chantier futur — paramètre dossier "date de début d'exercice" (10/08)
+
+Nécessaire pour la ligne 10 de la déclaration CA3 (crédit de TVA
+antérieur, phase 2 du chantier déclaration) — le solde du 44567 à
+l'ouverture de la période se calcule depuis le début de l'**exercice**
+comptable du dossier, pas depuis le début de la période déclarée elle-
+même, ni depuis une date arbitraire. Ce paramètre n'existe pas encore
+dans les paramètres dossier — à ajouter avant de pouvoir construire
+cette ligne. La phase 2 reste donc bloquée sur deux points : ce
+paramètre à construire, ET la vérification de comportement de
+`trial_balance` sur une large période (cumul vs mouvements seuls).
