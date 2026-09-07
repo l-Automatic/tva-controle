@@ -849,6 +849,36 @@ export async function executerCycleTva(
     params.periodeDebut,
     params.periodeFin
   );
+
+  // Ligne 10 CA3 (10/08, phase 2) — solde débiteur du 44567 à l'ouverture
+  // de la période, depuis le début de l'exercice (paramètre dossier
+  // date_debut_exercice, pas encore construit ailleurs — si absent,
+  // cette ligne reste simplement non calculée, jamais un zéro deviné).
+  // fetchTrialBalance sur une fenêtre large donne bien un solde CUMULÉ
+  // sur toute la fenêtre (confirmé par Rami sur un exemple réel), pas
+  // seulement les mouvements du dernier mois — d'où la réutilisation
+  // directe de cette même fonction, aucun nouveau mécanisme nécessaire.
+  const dateDebutExerciceBrut = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    parametreDossierValeur(client, params.dossierId, 'date_debut_exercice')
+  );
+  let creditTvaAnterieur = 0;
+  if (typeof dateDebutExerciceBrut === 'string') {
+    const veilleDebutPeriode = new Date(params.periodeDebut);
+    veilleDebutPeriode.setDate(veilleDebutPeriode.getDate() - 1);
+    const periodeFinExercicePrecedent = veilleDebutPeriode.toISOString().slice(0, 10);
+    // Fenêtre vide ou inversée (période déclarée = tout début de
+    // l'exercice) : rien à récupérer, pas une erreur.
+    if (periodeFinExercicePrecedent >= dateDebutExerciceBrut) {
+      const balanceOuverture = await fetchTrialBalance(params.client, {
+        dossierId: params.dossierId,
+        periodeDebut: dateDebutExerciceBrut,
+        periodeFin: periodeFinExercicePrecedent,
+      });
+      const ligne44567 = balanceOuverture.comptes.find((c) => c.numeroCompte.startsWith('44567'));
+      creditTvaAnterieur = ligne44567?.debit ?? 0;
+    }
+  }
+
   // Régime TVA sur encaissement (09/08) : 'service' par défaut si non
   // paramétré (comportement historique, rétrocompatible avec les dossiers
   // déjà en test). Un dossier vendant des biens (ou fonctionnant en caisse
@@ -1061,6 +1091,7 @@ export async function executerCycleTva(
       ['base_ht_2_1', baseHtParTaux.parTaux.taux2_1],
       ['base_ht_export', baseHtExport],
       ['base_ht_intracom_exoneree', baseHtIntracomExoneree],
+      ['credit_tva_anterieur', creditTvaAnterieur],
     ] as const
   )
     .filter(([, montant]) => montant !== 0)
