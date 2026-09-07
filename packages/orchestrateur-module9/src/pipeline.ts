@@ -31,6 +31,7 @@ import {
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
   detecterEncaissementsClientAAffecter,
+  detecterJournalVenteDominant,
   identifierComptesACategoriser,
   chercherDansReferentiel,
   type CompteACategoriser,
@@ -714,11 +715,21 @@ export async function executerCycleTva(
   // journal de vente, jamais un vrai encaissement — sans cette résolution,
   // toute la protection reste désactivée (comportement identique à avant,
   // pas de régression, juste pas de correctif actif).
-  const journalIdsClient = [...new Set(lignesClient.map((l) => l.journalId).filter((id): id is number => id !== undefined))];
-  const journalCodeParId = await resolveJournalsByIds(params.client, journalIdsClient).then(
+  //
+  // Journal de vente détecté AUTOMATIQUEMENT (10/08, demande de Rami) —
+  // plus de confirmation manuelle : cf. detecterJournalVenteDominant,
+  // recalculé à chaque cycle à partir des vraies écritures de collecte.
+  const journalIdVenteDominant = detecterJournalVenteDominant(ecritures);
+  const journalIdsAResoudre = [
+    ...new Set([
+      ...lignesClient.map((l) => l.journalId).filter((id): id is number => id !== undefined),
+      ...(journalIdVenteDominant !== null ? [journalIdVenteDominant] : []),
+    ]),
+  ];
+  const journalCodeParId = await resolveJournalsByIds(params.client, journalIdsAResoudre).then(
     (m) => new Map([...m.entries()].map(([id, j]) => [id, j.code]))
   );
-  const journalCodeVente = conventionValeur(contexteDossier, 'code_journal_vente');
+  const journalCodeVente = journalIdVenteDominant !== null ? journalCodeParId.get(journalIdVenteDominant) : undefined;
 
   const { regularisations: regularisationsClient, anomalies: anomaliesClient } = detecterEncaissementsClientAAffecter(
     lignesClient,
