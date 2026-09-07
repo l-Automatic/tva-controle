@@ -29,7 +29,13 @@ export type CategorieLigneCalcul =
   | 'base_ht_20'
   | 'base_ht_10'
   | 'base_ht_5_5'
-  | 'base_ht_2_1';
+  | 'base_ht_2_1'
+  // Lignes 6/7 CA3 (10/08) — exportations et livraisons intracom
+  // exonérées, même nature que base_ht_XX ci-dessus (un montant HT,
+  // jamais un montant de TVA — ces ventes n'ont par nature aucune TVA
+  // associée). Jamais produites par calculerTva non plus.
+  | 'base_ht_export'
+  | 'base_ht_intracom_exoneree';
 
 export interface LigneCalculTva {
   categorie: CategorieLigneCalcul;
