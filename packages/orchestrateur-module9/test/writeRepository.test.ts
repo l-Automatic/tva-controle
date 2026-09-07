@@ -43,6 +43,8 @@ import {
   qualifierEncaissementClientTaux,
   appliquerCorrectionTauxCollecte,
   qualifierNouveauTiers,
+  qualifierFraisVehicule,
+  appliquerCorrectionFraisVehicule,
   ajouterVehiculeManuel,
   autoResoudreFactureSansCandidat,
   PaiementDejaReclameError,
@@ -2616,5 +2618,80 @@ describe('chargerDetailCalcul', () => {
     expect(collectee10?.montant).toBe(0); // jamais alimentée
     expect(collectee10?.ajuste).toBe(false);
     expect(detail).toHaveLength(8); // toutes les catégories, même à 0
+  });
+});
+
+describe('qualifierFraisVehicule', () => {
+  it('refuse un typeAnomalie inconnu', async () => {
+    await expect(
+      avecClient((client) => qualifierFraisVehicule(client, 'id-inexistant', 'user-id', 'un_type_bidon', 'confirme'))
+    ).rejects.toThrow('typeAnomalie inconnu');
+  });
+
+  it('"confirme" résout l\'anomalie pour le bon type précisément', async () => {
+    const periode = '2026-05-01';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ16', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq16-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+    const anomalieId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, description, statut)
+           VALUES ($1, $2, 'entretien_vehicule_tourisme_deduit_a_tort', 'signale', 'test', 'ouvert') RETURNING id`,
+          [dossierId, periode]
+        )
+      )
+    ).rows[0]!.id;
+
+    await avecClient((client) =>
+      qualifierFraisVehicule(client, anomalieId, utilisateurId, 'entretien_vehicule_tourisme_deduit_a_tort', 'confirme')
+    );
+
+    const anomalie = await avecClient((client) => client.query<{ statut: string }>(`SELECT statut FROM anomalies WHERE id = $1`, [anomalieId]));
+    expect(anomalie.rows[0]?.statut).toBe('resolu');
+  });
+});
+
+describe('appliquerCorrectionFraisVehicule', () => {
+  it('retire le montant de deductible_abs', async () => {
+    const periode = '2026-05-02';
+    const utilisateurId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'RQ17', $2, 'collaborateur') RETURNING id`,
+          [cabinetId, `rq17-${Date.now()}@test.fr`]
+        )
+      )
+    ).rows[0]!.id;
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 900, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2026-05-31']
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES ($1, 'deductible_abs', 1200, 6)`,
+        [calculId]
+      )
+    );
+
+    await avecClient((client) => appliquerCorrectionFraisVehicule(client, dossierId, periode, 80, 'test', utilisateurId));
+
+    const ajustement = await avecClient((client) =>
+      client.query<{ montant_ajuste: string }>(
+        `SELECT montant_ajuste FROM ajustements_calcul WHERE calcul_id = $1 AND type_montant = 'deductible_abs'`,
+        [calculId]
+      )
+    );
+    expect(Number.parseFloat(ajustement.rows[0]!.montant_ajuste)).toBe(1120); // 1200 - 80
   });
 });
