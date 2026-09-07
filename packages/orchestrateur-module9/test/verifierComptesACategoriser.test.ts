@@ -85,7 +85,7 @@ describe('verifierComptesACategoriser', () => {
       if (url.pathname.includes('trial_balance') || url.pathname.includes('general_balance')) {
         return new Response(
           JSON.stringify({
-            items: [{ number: '445666', debit: 0, credit: 0 }, { number: '44566', debit: 100, credit: 0 }],
+            items: [{ number: '44566', formatted_number: '44566', label: 'TVA déductible', debits: '100', credits: '0' }],
             has_more: false,
             next_cursor: null,
           }),
