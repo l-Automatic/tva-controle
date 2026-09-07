@@ -17,7 +17,19 @@ export type CategorieLigneCalcul =
   // 445664 vont tous à la même ligne 20/8, aucune raison de les séparer.
   | 'autoliquidation_due_btp'
   | 'autoliquidation_due_intracom'
-  | 'autoliquidation_deductible';
+  | 'autoliquidation_deductible'
+  // Base HT par taux — ligne 3 CA3 (10/08, chantier déclaration). Nature
+  // DIFFÉRENTE des autres catégories : un montant HT, jamais un montant
+  // de TVA — jamais produites par calculerTva lui-même (aucune assignation
+  // dans ce fichier), toujours ajoutées après coup par pipeline.ts via
+  // agregerBaseHtParTaux. Réutilisent ce type et la table
+  // calculs_tva_lignes par pragmatisme (même mécanisme de persistance et
+  // de lecture), pas parce qu'elles sont conceptuellement un résultat de
+  // calcul de TVA.
+  | 'base_ht_20'
+  | 'base_ht_10'
+  | 'base_ht_5_5'
+  | 'base_ht_2_1';
 
 export interface LigneCalculTva {
   categorie: CategorieLigneCalcul;
