@@ -207,11 +207,15 @@ export class AnomalieNonQualifiableError extends Error {
 }
 
 // Somme brute des lignes de calcul pour la catégorie "collectée" — inclut
-// autoliquidation_due (définition fiscalement correcte, une ligne CA3
-// "TVA collectée" inclut la TVA due autoliquidée) — À VÉRIFIER que cette
-// définition correspond bien à ce que le frontend affiche déjà comme
-// "TVA collectée totale" (calculée côté frontend depuis les lignes brutes,
-// jamais vérifié directement contre cette définition backend).
+// l'autoliquidation due (BTP + intracom). Point tranché le 10/08 (chantier
+// déclaration CA3, avec Rami) : la ligne 1 de la CA3 elle-même (solde
+// créditeur du seul compte 44571) EXCLUT l'autoliquidation due, qui va sur
+// une ligne séparée (ligne 4 pour l'intracom, "autres opérations
+// imposables" pour le BTP) — cet agrégat interne 'collectee_totale' sert
+// un usage DIFFÉRENT (les corrections d'ajustement, ex: avoirs), où
+// inclure l'autoliquidation due dans le total à corriger reste cohérent.
+// Ne pas confondre les deux : ce champ n'est jamais utilisé tel quel pour
+// afficher la ligne 1 de la déclaration.
 export type TypeMontantAjustable =
   | 'collectee_totale'
   | 'deductible_totale'
@@ -223,7 +227,14 @@ export type TypeMontantAjustable =
   | 'collectee_2_1';
 
 const CATEGORIES_PAR_TYPE_MONTANT: Record<TypeMontantAjustable, string[]> = {
-  collectee_totale: ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due'],
+  collectee_totale: [
+    'collectee_20',
+    'collectee_10',
+    'collectee_5_5',
+    'collectee_2_1',
+    'autoliquidation_due_btp',
+    'autoliquidation_due_intracom',
+  ],
   deductible_totale: ['deductible_abs', 'deductible_immo', 'autoliquidation_deductible'],
   // Élargi une seconde fois (10/08) — nécessaire pour le transfert
   // deductible_abs -> deductible_immo (immobilisation_potentielle_non_passee) :
