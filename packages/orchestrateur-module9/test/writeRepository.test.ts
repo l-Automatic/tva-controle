@@ -2747,9 +2747,9 @@ describe('chargerDeclarationCalcul', () => {
     expect(declaration.ligne09DeductibleImmo).toBe(100);
     // solde = (1200 + 50 + 30) - (680 + 100) = 500
     expect(declaration.solde).toEqual({ sens: 'a_decaisser', montant: 500 });
-    expect(declaration.disponible).toEqual({
-      ligne10CreditAnterieur: false,
-    });
+    // date_debut_exercice jamais confirmé dans ce test — ligne 10 reste
+    // null (pas encore disponible), jamais confondue avec un vrai zéro.
+    expect(declaration.ligne10CreditAnterieur).toBeNull();
   });
 
   it('donne un solde en credit (montant negatif) si le deductible depasse le collecte', async () => {
@@ -2806,5 +2806,53 @@ describe('chargerDeclarationCalcul', () => {
     // Le total doit être la somme des deux lignes DÉJÀ arrondies (1202),
     // jamais un arrondi séparé de la somme brute (qui donnerait 1201).
     expect(declaration.ligne01CollecteTotal).toBe(1202);
+  });
+
+  it('ligne 10 disponible (row persistée) : intégrée au solde, jamais confondue avec null', async () => {
+    const periode = '2026-06-04';
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 0, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2026-06-30']
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES
+           ($1, 'collectee_20', 1000, 1), ($1, 'credit_tva_anterieur', 150, 1)`,
+        [calculId]
+      )
+    );
+
+    const declaration = await avecClient((client) => chargerDeclarationCalcul(client, calculId));
+
+    expect(declaration.ligne10CreditAnterieur).toBe(150); // disponible, pas null
+    // solde = 1000 - 150 = 850
+    expect(declaration.solde).toEqual({ sens: 'a_decaisser', montant: 850 });
+  });
+
+  it('ligne 10 disponible mais vraiment nulle (0€) : distincte de "pas encore disponible"', async () => {
+    const periode = '2026-06-05';
+    const calculId = (
+      await avecClient((client) =>
+        client.query<{ id: string }>(
+          `INSERT INTO calculs_tva (dossier_id, periode_debut, periode_fin, tva_nette, sens)
+           VALUES ($1, $2, $3, 0, 'a_decaisser') RETURNING id`,
+          [dossierId, periode, '2026-06-30']
+        )
+      )
+    ).rows[0]!.id;
+    await avecClient((client) =>
+      client.query(
+        `INSERT INTO calculs_tva_lignes (calcul_id, categorie, montant, nb_ecritures_source) VALUES ($1, 'credit_tva_anterieur', 0, 1)`,
+        [calculId]
+      )
+    );
+
+    const declaration = await avecClient((client) => chargerDeclarationCalcul(client, calculId));
+    expect(declaration.ligne10CreditAnterieur).toBe(0); // pas null, vraiment zéro
   });
 });
