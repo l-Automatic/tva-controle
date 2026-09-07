@@ -35,7 +35,12 @@ export type CategorieLigneCalcul =
   // jamais un montant de TVA — ces ventes n'ont par nature aucune TVA
   // associée). Jamais produites par calculerTva non plus.
   | 'base_ht_export'
-  | 'base_ht_intracom_exoneree';
+  | 'base_ht_intracom_exoneree'
+  // Ligne 10 CA3 (10/08, phase 2) — solde débiteur du 44567 à l'ouverture
+  // de la période, calculé depuis le début de l'exercice. Même nature
+  // que base_ht_XX : jamais produite par calculerTva, ajoutée après coup
+  // par pipeline.ts.
+  | 'credit_tva_anterieur';
 
 export interface LigneCalculTva {
   categorie: CategorieLigneCalcul;
