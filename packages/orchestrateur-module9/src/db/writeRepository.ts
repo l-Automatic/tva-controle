@@ -2139,3 +2139,76 @@ export async function qualifierTvaHotel(
     details: { anomalieId, type },
   });
 }
+
+// ============================================================================
+// FRAIS ENTRETIEN/LOCATION VÉHICULE TOURISME (10/08)
+// ============================================================================
+
+const TYPES_FRAIS_VEHICULE = ['entretien_vehicule_tourisme_deduit_a_tort', 'location_vehicule_tourisme_deduite_a_tort'];
+
+// Qualification pour les deux types (paramétrée) : "confirme" (correction
+// externe attendue, puis "Vérifier à nouveau") ou "ignore" (le jugement IA
+// était faux). Même mécanisme exactement que tva_hotel_a_verifier — un
+// jugement LLM peut toujours se tromper, même la variante "bloquante" de
+// ces deux anomalies reste basée sur un jugement IA, jamais une certitude
+// déterministe absolue.
+export async function qualifierFraisVehicule(
+  client: PoolClient,
+  anomalieId: string,
+  utilisateurId: string,
+  typeAnomalie: string,
+  type: 'confirme' | 'ignore'
+): Promise<void> {
+  if (!TYPES_FRAIS_VEHICULE.includes(typeAnomalie)) {
+    throw new Error(`typeAnomalie inconnu pour qualifierFraisVehicule : ${typeAnomalie}`);
+  }
+  const res = await client.query<{ dossier_id: string }>(
+    `UPDATE anomalies SET statut = 'resolu', traite_par = $2, date_traitement = now(), resolution = $3
+     WHERE id = $1 AND type_anomalie = $4 AND statut = 'ouvert'
+     RETURNING dossier_id`,
+    [anomalieId, utilisateurId, JSON.stringify({ type }), typeAnomalie]
+  );
+  const ligne = res.rows[0];
+  if (!ligne) {
+    throw new AnomalieNonQualifiableError(anomalieId);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId: ligne.dossier_id,
+    typeEvenement: 'frais_vehicule_qualifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { anomalieId, typeAnomalie, type },
+  });
+}
+
+// Retire le montant à tort déduit de deductible_abs — même mécanisme
+// exactement que appliquerCorrectionTvaHotel.
+export async function appliquerCorrectionFraisVehicule(
+  client: PoolClient,
+  dossierId: string,
+  periode: string,
+  montantTva: number,
+  description: string,
+  utilisateurId: string
+): Promise<void> {
+  if (montantTva <= 0) return;
+
+  const calcul = await client.query<{ id: string }>(
+    `SELECT id FROM calculs_tva WHERE dossier_id = $1 AND periode_debut = $2 AND statut = 'brouillon'`,
+    [dossierId, periode]
+  );
+  const calculId = calcul.rows[0]?.id;
+  if (!calculId) return;
+
+  const montantActuel = await calculerMontantActuelPourType(client, calculId, 'deductible_abs');
+  await ajusterMontantCalcul(
+    client,
+    calculId,
+    'deductible_abs',
+    montantActuel,
+    montantActuel - montantTva,
+    description,
+    utilisateurId
+  );
+}
