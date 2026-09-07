@@ -1002,7 +1002,7 @@ export async function executerCycleTva(
   // montant HT pas un montant de TVA) — cf. commentaire sur
   // CategorieLigneCalcul. N'ajoute une ligne que si le montant est non
   // nul, jamais des lignes à zéro qui polluent inutilement la table.
-  const baseHtParTaux = agregerBaseHtParTaux(ecritures);
+  const baseHtParTaux = agregerBaseHtParTaux(ecritures, statutsExigibilite);
   const lignesBaseHt: LigneCalculTva[] = (
     [
       ['base_ht_20', baseHtParTaux.parTaux.taux20],
