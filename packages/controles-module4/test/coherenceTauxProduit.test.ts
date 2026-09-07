@@ -131,4 +131,25 @@ describe('agregerBaseHtParTaux', () => {
     const e = ecriture(1, 150, '706100', 1000); // 15%, jamais un taux officiel
     expect(agregerBaseHtParTaux([e])).toEqual({ total: 0, parTaux: { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 } });
   });
+
+  it('bug réel corrigé (10/08, trouvé avant même d’être poussé) : exclut une ligne non exigible, exactement comme calculerTva le fait pour collectee_20', () => {
+    const e = ecriture(1, 200, '706100', 1000, '445711');
+    const statuts = [
+      { ledgerEntryId: 1, compte: '445711', natureOperation: 'bien' as const, exigible: false, motif: 'pas encore exigible' },
+    ];
+    expect(agregerBaseHtParTaux([e], statuts)).toEqual({ total: 0, parTaux: { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 } });
+  });
+
+  it('applique le prorata d’un paiement partiel authentique, comme calculerTva', () => {
+    const e = ecriture(1, 200, '706100', 1000, '445711'); // 1000 HT plein
+    const statuts = [
+      { ledgerEntryId: 1, compte: '445711', natureOperation: 'bien' as const, exigible: true, motif: 'paiement partiel', prorataExigible: 0.5 },
+    ];
+    expect(agregerBaseHtParTaux([e], statuts).parTaux.taux20).toBe(500); // 1000 * 0.5
+  });
+
+  it('inclut normalement une ligne sans statut d’exigibilité (compte hors périmètre du contrôle)', () => {
+    const e = ecriture(1, 200, '706100', 1000);
+    expect(agregerBaseHtParTaux([e], []).parTaux.taux20).toBe(1000);
+  });
 });
