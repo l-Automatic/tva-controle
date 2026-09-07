@@ -104,6 +104,12 @@ function fakeFetchRouteur(): typeof fetch {
     if (/\/ledger_entries\/\d+\/ledger_entry_lines/.test(url.pathname)) {
       return new Response(JSON.stringify(pieceRousseau), { status: 200 });
     }
+    if (url.pathname === '/api/external/v2/journals') {
+      return new Response(
+        JSON.stringify({ items: [{ id: 80826900480, code: 'VE', label: 'VE' }], has_more: false, next_cursor: null }),
+        { status: 200 }
+      );
+    }
     throw new Error(`URL non routée : ${rawUrl}`);
   }) as unknown as typeof fetch;
 }
@@ -260,7 +266,13 @@ describe('executerCycleTva — dérivation des comptes depuis conventions_dossie
       if (/\/ledger_entries\/\d+\/ledger_entry_lines/.test(url.pathname)) {
         return new Response(JSON.stringify(pieceRousseau), { status: 200 });
       }
-      throw new Error(`URL non routée : ${rawUrl}`);
+      if (url.pathname === '/api/external/v2/journals') {
+      return new Response(
+        JSON.stringify({ items: [{ id: 80826900480, code: 'VE', label: 'VE' }], has_more: false, next_cursor: null }),
+        { status: 200 }
+      );
+    }
+    throw new Error(`URL non routée : ${rawUrl}`);
     }) as unknown as typeof fetch;
 
     const client = new PennylaneClient({ token: 'x', fetchImpl });
@@ -346,7 +358,13 @@ describe('executerCycleTva — chemin bloqué (comportement central de cette v1)
       if (/\/ledger_entries\/\d+\/ledger_entry_lines/.test(url.pathname)) {
         return new Response(JSON.stringify(piece), { status: 200 });
       }
-      throw new Error(`URL non routée : ${rawUrl}`);
+      if (url.pathname === '/api/external/v2/journals') {
+      return new Response(
+        JSON.stringify({ items: [{ id: 80826900480, code: 'VE', label: 'VE' }], has_more: false, next_cursor: null }),
+        { status: 200 }
+      );
+    }
+    throw new Error(`URL non routée : ${rawUrl}`);
     }) as unknown as typeof fetch;
 
     const client = new PennylaneClient({ token: 'x', fetchImpl });
@@ -491,7 +509,13 @@ describe('executerCycleTva — découverte automatique des comptes via la balanc
       if (/\/ledger_entries\/\d+\/ledger_entry_lines/.test(url.pathname)) {
         return new Response(JSON.stringify(pieceRousseau), { status: 200 });
       }
-      throw new Error(`URL non routée : ${rawUrl}`);
+      if (url.pathname === '/api/external/v2/journals') {
+      return new Response(
+        JSON.stringify({ items: [{ id: 80826900480, code: 'VE', label: 'VE' }], has_more: false, next_cursor: null }),
+        { status: 200 }
+      );
+    }
+    throw new Error(`URL non routée : ${rawUrl}`);
     }) as unknown as typeof fetch;
 
     const client = new PennylaneClient({ token: 'x', fetchImpl });
