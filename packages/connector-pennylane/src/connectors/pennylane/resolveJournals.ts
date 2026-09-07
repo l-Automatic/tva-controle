@@ -1,9 +1,6 @@
 import type { IPennylaneApiClient } from './client.js';
 import type { PennylaneJournalItem, PennylaneJournalsResponse } from './types.js';
 
-// Hypothèse à vérifier en conditions réelles (10/08) : chemin par cohérence
-// avec /ledger_accounts — à ajuster si l'appel réel révèle un chemin
-// différent.
 const JOURNALS_PATH = '/api/external/v2/journals';
 
 export interface JournalResolu {
@@ -15,10 +12,17 @@ export interface JournalResolu {
 // Résout une liste d'id de journaux Pennylane vers leur code/libellé réel —
 // nécessaire car le journal d'une écriture n'apparaît, dans la réponse
 // ledger_entry_lines, que sous la forme { id, url } (cf. PennylaneTvaLedgerLineItem)
-// jamais un code exploitable directement. Même principe et même garde-fou de
-// pagination que resolveLedgerAccountsByIds (Module 3, bug réel trouvé sur un
-// dossier électricien) — sans pagination, une résolution incomplète serait
-// silencieuse, jamais une erreur visible.
+// jamais un code exploitable directement.
+//
+// Bug réel corrigé (10/08, confirmé par une vraie erreur 400 en conditions
+// réelles) : l'endpoint /journals ne filtre QUE sur le champ "type" — jamais
+// "id", contrairement à /ledger_accounts qui accepte les deux. Filtrer par
+// id renvoie {"error":"Field \"id\" is not allowed for filter. Allowed
+// fields are \"type\""}. Corrigé en récupérant TOUS les journaux du dossier
+// (paginé, sans filtre), puis en filtrant côté client — un cabinet a en
+// pratique une poignée de journaux (une dizaine, jamais des centaines),
+// donc ça reste un coût réseau négligeable, jamais la peine de tenter une
+// autre approche plus complexe.
 export async function resolveJournalsByIds(
   client: IPennylaneApiClient,
   ids: number[]
@@ -27,18 +31,20 @@ export async function resolveJournalsByIds(
   if (ids.length === 0) {
     return resultat;
   }
+  const idsRecherches = new Set(ids);
 
   let cursor: string | undefined;
   do {
     const response = await client.get<PennylaneJournalsResponse>(JOURNALS_PATH, {
-      filter: JSON.stringify([{ field: 'id', operator: 'in', value: ids }]),
       use_2026_api_changes: true,
       limit: 100,
       cursor,
     });
 
     for (const item of response.items) {
-      resultat.set(item.id, mapJournal(item));
+      if (idsRecherches.has(item.id)) {
+        resultat.set(item.id, mapJournal(item));
+      }
     }
     cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
   } while (cursor);
