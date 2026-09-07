@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { LigneEcritureAvecLettrage, ContexteDossier } from '@tva-controle/core';
-import { detecterEncaissementsClientAAffecter } from '../src/encaissementClientNonAffecte.js';
+import type { LigneEcritureAvecLettrage, ContexteDossier, EcritureTvaComplete } from '@tva-controle/core';
+import { detecterEncaissementsClientAAffecter, detecterJournalVenteDominant } from '../src/encaissementClientNonAffecte.js';
 
 function ligne(overrides: Partial<LigneEcritureAvecLettrage> = {}): LigneEcritureAvecLettrage {
   return {
@@ -151,5 +151,50 @@ describe('detecterEncaissementsClientAAffecter — regime TVA sur encaissement (
     const journalCodeParId = new Map([[42, 'VE']]);
     const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte(), 'service', 'VE', journalCodeParId);
     expect(regularisations).toHaveLength(1);
+  });
+});
+
+function ecritureCollecte(compte: string, journalId: number | undefined, ledgerEntryId = 1): EcritureTvaComplete {
+  return {
+    ledgerEntryId,
+    ligneTva: {
+      id: ledgerEntryId,
+      compte,
+      compteId: 1,
+      libelle: null,
+      debit: 0,
+      credit: 100,
+      date: '2025-01-01',
+      ledgerEntryId,
+      journalId,
+      lettrage: { estLettree: false, groupeIds: [] },
+    },
+    autresLignes: [],
+    lignesTiers: [],
+  };
+}
+
+describe('detecterJournalVenteDominant', () => {
+  it('retourne null si aucune écriture de collecte n’a de journal identifié', () => {
+    expect(detecterJournalVenteDominant([])).toBeNull();
+    expect(detecterJournalVenteDominant([ecritureCollecte('44571', undefined)])).toBeNull();
+  });
+
+  it('retourne le journal le plus fréquent parmi les écritures de collecte', () => {
+    const ecritures = [
+      ecritureCollecte('445711', 42, 1),
+      ecritureCollecte('445711', 42, 2),
+      ecritureCollecte('445711', 42, 3),
+      ecritureCollecte('445711', 99, 4), // journal "VT" par défaut, quasi jamais utilisé
+    ];
+    expect(detecterJournalVenteDominant(ecritures)).toBe(42);
+  });
+
+  it('ignore les écritures qui ne touchent pas un compte de collecte (44571x)', () => {
+    const ecritures = [
+      ecritureCollecte('44566', 7, 1), // déductible, pas de la collecte
+      ecritureCollecte('445711', 42, 2),
+    ];
+    expect(detecterJournalVenteDominant(ecritures)).toBe(42);
   });
 });
