@@ -64,7 +64,11 @@ export {
   type ConfigExhaustiviteAutoliquidation,
 } from './exhaustiviteAutoliquidation.js';
 export { verifierCoherenceTvaHotel } from './coherenceHotel.js';
-export { verifierCoherenceTauxProduit } from './coherenceTauxProduit.js';
+export {
+  verifierCoherenceTauxProduit,
+  agregerBaseHtParTaux,
+  type BaseHtParTaux,
+} from './coherenceTauxProduit.js';
 export {
   detecterCadeauClientSeuilDepasse,
   type ConfigCadeauClient,
