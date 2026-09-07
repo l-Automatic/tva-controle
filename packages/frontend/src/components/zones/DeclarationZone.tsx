@@ -70,12 +70,16 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
         <p className="reference">5,5 % : {formatMontant(declaration.ligne02ParTaux.taux5_5)}</p>
         <p className="reference">2,1 % : {formatMontant(declaration.ligne02ParTaux.taux2_1)}</p>
       </li>
-      <LigneDeclaration
-        numero="Ligne 3"
-        libelle="Base HT des opérations imposables"
-        montant={0}
-        disponible={declaration.disponible.ligne03BaseHt}
-      />
+      <li className="card">
+        <p className="label">
+          <span className="badge badge-origine">Ligne 3</span> Base HT des opérations imposables
+        </p>
+        <p className="reference">Total : {formatMontant(declaration.ligne03BaseHt.total)}</p>
+        <p className="reference">20 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux20)}</p>
+        <p className="reference">10 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux10)}</p>
+        <p className="reference">5,5 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux5_5)}</p>
+        <p className="reference">2,1 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux2_1)}</p>
+      </li>
       <LigneDeclaration
         numero="Ligne 4"
         libelle="TVA due — acquisitions intracommunautaires"

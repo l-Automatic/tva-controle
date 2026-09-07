@@ -554,20 +554,20 @@ export interface DetailCalculLigne {
 // Onglet Déclaration (brief v49) — première version, affichage seulement
 // des montants à reporter dans la CA3 pour un calcul donné (déclarer
 // réellement viendra plus tard). GET /calculs/:calculId/declaration.
-// `disponible` : les 4 lignes valent toujours false pour l'instant
-// (phases 2 à 4 du chantier pas commencées) — jamais un 0€ à leur place,
-// qui laisserait croire à tort que la ligne est vide plutôt que non
-// calculée.
+// `disponible` : ces lignes valent toujours false pour l'instant (phases
+// 2 et 4 du chantier pas commencées — la 3 est disponible depuis le brief
+// v50) — jamais un 0€ à leur place, qui laisserait croire à tort que la
+// ligne est vide plutôt que non calculée.
 export interface DeclarationCalcul {
   ligne01CollecteTotal: number;
   ligne02ParTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
+  ligne03BaseHt: { total: number; parTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number } };
   ligne04DueIntracom: number;
   autresOperationsImposablesBtp: number;
   ligne08DeductibleAbs: number;
   ligne09DeductibleImmo: number;
   solde: { sens: 'a_decaisser' | 'credit'; montant: number };
   disponible: {
-    ligne03BaseHt: boolean;
     ligne05Export: boolean;
     ligne06IntracomExonere: boolean;
     ligne10CreditAnterieur: boolean;
