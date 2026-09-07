@@ -15,6 +15,7 @@ import {
   resoudreAnomaliesEnMasse,
   verifierAutoliquidation,
   verifierAvoirs,
+  verifierCadeauClient,
   verifierCoherenceTauxAutoliquidation,
   verifierComptesNonReconnus,
   verifierImmobilisation,
@@ -106,6 +107,10 @@ const TYPE_AUTOLIQUIDATION_INCOMPLETE = 'autoliquidation_incomplete';
 const TYPE_IMMOBILISATION_TVA_INCORRECT = 'immobilisation_sur_compte_tva_incorrect';
 const TYPE_INCOHERENCE_TAUX_PRODUIT = 'incoherence_taux_produit';
 const TYPE_INCOHERENCE_TAUX_AUTOLIQUIDATION = 'incoherence_taux_autoliquidation';
+// Même famille exactement (brief v47) — transaction individuelle (pas un
+// cumul annuel) dépassant le seuil légal de 73€ TTC avec TVA réellement
+// déduite dessus, erreur certaine.
+const TYPE_CADEAU_CLIENT_SEUIL_DEPASSE = 'cadeau_client_seuil_depasse';
 
 // Tous les types actifs du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md. tva_sur_livraison_intracom_exoneree existe dans
@@ -145,6 +150,7 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   immobilisation_sur_compte_tva_incorrect: 'Immobilisation sur compte de TVA incorrect',
   incoherence_taux_autoliquidation: 'Incohérence de taux — autoliquidation',
   incoherence_taux_produit: 'Incohérence de taux — compte produit',
+  cadeau_client_seuil_depasse: 'Cadeau client — seuil de 73€ dépassé',
 };
 
 interface AnomaliesPanelProps {
@@ -1388,11 +1394,13 @@ function AnomalieRow({
   const estImmobilisationTvaIncorrect = anomalie.typeAnomalie === TYPE_IMMOBILISATION_TVA_INCORRECT;
   const estIncoherenceTauxProduit = anomalie.typeAnomalie === TYPE_INCOHERENCE_TAUX_PRODUIT;
   const estIncoherenceTauxAutoliquidation = anomalie.typeAnomalie === TYPE_INCOHERENCE_TAUX_AUTOLIQUIDATION;
+  const estCadeauClientSeuilDepasse = anomalie.typeAnomalie === TYPE_CADEAU_CLIENT_SEUIL_DEPASSE;
   const estVerificationSimple =
     estAutoliquidationDesequilibreeOuIncomplete ||
     estImmobilisationTvaIncorrect ||
     estIncoherenceTauxProduit ||
-    estIncoherenceTauxAutoliquidation;
+    estIncoherenceTauxAutoliquidation ||
+    estCadeauClientSeuilDepasse;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -1495,7 +1503,9 @@ function AnomalieRow({
                     ? verifierImmobilisationTva
                     : estIncoherenceTauxProduit
                       ? verifierTauxProduit
-                      : verifierCoherenceTauxAutoliquidation
+                      : estIncoherenceTauxAutoliquidation
+                        ? verifierCoherenceTauxAutoliquidation
+                        : verifierCadeauClient
               }
               nomAnomalie={
                 estAutoliquidationDesequilibreeOuIncomplete
@@ -1504,7 +1514,9 @@ function AnomalieRow({
                     ? 'immobilisation sur compte TVA incorrect'
                     : estIncoherenceTauxProduit
                       ? 'incohérence taux produit'
-                      : 'incohérence taux autoliquidation'
+                      : estIncoherenceTauxAutoliquidation
+                        ? 'incohérence taux autoliquidation'
+                        : 'cadeau client — seuil dépassé'
               }
             />
           </div>

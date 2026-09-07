@@ -470,6 +470,10 @@ export const verifierAutoliquidation = verifierSansQualification('verifier-autol
 export const verifierImmobilisationTva = verifierSansQualification('verifier-immobilisation-tva');
 export const verifierTauxProduit = verifierSansQualification('verifier-taux-produit');
 export const verifierCoherenceTauxAutoliquidation = verifierSansQualification('verifier-coherence-taux-autoliquidation');
+// cadeau_client_seuil_depasse (brief v47) — transaction individuelle
+// dépassant le seuil légal de 73€ TTC avec TVA réellement déduite, jamais
+// un cumul annuel. Même famille exactement que les 4 routes ci-dessus.
+export const verifierCadeauClient = verifierSansQualification('verifier-cadeau-client');
 
 export function fetchConventions(
   cabinetId: string,
