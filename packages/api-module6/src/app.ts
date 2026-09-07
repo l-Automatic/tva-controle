@@ -66,6 +66,7 @@ import {
   listerTauxHistorique,
   listerCalculs,
   chargerDetailCalcul,
+  chargerDeclarationCalcul,
   listerAuditLog,
   listerAuditLogPourExport,
   CalculDejaValideError,
@@ -1300,6 +1301,14 @@ export function buildApp(pool: Pool): FastifyInstance {
   app.get<{ Params: { calculId: string } }>('/calculs/:calculId/detail', async (request) => {
     const cabinetId = request.utilisateur!.cabinetId;
     return avecContexteCabinet(pool, cabinetId, (client) => chargerDetailCalcul(client, request.params.calculId));
+  });
+
+  // Onglet Déclaration (10/08) — première version, lignes 1/2/4/8/9/solde
+  // uniquement. Les autres lignes CA3 sont marquées `disponible: false`
+  // dans la réponse, jamais un zéro silencieux.
+  app.get<{ Params: { calculId: string } }>('/calculs/:calculId/declaration', async (request) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    return avecContexteCabinet(pool, cabinetId, (client) => chargerDeclarationCalcul(client, request.params.calculId));
   });
 
   app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
