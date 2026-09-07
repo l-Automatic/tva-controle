@@ -141,7 +141,7 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
     const ligneCollectee20 = resultat.resultat.lignes.find((l) => l.categorie === 'collectee_20');
     expect(ligneCollectee20).toEqual({ categorie: 'collectee_20', montant: 711.03, referencesPieces: [22495307276288] });
     const ligneBaseHt20 = resultat.resultat.lignes.find((l) => l.categorie === 'base_ht_20');
-    expect(ligneBaseHt20?.montant).toBeCloseTo(711.03 / 0.2); // même écriture, TVA/HT à 20%
+    expect(ligneBaseHt20?.montant).toBeCloseTo(711.03 / 0.2, 1); // 711.03 déjà arrondi, tolérance plus large qu'une précision à 2 décimales
     expect(resultat.resultat.lignes).toHaveLength(2);
     expect(resultat.resultat.sens).toBe('a_decaisser');
     expect(resultat.resultat.tvaNette).toBe(711.03);
