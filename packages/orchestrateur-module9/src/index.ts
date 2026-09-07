@@ -151,6 +151,8 @@ export {
   listerTauxHistoriqueTiers,
   listerCalculs,
   chargerDetailCalcul,
+  chargerDeclarationCalcul,
+  type DeclarationCalcul,
   type LigneDetailCalcul,
   listerAuditLog,
   listerAuditLogPourExport,
