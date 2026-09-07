@@ -15,6 +15,10 @@ export {
   type CompteResolu,
 } from './connectors/pennylane/ledgerAccounts.js';
 export {
+  resolveJournalsByIds,
+  type JournalResolu,
+} from './connectors/pennylane/resolveJournals.js';
+export {
   fetchLignesParCompte,
   type FetchLignesParCompteParams,
 } from './connectors/pennylane/tvaLedgerLines.js';
