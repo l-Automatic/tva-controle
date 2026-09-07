@@ -28,6 +28,7 @@ import {
   type ProrataApplique,
   verifierAbsenceTvaLivraisonIntracom,
   verifierCoherenceTauxProduit,
+  agregerBaseHtParTaux,
   detecterCadeauClientSeuilDepasse,
   detecterEncaissementsNonAffectes,
   verifierNouveauxTiers,
@@ -42,7 +43,7 @@ import {
   type CompteSansTauxAssigne,
   type CompteClientSansTauxAssigne,
 } from '@tva-controle/controles-module4';
-import { calculerTva, integrerRegularisations, type ResultatCalculTva } from '@tva-controle/calcul-module7';
+import { calculerTva, integrerRegularisations, type ResultatCalculTva, type LigneCalculTva } from '@tva-controle/calcul-module7';
 import { analyserTauxHistorique, analyserTauxHistoriqueParTiers } from '@tva-controle/onboarding-module3';
 import {
   MistralClient,
@@ -995,6 +996,24 @@ export async function executerCycleTva(
     listerRegularisationsAIntegrer(client, params.dossierId, params.periodeDebut)
   );
   const resultat = integrerRegularisations(resultatBrut, [...regularisations471, ...regularisationsClient]);
+
+  // Base HT par taux — ligne 3 CA3 (10/08, chantier déclaration). Ajoutées
+  // après coup, jamais dans calculerTva lui-même (nature différente, un
+  // montant HT pas un montant de TVA) — cf. commentaire sur
+  // CategorieLigneCalcul. N'ajoute une ligne que si le montant est non
+  // nul, jamais des lignes à zéro qui polluent inutilement la table.
+  const baseHtParTaux = agregerBaseHtParTaux(ecritures);
+  const lignesBaseHt: LigneCalculTva[] = (
+    [
+      ['base_ht_20', baseHtParTaux.parTaux.taux20],
+      ['base_ht_10', baseHtParTaux.parTaux.taux10],
+      ['base_ht_5_5', baseHtParTaux.parTaux.taux5_5],
+      ['base_ht_2_1', baseHtParTaux.parTaux.taux2_1],
+    ] as const
+  )
+    .filter(([, montant]) => montant !== 0)
+    .map(([categorie, montant]) => ({ categorie, montant, referencesPieces: [] }));
+  resultat.lignes.push(...lignesBaseHt);
 
   if (process.env.DEBUG_CYCLE) {
     console.error(`[DEBUG_CYCLE] regularisations 471 integrees : ${JSON.stringify(regularisations471)}`);
