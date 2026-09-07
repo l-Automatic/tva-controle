@@ -134,9 +134,15 @@ describe('executerCycleTva — bout-en-bout, vraie base + cas réel ROUSSEAU', (
     expect(resultat.statut).toBe('calcule');
     if (resultat.statut !== 'calcule') throw new Error('assertion');
 
-    expect(resultat.resultat.lignes).toEqual([
-      { categorie: 'collectee_20', montant: 711.03, referencesPieces: [22495307276288] },
-    ]);
+    // 10/08 : resultat.lignes contient désormais aussi la ligne 3
+    // (base_ht_20, HT correspondant), ajoutée après coup par pipeline.ts
+    // — vérification par élément plutôt qu'égalité exacte du tableau
+    // complet, pour ne pas devoir deviner le montant HT exact ici.
+    const ligneCollectee20 = resultat.resultat.lignes.find((l) => l.categorie === 'collectee_20');
+    expect(ligneCollectee20).toEqual({ categorie: 'collectee_20', montant: 711.03, referencesPieces: [22495307276288] });
+    const ligneBaseHt20 = resultat.resultat.lignes.find((l) => l.categorie === 'base_ht_20');
+    expect(ligneBaseHt20?.montant).toBeCloseTo(711.03 / 0.2); // même écriture, TVA/HT à 20%
+    expect(resultat.resultat.lignes).toHaveLength(2);
     expect(resultat.resultat.sens).toBe('a_decaisser');
     expect(resultat.resultat.tvaNette).toBe(711.03);
 
