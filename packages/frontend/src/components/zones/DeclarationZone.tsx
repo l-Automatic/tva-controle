@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react';
 import { ApiError, fetchCalculs, fetchDeclarationCalcul } from '../../api';
 import { formatDate } from '../../dateUtils';
-import { formatMontant, LIBELLE_STATUT_CALCUL } from '../CalculsPanel';
+import { LIBELLE_STATUT_CALCUL } from '../CalculsPanel';
 import { BadgeStatut } from '../BadgeStatut';
 import type { Calcul, DeclarationCalcul } from '../../types';
 
 interface DeclarationZoneProps {
   cabinetId: string;
   dossierId: string;
+}
+
+// GET /calculs/:calculId/declaration renvoie désormais des entiers (brief
+// v52) — jamais de décimales sur cet onglet précisément (le reste du
+// produit, panneau de calcul compris, garde formatMontant avec décimales,
+// cf. CalculsPanel.tsx — pas le même formatage, volontairement).
+function formatMontantEntier(montant: number): string {
+  return `${montant.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €`;
 }
 
 // Une ligne CA3 = un numéro de ligne officiel + un montant, ou "Pas encore
@@ -30,7 +38,7 @@ function LigneDeclaration({
       <p className="label">
         <span className="badge badge-origine">{numero}</span> {libelle}
       </p>
-      <p className="reference">{disponible ? formatMontant(montant) : 'Pas encore disponible'}</p>
+      <p className="reference">{disponible ? formatMontantEntier(montant) : 'Pas encore disponible'}</p>
     </li>
   );
 }
@@ -65,20 +73,20 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
         <p className="label">
           <span className="badge badge-origine">Ligne 2</span> TVA collectée par taux
         </p>
-        <p className="reference">20 % : {formatMontant(declaration.ligne02ParTaux.taux20)}</p>
-        <p className="reference">10 % : {formatMontant(declaration.ligne02ParTaux.taux10)}</p>
-        <p className="reference">5,5 % : {formatMontant(declaration.ligne02ParTaux.taux5_5)}</p>
-        <p className="reference">2,1 % : {formatMontant(declaration.ligne02ParTaux.taux2_1)}</p>
+        <p className="reference">20 % : {formatMontantEntier(declaration.ligne02ParTaux.taux20)}</p>
+        <p className="reference">10 % : {formatMontantEntier(declaration.ligne02ParTaux.taux10)}</p>
+        <p className="reference">5,5 % : {formatMontantEntier(declaration.ligne02ParTaux.taux5_5)}</p>
+        <p className="reference">2,1 % : {formatMontantEntier(declaration.ligne02ParTaux.taux2_1)}</p>
       </li>
       <li className="card">
         <p className="label">
           <span className="badge badge-origine">Ligne 3</span> Base HT des opérations imposables
         </p>
-        <p className="reference">Total : {formatMontant(declaration.ligne03BaseHt.total)}</p>
-        <p className="reference">20 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux20)}</p>
-        <p className="reference">10 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux10)}</p>
-        <p className="reference">5,5 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux5_5)}</p>
-        <p className="reference">2,1 % : {formatMontant(declaration.ligne03BaseHt.parTaux.taux2_1)}</p>
+        <p className="reference">Total : {formatMontantEntier(declaration.ligne03BaseHt.total)}</p>
+        <p className="reference">20 % : {formatMontantEntier(declaration.ligne03BaseHt.parTaux.taux20)}</p>
+        <p className="reference">10 % : {formatMontantEntier(declaration.ligne03BaseHt.parTaux.taux10)}</p>
+        <p className="reference">5,5 % : {formatMontantEntier(declaration.ligne03BaseHt.parTaux.taux5_5)}</p>
+        <p className="reference">2,1 % : {formatMontantEntier(declaration.ligne03BaseHt.parTaux.taux2_1)}</p>
       </li>
       <LigneDeclaration
         numero="Ligne 4"
@@ -93,7 +101,7 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
       />
       <li className="card">
         <p className="label">Autres opérations imposables (sous-traitance BTP)</p>
-        <p className="reference">{formatMontant(declaration.autresOperationsImposablesBtp)}</p>
+        <p className="reference">{formatMontantEntier(declaration.autresOperationsImposablesBtp)}</p>
       </li>
       <LigneDeclaration
         numero="Ligne 8"
@@ -114,7 +122,7 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
       <li className="card">
         <p className="label montant-principal">
           {declaration.solde.sens === 'a_decaisser' ? 'TVA à décaisser' : 'Crédit de TVA'} :{' '}
-          <strong>{formatMontant(declaration.solde.montant)}</strong>
+          <strong>{formatMontantEntier(declaration.solde.montant)}</strong>
         </p>
       </li>
     </ul>
