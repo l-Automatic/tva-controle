@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EcritureTvaComplete } from '@tva-controle/core';
-import { verifierCoherenceTauxProduit } from '../src/coherenceTauxProduit.js';
+import { verifierCoherenceTauxProduit, agregerBaseHtParTaux } from '../src/coherenceTauxProduit.js';
 
 function ecriture(
   ledgerEntryId: number,
@@ -94,5 +94,41 @@ describe('verifierCoherenceTauxProduit', () => {
       lignesTiers: [],
     };
     expect(verifierCoherenceTauxProduit([sansAutresLignes])).toEqual([]);
+  });
+});
+
+describe('agregerBaseHtParTaux', () => {
+  it('agrège la base HT par taux, total garanti par construction = somme des détails', () => {
+    const ecritures = [
+      ecriture(1, 200, '706100', 1000), // 20% : 1000 HT
+      ecriture(2, 100, '706200', 1000), // 10% : 1000 HT
+      ecriture(3, 55, '706300', 1000), // 5,5% : 1000 HT
+      ecriture(4, 21, '706400', 1000), // 2,1% : 1000 HT
+    ];
+    const resultat = agregerBaseHtParTaux(ecritures);
+    expect(resultat.parTaux).toEqual({ taux20: 1000, taux10: 1000, taux5_5: 1000, taux2_1: 1000 });
+    expect(resultat.total).toBe(4000);
+    expect(resultat.total).toBe(
+      resultat.parTaux.taux20 + resultat.parTaux.taux10 + resultat.parTaux.taux5_5 + resultat.parTaux.taux2_1
+    );
+  });
+
+  it('cumule plusieurs lignes sur le même taux', () => {
+    const ecritures = [ecriture(1, 200, '706100', 1000), ecriture(2, 400, '706100', 2000)];
+    expect(agregerBaseHtParTaux(ecritures).parTaux.taux20).toBe(3000);
+  });
+
+  it('exclut les ventes exonérées (aucune ligne 44571), naturellement — pas de faux calcul', () => {
+    expect(agregerBaseHtParTaux([])).toEqual({ total: 0, parTaux: { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 } });
+  });
+
+  it('ignore une écriture qui ne touche pas 44571x', () => {
+    const e = ecriture(1, 200, '706100', 1000, '44566'); // pas une collecte
+    expect(agregerBaseHtParTaux([e])).toEqual({ total: 0, parTaux: { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 } });
+  });
+
+  it('exclut un taux non officiel plutôt que de le compter sous un taux arbitraire', () => {
+    const e = ecriture(1, 150, '706100', 1000); // 15%, jamais un taux officiel
+    expect(agregerBaseHtParTaux([e])).toEqual({ total: 0, parTaux: { taux20: 0, taux10: 0, taux5_5: 0, taux2_1: 0 } });
   });
 });
