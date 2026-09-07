@@ -2617,7 +2617,7 @@ describe('chargerDetailCalcul', () => {
     expect(deductibleAbs?.ajuste).toBe(true);
     expect(collectee10?.montant).toBe(0); // jamais alimentée
     expect(collectee10?.ajuste).toBe(false);
-    expect(detail).toHaveLength(8); // toutes les catégories, même à 0
+    expect(detail).toHaveLength(9); // toutes les catégories, même à 0 — 9 depuis la séparation BTP/intracom du 10/08
   });
 });
 
