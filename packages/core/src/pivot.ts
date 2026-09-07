@@ -45,6 +45,13 @@ export interface LigneEcriture {
 
 export interface LigneEcritureAvecLettrage extends LigneEcriture {
   lettrage: Lettrage;
+  // Id Pennylane du journal (10/08, demande de Rami — corrige le bug
+  // avoir/encaissement sur encaissement_client_taux_applique). Optionnel :
+  // ajouté uniquement ici, jamais sur le type de base LigneEcriture (utilisé
+  // beaucoup plus largement dans ce projet) — évite de casser les fixtures
+  // de test existantes qui construisent ce type sans ce champ. Résolu (id
+  // -> code réel) séparément via resolveJournalsByIds, jamais ici.
+  journalId?: number;
 }
 
 export interface LigneTiersAvecContexte {
