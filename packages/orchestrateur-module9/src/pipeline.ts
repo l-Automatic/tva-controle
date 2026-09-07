@@ -334,6 +334,11 @@ export async function executerCycleTva(
   // Détection déterministe pour le popup de catégorisation (08/08) — ne
   // dépend que des 4 conventions déjà connues, calculée une fois qu'elles
   // le sont toutes.
+  // Bug réel corrigé (10/08) : même trou que celui trouvé dans
+  // verifierComptesACategoriser.ts (signalé par Claude Code puis élargi
+  // en vérifiant) — sans ces trois listes, un compte confirmé sous l'une
+  // de ces catégories n'était jamais exclu de "à catégoriser" ici non
+  // plus, donc re-proposé indéfiniment malgré la confirmation.
   const comptesACategoriser = identifierComptesACategoriser(ecritures, {
     comptesVenteService,
     comptesChargeService,
@@ -341,6 +346,9 @@ export async function executerCycleTva(
     comptesCarburant,
     comptesCadeaux,
     comptesImmobilisation,
+    comptesEntretienVehicule,
+    comptesLocationVehicule,
+    comptesVenteExport,
     comptesSansCategorie,
   });
 
