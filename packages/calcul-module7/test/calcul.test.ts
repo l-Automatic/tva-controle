@@ -125,7 +125,7 @@ describe('calculerTva — autoliquidation', () => {
 
     const resultat = calculerTva([eDue, eDeductible], [], [], []);
     const categories = resultat.lignes.map((l) => l.categorie).sort();
-    expect(categories).toEqual(['autoliquidation_deductible', 'autoliquidation_due']);
+    expect(categories).toEqual(['autoliquidation_deductible', 'autoliquidation_due_btp']);
     expect(resultat.tvaNette).toBe(0);
   });
 
@@ -137,7 +137,7 @@ describe('calculerTva — autoliquidation', () => {
 
     const resultat = calculerTva([eDue], [], [], []);
 
-    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due', montant: 200, referencesPieces: [1] }]);
+    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due_btp', montant: 200, referencesPieces: [1] }]);
   });
 
   it('taux configurable via tauxAutoliquidation, défaut 20%', () => {
@@ -146,7 +146,7 @@ describe('calculerTva — autoliquidation', () => {
     const resultat = calculerTva([eDue], [], [], [], { tauxAutoliquidation: 10 });
 
     // 1100 TTC à 10% -> HT = 1000, TVA = 100
-    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due', montant: 100, referencesPieces: [1] }]);
+    expect(resultat.lignes).toEqual([{ categorie: 'autoliquidation_due_btp', montant: 100, referencesPieces: [1] }]);
   });
 });
 
@@ -342,13 +342,13 @@ describe('calculerTva — prorata paiement partiel (10/08)', () => {
 });
 
 describe('calculerTva — TVA intracom, deuxième paire d’autoliquidation (10/08)', () => {
-  it('reconnaît le compte due intracom configuré, réutilise la catégorie autoliquidation_due', () => {
+  it('reconnaît le compte due intracom configuré, catégorie autoliquidation_due_intracom distincte du BTP', () => {
     const e = ecriture({ ligneTva: ligneTva({ compte: '4452', credit: 1200, ledgerEntryId: 1 }) });
     const resultat = calculerTva([e], [], [], [], {
       compteAutoliquidationDueIntracom: '4452',
       tauxAutoliquidation: 20,
     });
-    const ligneDue = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due');
+    const ligneDue = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due_intracom');
     expect(ligneDue).toBeDefined();
     expect(ligneDue?.montant).toBeCloseTo(200); // 1200 TTC -> 200 de TVA a 20%
   });
@@ -363,7 +363,7 @@ describe('calculerTva — TVA intracom, deuxième paire d’autoliquidation (10/
     expect(ligneDeductible?.montant).toBeCloseTo(200);
   });
 
-  it('BTP (4454) et intracom (4452) coexistent, s’accumulent dans la même catégorie', () => {
+  it('BTP (4454) et intracom (4452) coexistent, chacun dans sa propre catégorie (10/08, séparées pour la déclaration CA3)', () => {
     const eBtp = ecriture({ ligneTva: ligneTva({ compte: '4454', credit: 1200, ledgerEntryId: 1 }) });
     const eIntracom = ecriture({ ligneTva: ligneTva({ compte: '4452', credit: 600, ledgerEntryId: 2 }) });
     const resultat = calculerTva([eBtp, eIntracom], [], [], [], {
@@ -371,9 +371,11 @@ describe('calculerTva — TVA intracom, deuxième paire d’autoliquidation (10/
       compteAutoliquidationDueIntracom: '4452',
       tauxAutoliquidation: 20,
     });
-    const ligneDue = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due');
-    expect(ligneDue?.montant).toBeCloseTo(300); // 200 (BTP) + 100 (intracom)
-    expect(ligneDue?.referencesPieces).toContain(1);
-    expect(ligneDue?.referencesPieces).toContain(2);
+    const ligneBtp = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due_btp');
+    const ligneIntracom = resultat.lignes.find((l) => l.categorie === 'autoliquidation_due_intracom');
+    expect(ligneBtp?.montant).toBeCloseTo(200);
+    expect(ligneIntracom?.montant).toBeCloseTo(100);
+    // Le résultat net global reste inchangé — seules les catégories internes sont séparées.
+    expect(resultat.tvaNette).toBeCloseTo(300);
   });
 });
