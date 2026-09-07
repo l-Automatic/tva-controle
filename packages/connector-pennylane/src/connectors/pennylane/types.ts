@@ -42,6 +42,23 @@ export interface PennylaneLedgerAccountsResponse {
   next_cursor: string | null;
 }
 
+// --- Journaux (GET /journals) ---
+// Hypothèse à vérifier en conditions réelles (10/08) : je n'ai pas accès à
+// l'API pour confirmer le nom exact du champ code/type — je pars sur "code"
+// (convention comptable française standard : VE/AC/BQ/OD), à ajuster si
+// l'appel réel révèle un nom différent (name, journal_type...).
+export interface PennylaneJournalItem {
+  id: number;
+  code: string;
+  label: string;
+}
+
+export interface PennylaneJournalsResponse {
+  items: PennylaneJournalItem[];
+  has_more: boolean | null;
+  next_cursor: string | null;
+}
+
 // --- Ledger entry lines — endpoint général (GET /ledger_entry_lines) ---
 // Seul cet endpoint expose lettered_ledger_entry_lines. Confirmé sur données réelles :
 // vide sur les comptes 445xx (jamais lettrables en pratique), rempli sur 411/401.
