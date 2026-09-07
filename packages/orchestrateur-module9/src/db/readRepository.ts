@@ -793,10 +793,22 @@ export interface DeclarationCalcul {
 // séparément, volontairement absentes de TOUTES_CATEGORIES/chargerDetailCalcul
 // (jamais sujettes à ajustement manuel, pas leur place dans le panneau de
 // calcul persistant — uniquement pertinentes pour cet onglet Déclaration).
+// Arrondi à l'euro le plus proche (10/08, décision de méthode avec
+// Rami) — chaque ligne individuelle est arrondie EN PREMIER, puis tout
+// total ou solde se calcule comme la somme des lignes déjà arrondies
+// affichées, jamais un arrondi indépendant du total. Sans cette règle,
+// un collaborateur qui vérifie à la main (ligne 1 = somme des taux de la
+// ligne 2, solde = ligne1+ligne4+BTP−ligne8−ligne9) pourrait retomber sur
+// un montant différent d'1€ de ce qui est affiché à l'écran — jamais une
+// vraie erreur, juste deux arrondis indépendants qui divergent.
+function arrondirEuro(montant: number): number {
+  return Math.round(montant);
+}
+
 export async function chargerDeclarationCalcul(client: PoolClient, calculId: string): Promise<DeclarationCalcul> {
   const detail = await chargerDetailCalcul(client, calculId);
   const parCategorie = new Map(detail.map((l) => [l.categorie, l.montant]));
-  const m = (categorie: string): number => parCategorie.get(categorie) ?? 0;
+  const m = (categorie: string): number => arrondirEuro(parCategorie.get(categorie) ?? 0);
 
   const baseHtRes = await client.query<{ categorie: string; total: string }>(
     `SELECT categorie, SUM(montant) AS total FROM calculs_tva_lignes
@@ -808,7 +820,7 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
     [calculId]
   );
   const baseHtParCategorie = new Map(baseHtRes.rows.map((r) => [r.categorie, Number.parseFloat(r.total)]));
-  const mBaseHt = (categorie: string): number => baseHtParCategorie.get(categorie) ?? 0;
+  const mBaseHt = (categorie: string): number => arrondirEuro(baseHtParCategorie.get(categorie) ?? 0);
   const ligne03ParTaux = {
     taux20: mBaseHt('base_ht_20'),
     taux10: mBaseHt('base_ht_10'),
@@ -816,6 +828,8 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
     taux2_1: mBaseHt('base_ht_2_1'),
   };
   const ligne03BaseHt = {
+    // Somme des 4 valeurs DÉJÀ arrondies ci-dessus — jamais un arrondi
+    // séparé du total brut, qui pourrait diverger d'1€.
     total: ligne03ParTaux.taux20 + ligne03ParTaux.taux10 + ligne03ParTaux.taux5_5 + ligne03ParTaux.taux2_1,
     parTaux: ligne03ParTaux,
   };
@@ -828,12 +842,22 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
     taux5_5: m('collectee_5_5'),
     taux2_1: m('collectee_2_1'),
   };
+  // Même principe : somme des 4 valeurs déjà arrondies, pas un arrondi du
+  // total brut calculé séparément.
   const ligne01CollecteTotal = ligne02ParTaux.taux20 + ligne02ParTaux.taux10 + ligne02ParTaux.taux5_5 + ligne02ParTaux.taux2_1;
   const ligne04DueIntracom = m('autoliquidation_due_intracom');
   const autresOperationsImposablesBtp = m('autoliquidation_due_btp');
-  const ligne08DeductibleAbs = m('deductible_abs') + m('autoliquidation_deductible');
+  // deductible_abs et autoliquidation_deductible ne sont jamais affichées
+  // séparément (seule leur somme, la ligne 8, est visible) — arrondir la
+  // somme brute directement ici ne crée donc aucun risque d'incohérence
+  // visible pour le collaborateur.
+  const ligne08DeductibleAbs = arrondirEuro((parCategorie.get('deductible_abs') ?? 0) + (parCategorie.get('autoliquidation_deductible') ?? 0));
   const ligne09DeductibleImmo = m('deductible_immo');
 
+  // Solde : somme des lignes déjà arrondies ci-dessus, jamais un arrondi
+  // du montant net brut calculé séparément — garantit que
+  // ligne1+ligne4+BTP−ligne8−ligne9 (calcul à la main depuis ce qui est
+  // affiché) redonne exactement ce solde.
   const montantNet =
     ligne01CollecteTotal + ligne04DueIntracom + autresOperationsImposablesBtp - ligne08DeductibleAbs - ligne09DeductibleImmo;
 
