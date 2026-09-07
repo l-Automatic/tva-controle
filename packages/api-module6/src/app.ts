@@ -35,6 +35,8 @@ import {
   qualifierEncaissementClientTaux,
   qualifierTvaHotel,
   verifierTvaHotelLegere,
+  qualifierFraisVehicule,
+  verifierFraisVehiculeLegere,
   verifierNumerotationLegere,
   verifierImmobilisationLegere,
   AnomalieNonQualifiableError,
@@ -743,6 +745,66 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
 
     return verifierTvaHotelLegere(pool, {
+      cabinetId,
+      dossierId: request.params.dossierId,
+      client,
+      periodeDebut,
+      periodeFin,
+      utilisateurId,
+    });
+  });
+
+  // Qualification pour les deux frais véhicule tourisme (10/08) —
+  // typeAnomalie dans le corps distingue lequel des deux : "confirme"
+  // (correction externe attendue, puis "Vérifier à nouveau") ou "ignore"
+  // (le jugement IA était faux).
+  app.post<{
+    Params: { id: string };
+    Body: { utilisateurId: string; typeAnomalie: string; type: 'confirme' | 'ignore' };
+  }>('/anomalies/:id/qualifier-frais-vehicule', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { utilisateurId, typeAnomalie, type } = request.body;
+    if (type !== 'confirme' && type !== 'ignore') {
+      return reply.code(400).send({ erreur: "type doit être 'confirme' ou 'ignore'" });
+    }
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        qualifierFraisVehicule(client, request.params.id, utilisateurId, typeAnomalie, type)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof AnomalieNonQualifiableError) {
+        return reply.code(409).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // "Vérifier à nouveau" — couvre les deux frais véhicule tourisme en un
+  // seul appel (10/08). Retire la TVA à tort déduite du calcul brouillon
+  // si la correction est constatée.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+  }>('/dossiers/:dossierId/verifier-frais-vehicule', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const { periodeDebut, periodeFin, utilisateurId } = request.body;
+    if (!periodeDebut || !periodeFin || !utilisateurId) {
+      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    }
+
+    let client;
+    try {
+      client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+    } catch (err) {
+      if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+      if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+        return reply.code(400).send({ erreur: err.message });
+      }
+      throw err;
+    }
+
+    return verifierFraisVehiculeLegere(pool, {
       cabinetId,
       dossierId: request.params.dossierId,
       client,
