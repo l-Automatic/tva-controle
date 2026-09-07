@@ -110,4 +110,46 @@ describe('detecterEncaissementsClientAAffecter — regime TVA sur encaissement (
     const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte(), 'mixte');
     expect(regularisations[0]?.taux).toBe(20);
   });
+
+  it('bug réel corrigé (10/08, trouvé par Rami) : un avoir client (journal de vente) n’est jamais traité comme un encaissement', () => {
+    const l = ligne({ credit: 500, compte: '411ROUSSEAU', journalId: 42 });
+    const journalCodeParId = new Map([[42, 'VE']]); // 42 résolu -> code "VE" (vente)
+
+    const { regularisations, anomalies } = detecterEncaissementsClientAAffecter(
+      [l],
+      contexte(),
+      'service',
+      'VE', // journal de vente confirmé
+      journalCodeParId
+    );
+
+    expect(regularisations).toEqual([]);
+    expect(anomalies).toEqual([]);
+  });
+
+  it('un vrai encaissement (journal banque, différent du journal de vente) reste traité normalement', () => {
+    const l = ligne({ credit: 500, compte: '411ROUSSEAU', journalId: 7 });
+    const journalCodeParId = new Map([
+      [42, 'VE'],
+      [7, 'BQ'],
+    ]);
+
+    const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte(), 'service', 'VE', journalCodeParId);
+
+    expect(regularisations).toHaveLength(1);
+    expect(regularisations[0]?.montantTTC).toBe(500);
+  });
+
+  it('sans résolution de journal disponible (journalCodeVente absent), comportement identique à avant le correctif — pas de régression', () => {
+    const l = ligne({ credit: 500, compte: '411ROUSSEAU', journalId: 42 });
+    const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte());
+    expect(regularisations).toHaveLength(1);
+  });
+
+  it('sans journalId sur la ligne (résolution indisponible pour cette ligne précise), jamais exclue à tort', () => {
+    const l = ligne({ credit: 500, compte: '411ROUSSEAU' }); // pas de journalId
+    const journalCodeParId = new Map([[42, 'VE']]);
+    const { regularisations } = detecterEncaissementsClientAAffecter([l], contexte(), 'service', 'VE', journalCodeParId);
+    expect(regularisations).toHaveLength(1);
+  });
 });
