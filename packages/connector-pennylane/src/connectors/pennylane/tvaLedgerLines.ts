@@ -28,6 +28,7 @@ function mapLigne(item: PennylaneLedgerEntryLineItem): LigneEcritureAvecLettrage
     credit: parseMontant(item.credit),
     date: item.date,
     ledgerEntryId: item.ledger_entry.id,
+    journalId: item.journal.id,
     lettrage: {
       estLettree: item.lettered_ledger_entry_lines.ids.length > 0,
       groupeIds: item.lettered_ledger_entry_lines.ids,
