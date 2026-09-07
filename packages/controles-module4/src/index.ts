@@ -27,6 +27,7 @@ export { detecterEncaissementsNonAffectes } from './encaissementNonAffecte.js';
 export { verifierNouveauxTiers, type StatutTiers } from './tiersReference.js';
 export {
   detecterEncaissementsClientAAffecter,
+  detecterJournalVenteDominant,
   type RegularisationClientAAppliquer,
   type RegimeTvaEncaissement,
 } from './encaissementClientNonAffecte.js';
