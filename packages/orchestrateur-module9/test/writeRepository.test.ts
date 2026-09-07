@@ -2719,6 +2719,8 @@ describe('chargerDeclarationCalcul', () => {
       ['deductible_immo', 100],
       ['base_ht_20', 5000],
       ['base_ht_10', 2000],
+      ['base_ht_export', 800],
+      ['base_ht_intracom_exoneree', 400],
     ];
     for (const [categorie, montant] of lignes) {
       await avecClient((client) =>
@@ -2739,13 +2741,13 @@ describe('chargerDeclarationCalcul', () => {
     });
     expect(declaration.ligne04DueIntracom).toBe(50);
     expect(declaration.autresOperationsImposablesBtp).toBe(30);
+    expect(declaration.ligne06Export).toBe(800);
+    expect(declaration.ligne07IntracomExoneree).toBe(400);
     expect(declaration.ligne08DeductibleAbs).toBe(680); // 600 + 80
     expect(declaration.ligne09DeductibleImmo).toBe(100);
     // solde = (1200 + 50 + 30) - (680 + 100) = 500
     expect(declaration.solde).toEqual({ sens: 'a_decaisser', montant: 500 });
     expect(declaration.disponible).toEqual({
-      ligne05Export: false,
-      ligne06IntracomExonere: false,
       ligne10CreditAnterieur: false,
     });
   });
