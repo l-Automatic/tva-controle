@@ -770,16 +770,17 @@ export async function listerPaiementsDejaReclames(client: PoolClient, dossierId:
 export interface DeclarationCalcul {
   ligne01CollecteTotal: number; // solde créditeur 44571 — collecte SEULE, exclut l'autoliquidation
   ligne02ParTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
+  ligne03BaseHt: { total: number; parTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number } };
   ligne04DueIntracom: number; // TVA due sur acquisitions intracom (4452)
   autresOperationsImposablesBtp: number; // pas un numéro de ligne officiel isolé — sous-traitance BTP (art. 283-2 nonies CGI), à déclarer en "autres opérations imposables"
   ligne08DeductibleAbs: number; // 44566 + 445662 + 445664, fusionnés (confirmé par Rami)
   ligne09DeductibleImmo: number; // 44562 (+ 445622 le cas échéant, non séparé pour l'instant)
   solde: { sens: 'a_decaisser' | 'credit'; montant: number };
   // Lignes dont on ne calcule pas encore le montant (10/08, chantier en
-  // cours, phases 2 à 4 pas commencées) — jamais un zéro silencieux, le
-  // frontend doit afficher "pas encore disponible" pour chacune.
+  // cours, phases 2 et 4 pas commencées — la 3 est disponible depuis ce
+  // même jour) — jamais un zéro silencieux, le frontend doit afficher
+  // "pas encore disponible" pour chacune de celles-ci.
   disponible: {
-    ligne03BaseHt: false;
     ligne05Export: false;
     ligne06IntracomExonere: false;
     ligne10CreditAnterieur: false;
@@ -787,13 +788,35 @@ export interface DeclarationCalcul {
 }
 
 // Traduit notre détail par catégorie (chargerDetailCalcul) en lignes de
-// déclaration CA3 — première version (10/08), lignes 1/2/4/8/9/solde
-// uniquement. Réutilise chargerDetailCalcul plutôt que de recalculer,
-// jamais deux sources de vérité pour le même montant.
+// déclaration CA3 — première version (10/08), lignes 1/2/3/4/8/9/solde.
+// Réutilise chargerDetailCalcul plutôt que de recalculer, jamais deux
+// sources de vérité pour le même montant. La ligne 3 (base_ht_XX) est lue
+// séparément, volontairement absente de TOUTES_CATEGORIES/chargerDetailCalcul
+// (jamais sujette à ajustement manuel, pas sa place dans le panneau de
+// calcul persistant — uniquement pertinente pour cet onglet Déclaration).
 export async function chargerDeclarationCalcul(client: PoolClient, calculId: string): Promise<DeclarationCalcul> {
   const detail = await chargerDetailCalcul(client, calculId);
   const parCategorie = new Map(detail.map((l) => [l.categorie, l.montant]));
   const m = (categorie: string): number => parCategorie.get(categorie) ?? 0;
+
+  const baseHtRes = await client.query<{ categorie: string; total: string }>(
+    `SELECT categorie, SUM(montant) AS total FROM calculs_tva_lignes
+     WHERE calcul_id = $1 AND categorie IN ('base_ht_20', 'base_ht_10', 'base_ht_5_5', 'base_ht_2_1')
+     GROUP BY categorie`,
+    [calculId]
+  );
+  const baseHtParCategorie = new Map(baseHtRes.rows.map((r) => [r.categorie, Number.parseFloat(r.total)]));
+  const mBaseHt = (categorie: string): number => baseHtParCategorie.get(categorie) ?? 0;
+  const ligne03ParTaux = {
+    taux20: mBaseHt('base_ht_20'),
+    taux10: mBaseHt('base_ht_10'),
+    taux5_5: mBaseHt('base_ht_5_5'),
+    taux2_1: mBaseHt('base_ht_2_1'),
+  };
+  const ligne03BaseHt = {
+    total: ligne03ParTaux.taux20 + ligne03ParTaux.taux10 + ligne03ParTaux.taux5_5 + ligne03ParTaux.taux2_1,
+    parTaux: ligne03ParTaux,
+  };
 
   const ligne02ParTaux = {
     taux20: m('collectee_20'),
@@ -813,13 +836,13 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
   return {
     ligne01CollecteTotal,
     ligne02ParTaux,
+    ligne03BaseHt,
     ligne04DueIntracom,
     autresOperationsImposablesBtp,
     ligne08DeductibleAbs,
     ligne09DeductibleImmo,
     solde: { sens: montantNet >= 0 ? 'a_decaisser' : 'credit', montant: Math.abs(montantNet) },
     disponible: {
-      ligne03BaseHt: false,
       ligne05Export: false,
       ligne06IntracomExonere: false,
       ligne10CreditAnterieur: false,
