@@ -176,6 +176,31 @@ function fusionnerSuggestions(
 // liste de comptes différents. Contrairement aux autres jugements LLM de
 // ce projet, chaque candidat devient TOUJOURS une anomalie (le fait est
 // déjà certain) — seule la gravité varie selon la confiance.
+// Somme la base HT (côté crédit — une vente) des lignes touchant les
+// comptes confirmés d'une catégorie de vente exonérée (export ou
+// intracom, lignes 6/7 CA3, 10/08). Même principe de découverte que le
+// 471/411 : decouvrirComptesParPrefixe puis fetchLignesParCompte,
+// jamais un ancrage sur les comptes TVA (ces ventes n'en ont aucune).
+async function sommerVentesExonerees(
+  client: IPennylaneApiClient,
+  comptesPrefixes: string[],
+  periodeDebut: string,
+  periodeFin: string
+): Promise<number> {
+  if (comptesPrefixes.length === 0) return 0;
+
+  const comptes = (await Promise.all(comptesPrefixes.map((prefixe) => decouvrirComptesParPrefixe(client, prefixe)))).flat();
+  if (comptes.length === 0) return 0;
+
+  const lignes = await fetchLignesParCompte(client, {
+    compteIds: comptes.map((c) => c.id),
+    periodeDebut,
+    periodeFin,
+  });
+
+  return lignes.reduce((total, l) => total + Math.max(l.credit - l.debit, 0), 0);
+}
+
 async function construireAnomaliesFraisVehicule(
   ecritures: EcritureTvaComplete[],
   comptesConcernes: string[],
@@ -279,6 +304,7 @@ export async function executerCycleTva(
   const comptesChargeAutoliquidationIntracom =
     conventionListe(contexteDossier, 'comptes_charge_autoliquidation_intracom') ?? [];
   const comptesVenteIntracomExoneree = conventionListe(contexteDossier, 'comptes_vente_intracom_exoneree') ?? [];
+  const comptesVenteExport = conventionListe(contexteDossier, 'comptes_vente_export') ?? [];
 
   // Dérivés de la mémoire de dossier — [] si le dossier n'a encore aucune
   // convention confirmée pour ce point (ex: pas encore onboardé). Un tableau
@@ -799,6 +825,22 @@ export async function executerCycleTva(
           periodeFin: params.periodeFin,
         })
       : [];
+
+  // Lignes 6/7 CA3 (10/08, chantier déclaration) — exportations et
+  // livraisons intracom exonérées. Fetch séparé de
+  // fetchEcrituresTvaCompletes : ces ventes n'ont par nature AUCUNE ligne
+  // TVA associée (exonérées), donc invisibles pour un fetch ancré sur les
+  // comptes 445* — même raisonnement exactement que pour le 471 plus
+  // haut. Optionnelles (jamais un motif de blocage de cycle) : si aucun
+  // compte n'est confirmé, le montant reste simplement à 0, pas une
+  // anomalie.
+  const baseHtExport = await sommerVentesExonerees(params.client, comptesVenteExport, params.periodeDebut, params.periodeFin);
+  const baseHtIntracomExoneree = await sommerVentesExonerees(
+    params.client,
+    comptesVenteIntracomExoneree,
+    params.periodeDebut,
+    params.periodeFin
+  );
   // Régime TVA sur encaissement (09/08) : 'service' par défaut si non
   // paramétré (comportement historique, rétrocompatible avec les dossiers
   // déjà en test). Un dossier vendant des biens (ou fonctionnant en caisse
@@ -1009,6 +1051,8 @@ export async function executerCycleTva(
       ['base_ht_10', baseHtParTaux.parTaux.taux10],
       ['base_ht_5_5', baseHtParTaux.parTaux.taux5_5],
       ['base_ht_2_1', baseHtParTaux.parTaux.taux2_1],
+      ['base_ht_export', baseHtExport],
+      ['base_ht_intracom_exoneree', baseHtIntracomExoneree],
     ] as const
   )
     .filter(([, montant]) => montant !== 0)
