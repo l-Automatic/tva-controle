@@ -48,6 +48,10 @@ export {
   type CandidatJugementVehiculeTourisme,
 } from './candidatsVehiculeTourisme.js';
 export {
+  identifierCandidatsFraisVehicule,
+  type CandidatJugementFraisVehicule,
+} from './candidatsFraisVehicule.js';
+export {
   verifierCoherenceTauxAutoliquidation,
   type ConfigCoherenceAutoliquidation,
 } from './coherenceAutoliquidation.js';
