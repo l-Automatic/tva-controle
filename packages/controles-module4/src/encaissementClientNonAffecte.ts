@@ -1,4 +1,4 @@
-import type { LigneEcritureAvecLettrage, Anomalie, ContexteDossier } from '@tva-controle/core';
+import type { LigneEcritureAvecLettrage, Anomalie, ContexteDossier, EcritureTvaComplete } from '@tva-controle/core';
 import { tauxHabituelPour } from '@tva-controle/core';
 
 export interface RegularisationClientAAppliquer {
@@ -105,4 +105,32 @@ export function detecterEncaissementsClientAAffecter(
   }
 
   return { regularisations, anomalies };
+}
+
+// Détecte automatiquement le journal de vente dominant (10/08, demande de
+// Rami) — plutôt qu'une confirmation manuelle par le collaborateur : parmi
+// les écritures qui touchent un compte de collecte (44571x, donc une vraie
+// vente), le journal le plus fréquent est "le" journal de vente actif du
+// dossier. Recalculé à chaque cycle, jamais mémorisé — un dossier n'a en
+// pratique qu'un seul journal de vente réellement utilisé (les autres,
+// même créés par défaut par Pennylane comme "VT", restent à zéro
+// mouvement) : le comptage suffit, pas besoin de confirmation.
+//
+// Retourne l'id du journal (jamais son code — la résolution id -> code
+// reste une responsabilité du connecteur, cf. resolveJournalsByIds),
+// null si aucune écriture de collecte n'a de journal identifié.
+export function detecterJournalVenteDominant(ecritures: EcritureTvaComplete[]): number | null {
+  const occurrences = new Map<number, number>();
+
+  for (const ecriture of ecritures) {
+    if (!ecriture.ligneTva.compte.startsWith('44571')) continue;
+    const { journalId } = ecriture.ligneTva;
+    if (journalId === undefined) continue;
+    occurrences.set(journalId, (occurrences.get(journalId) ?? 0) + 1);
+  }
+
+  if (occurrences.size === 0) return null;
+
+  const dominant = [...occurrences.entries()].sort((a, b) => b[1] - a[1])[0];
+  return dominant ? dominant[0] : null;
 }
