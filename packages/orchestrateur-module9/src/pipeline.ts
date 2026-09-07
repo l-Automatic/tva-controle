@@ -5,6 +5,7 @@ import {
   fetchTrialBalance,
   filterComptesParPrefixe,
   fetchLignesParCompte,
+  resolveJournalsByIds,
   decouvrirComptesParPrefixe,
   resolveLedgerAccounts,
   fetchPieceNumbers,
@@ -707,10 +708,24 @@ export async function executerCycleTva(
   );
   const regimeTvaEncaissement: 'service' | 'bien' | 'mixte' =
     regimeTvaEncaissementBrut === 'bien' || regimeTvaEncaissementBrut === 'mixte' ? regimeTvaEncaissementBrut : 'service';
+
+  // Résolution des journaux (10/08, bug réel corrigé — cf.
+  // detecterEncaissementsClientAAffecter) : un avoir client passe par le
+  // journal de vente, jamais un vrai encaissement — sans cette résolution,
+  // toute la protection reste désactivée (comportement identique à avant,
+  // pas de régression, juste pas de correctif actif).
+  const journalIdsClient = [...new Set(lignesClient.map((l) => l.journalId).filter((id): id is number => id !== undefined))];
+  const journalCodeParId = await resolveJournalsByIds(params.client, journalIdsClient).then(
+    (m) => new Map([...m.entries()].map(([id, j]) => [id, j.code]))
+  );
+  const journalCodeVente = conventionValeur(contexteDossier, 'code_journal_vente');
+
   const { regularisations: regularisationsClient, anomalies: anomaliesClient } = detecterEncaissementsClientAAffecter(
     lignesClient,
     contexteDossier,
-    regimeTvaEncaissement
+    regimeTvaEncaissement,
+    journalCodeVente,
+    journalCodeParId
   );
 
   const { statuts: statutsTiers, anomalies: anomaliesTiers } = verifierNouveauxTiers(ecritures, contexteDossier);
