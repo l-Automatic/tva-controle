@@ -25,6 +25,8 @@ const CHOIX = [
   { cle: 'comptes_carburant', libelle: 'Carburant' },
   { cle: 'comptes_cadeaux', libelle: 'Cadeaux clients' },
   { cle: 'comptes_immobilisation', libelle: 'Immobilisation' },
+  { cle: 'comptes_entretien_vehicule', libelle: 'Entretien véhicule' },
+  { cle: 'comptes_location_vehicule', libelle: 'Location véhicule' },
 ] as const;
 
 function CompteCard({
@@ -209,7 +211,7 @@ export function CategorisationPopup({
           </button>
         </div>
         <p className="reference">
-          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 6 conventions. Les
+          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 8 conventions. Les
           comptes non traités réapparaîtront au prochain cycle.
         </p>
         {comptes.length === 0 ? (

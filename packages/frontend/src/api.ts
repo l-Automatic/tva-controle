@@ -475,6 +475,37 @@ export const verifierCoherenceTauxAutoliquidation = verifierSansQualification('v
 // un cumul annuel. Même famille exactement que les 4 routes ci-dessus.
 export const verifierCadeauClient = verifierSansQualification('verifier-cadeau-client');
 
+// Qualification structurée pour entretien_vehicule_tourisme_deduit_a_tort
+// ET location_vehicule_tourisme_deduite_a_tort (brief v48) — même principe
+// exactement que tva_hotel_a_verifier (brief v44), mais une seule route
+// couvre les deux types : typeAnomalie doit valoir exactement le type de
+// l'anomalie qualifiée (sinon 409, la mise à jour ne trouve aucune ligne).
+export function qualifierFraisVehicule(
+  cabinetId: string,
+  id: string,
+  utilisateurId: string,
+  typeAnomalie: string,
+  type: 'confirme' | 'ignore'
+): Promise<void> {
+  return request<void>(`/anomalies/${id}/qualifier-frais-vehicule`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ utilisateurId, typeAnomalie, type }),
+  });
+}
+
+// "Vérifier à nouveau" pour les DEUX types de frais véhicule (brief v48) —
+// même route, un seul appel, comme verifierTvaHotel.
+export function verifierFraisVehicule(
+  cabinetId: string,
+  dossierId: string,
+  params: { periodeDebut: string; periodeFin: string; utilisateurId: string }
+): Promise<{ anomaliesOuvertes: number; corrections: number }> {
+  return request<{ anomaliesOuvertes: number; corrections: number }>(`/dossiers/${dossierId}/verifier-frais-vehicule`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 export function fetchConventions(
   cabinetId: string,
   dossierId: string,

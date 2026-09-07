@@ -7,6 +7,7 @@ import {
   qualifierAvoir,
   qualifierEncaissement,
   qualifierEncaissementClientTaux,
+  qualifierFraisVehicule,
   qualifierImmobilisation,
   qualifierNouveauTiers,
   qualifierTvaHotel,
@@ -18,6 +19,7 @@ import {
   verifierCadeauClient,
   verifierCoherenceTauxAutoliquidation,
   verifierComptesNonReconnus,
+  verifierFraisVehicule,
   verifierImmobilisation,
   verifierImmobilisationTva,
   verifierNumerotation,
@@ -112,6 +114,17 @@ const TYPE_INCOHERENCE_TAUX_AUTOLIQUIDATION = 'incoherence_taux_autoliquidation'
 // déduite dessus, erreur certaine.
 const TYPE_CADEAU_CLIENT_SEUIL_DEPASSE = 'cadeau_client_seuil_depasse';
 
+// Frais véhicule de tourisme (brief v48) — même schéma exactement que
+// tva_hotel_a_verifier (brief v44) : qualification structurée d'abord,
+// puis "Vérifier à nouveau" une fois confirmé. Particularité : la gravité
+// varie PAR INSTANCE (bloquant si un véhicule est identifié dans le
+// libellé, signalé sinon) — déjà géré génériquement par anomalie.gravite,
+// rien de spécial à construire pour ça. Une seule route de qualification
+// couvre les deux types (typeAnomalie dans le corps de la requête), une
+// seule route de vérification aussi.
+const TYPE_ENTRETIEN_VEHICULE_A_TORT = 'entretien_vehicule_tourisme_deduit_a_tort';
+const TYPE_LOCATION_VEHICULE_A_TORT = 'location_vehicule_tourisme_deduite_a_tort';
+
 // Tous les types actifs du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md. tva_sur_livraison_intracom_exoneree existe dans
 // le code mais reste volontairement hors périmètre (décision explicite,
@@ -151,6 +164,8 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   incoherence_taux_autoliquidation: 'Incohérence de taux — autoliquidation',
   incoherence_taux_produit: 'Incohérence de taux — compte produit',
   cadeau_client_seuil_depasse: 'Cadeau client — seuil de 73€ dépassé',
+  entretien_vehicule_tourisme_deduit_a_tort: 'Entretien véhicule tourisme déduit à tort',
+  location_vehicule_tourisme_deduite_a_tort: 'Location véhicule tourisme déduite à tort',
 };
 
 interface AnomaliesPanelProps {
@@ -1134,6 +1149,137 @@ function VerificationTvaHotel({
   );
 }
 
+// Qualification structurée pour entretien_vehicule_tourisme_deduit_a_tort
+// ET location_vehicule_tourisme_deduite_a_tort (brief v48) — même schéma
+// exactement que QualificationTvaHotel, mais une seule route couvre les
+// deux types : typeAnomalie doit valoir exactement le type de CETTE
+// anomalie (sinon 409, aucune ligne ne correspond côté backend).
+function QualificationFraisVehicule({
+  anomalie,
+  cabinetId,
+  utilisateurId,
+  onChanged,
+}: {
+  anomalie: Anomalie;
+  cabinetId: string;
+  utilisateurId: string;
+  onChanged: () => void;
+}) {
+  const [submitting, setSubmitting] = useState<'confirme' | 'ignore' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleQualifier(type: 'confirme' | 'ignore') {
+    setSubmitting(type);
+    setError(null);
+    try {
+      await qualifierFraisVehicule(cabinetId, anomalie.id, utilisateurId, anomalie.typeAnomalie, type);
+      notifier(type === 'confirme' ? 'Frais véhicule à vérifier confirmé' : 'Ignoré — jugement IA écarté');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="actions">
+        <button onClick={() => void handleQualifier('confirme')} disabled={submitting !== null}>
+          <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
+          {submitting === 'confirme' ? '…' : 'Confirmer'}
+        </button>
+        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+          {submitting === 'ignore' ? '…' : 'Ignorer'}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
+// "Vérifier à nouveau" partagé par les deux types de frais véhicule
+// (brief v48) — même route backend, un seul appel. Affiché seulement une
+// fois 'confirme' (même particularité que VerificationTvaHotel/
+// VerificationImmobilisation), jamais avant qualification ni après
+// 'ignore'.
+function VerificationFraisVehicule({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  anomalie,
+  periodeFinContexte,
+  onChanged,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  anomalie: Anomalie;
+  periodeFinContexte?: string | null;
+  onChanged: () => void;
+}) {
+  const debutParDefaut = toDateOnly(anomalie.periode);
+  const [ouvert, setOuvert] = useState(false);
+  const [periodeDebut, setPeriodeDebut] = useState(debutParDefaut);
+  const [periodeFin, setPeriodeFin] = useState(periodeFinContexte ? toDateOnly(periodeFinContexte) : debutParDefaut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function handleVerifier() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { anomaliesOuvertes, corrections } = await verifierFraisVehicule(cabinetId, dossierId, {
+        periodeDebut,
+        periodeFin,
+        utilisateurId,
+      });
+      notifier(
+        corrections > 0
+          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
+          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) frais véhicule toujours ouverte(s) sur cette période`
+      );
+      setOuvert(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la vérification');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!ouvert) {
+    return (
+      <button className="secondary" onClick={() => setOuvert(true)}>
+        <RefreshCw size={14} aria-hidden="true" />
+        Vérifier à nouveau
+      </button>
+    );
+  }
+
+  return (
+    <div className="cycle-form">
+      <label>
+        Période — début
+        <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
+      </label>
+      <label>
+        Période — fin
+        <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
+      </label>
+      <button onClick={() => void handleVerifier()} disabled={submitting}>
+        {submitting ? 'Vérification…' : 'Vérifier'}
+      </button>
+      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+        Annuler
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 // "Vérifier à nouveau" pour trou_numerotation_facture ET
 // doublon_numerotation_facture (brief v45) — même route pour les deux
 // types, réponse {trouOuvert, doublonOuvert} : on ne lit que le booléen
@@ -1401,6 +1547,17 @@ function AnomalieRow({
     estIncoherenceTauxProduit ||
     estIncoherenceTauxAutoliquidation ||
     estCadeauClientSeuilDepasse;
+  // Même particularité que tva_hotel_a_verifier (brief v44) — qualifier()
+  // passe l'anomalie en 'resolu' immédiatement, "Vérifier à nouveau" ne
+  // doit apparaître qu'après 'confirme', jamais avant ni après 'ignore.
+  // Uniforme pour les deux types de frais véhicule (brief v48).
+  const estFraisVehicule =
+    anomalie.typeAnomalie === TYPE_ENTRETIEN_VEHICULE_A_TORT || anomalie.typeAnomalie === TYPE_LOCATION_VEHICULE_A_TORT;
+  const resolutionFraisVehiculeType =
+    estFraisVehicule && anomalie.resolution && typeof anomalie.resolution === 'object'
+      ? (anomalie.resolution as { type?: string }).type
+      : null;
+  const afficherVerificationFraisVehicule = estFraisVehicule && resolutionFraisVehiculeType === 'confirme';
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -1574,6 +1731,19 @@ function AnomalieRow({
           </div>
         )}
 
+        {afficherVerificationFraisVehicule && (
+          <div className="actions">
+            <VerificationFraisVehicule
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              anomalie={anomalie}
+              periodeFinContexte={periodeFinContexte}
+              onChanged={onChanged}
+            />
+          </div>
+        )}
+
         {estOuverte &&
           (estTvaHotelATort || estVerificationSimple ? null : estEncaissement ? (
             <EncaissementQualification
@@ -1614,6 +1784,8 @@ function AnomalieRow({
             />
           ) : estTvaHotelAVerifier ? (
             <QualificationTvaHotel anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
+          ) : estFraisVehicule ? (
+            <QualificationFraisVehicule anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
           ) : (
             <div className="actions">
               <input
@@ -1643,6 +1815,7 @@ function AnomalieRow({
           !estTvaHotelATort &&
           !estTvaHotelAVerifier &&
           !estVerificationSimple &&
+          !estFraisVehicule &&
           error && <p className="error">{error}</p>}
       </Accordion>
     </li>
