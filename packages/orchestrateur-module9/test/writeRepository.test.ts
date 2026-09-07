@@ -2698,7 +2698,7 @@ describe('appliquerCorrectionFraisVehicule', () => {
 });
 
 describe('chargerDeclarationCalcul', () => {
-  it('agrège correctement les lignes 1/2/4/8/9 et calcule le solde, marque le reste indisponible', async () => {
+  it('agrège correctement les lignes 1/2/3/4/8/9 et calcule le solde, marque le reste indisponible', async () => {
     const periode = '2026-06-01';
     const calculId = (
       await avecClient((client) =>
@@ -2717,6 +2717,8 @@ describe('chargerDeclarationCalcul', () => {
       ['deductible_abs', 600],
       ['autoliquidation_deductible', 80], // BTP + intracom fusionnés
       ['deductible_immo', 100],
+      ['base_ht_20', 5000],
+      ['base_ht_10', 2000],
     ];
     for (const [categorie, montant] of lignes) {
       await avecClient((client) =>
@@ -2731,6 +2733,10 @@ describe('chargerDeclarationCalcul', () => {
 
     expect(declaration.ligne01CollecteTotal).toBe(1200); // 1000 + 200
     expect(declaration.ligne02ParTaux).toEqual({ taux20: 1000, taux10: 200, taux5_5: 0, taux2_1: 0 });
+    expect(declaration.ligne03BaseHt).toEqual({
+      total: 7000, // 5000 + 2000
+      parTaux: { taux20: 5000, taux10: 2000, taux5_5: 0, taux2_1: 0 },
+    });
     expect(declaration.ligne04DueIntracom).toBe(50);
     expect(declaration.autresOperationsImposablesBtp).toBe(30);
     expect(declaration.ligne08DeductibleAbs).toBe(680); // 600 + 80
@@ -2738,7 +2744,6 @@ describe('chargerDeclarationCalcul', () => {
     // solde = (1200 + 50 + 30) - (680 + 100) = 500
     expect(declaration.solde).toEqual({ sens: 'a_decaisser', montant: 500 });
     expect(declaration.disponible).toEqual({
-      ligne03BaseHt: false,
       ligne05Export: false,
       ligne06IntracomExonere: false,
       ligne10CreditAnterieur: false,
