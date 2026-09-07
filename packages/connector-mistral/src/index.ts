@@ -9,6 +9,10 @@ export {
   jugerLibellesVehiculeTourisme,
   type JugementVehiculeTourisme,
 } from './jugerLibellesVehiculeTourisme.js';
+export {
+  jugerVehiculeIdentifieDansLibelle,
+  type JugementVehiculeIdentifie,
+} from './jugerVehiculeIdentifieDansLibelle.js';
 export { decouvrirMotifNumerotation, type MotifNumerotation } from './decouvrirMotifNumerotation.js';
 export {
   jugerCandidatsPaiementAchat,
