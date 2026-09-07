@@ -529,6 +529,9 @@ export interface AjustementCalcul {
 // ultérieurs). GET /calculs/:calculId/detail retourne toujours ces 8
 // lignes, même à 0 — `ajuste: true` signifie que le montant reflète un
 // ajustement manuel plutôt que la simple somme brute du cycle.
+// autoliquidation_due séparée en deux (brief v49, chantier déclaration
+// CA3) : autoliquidation_due_btp / autoliquidation_due_intracom, plus
+// jamais produite sous l'ancien nom unique côté backend.
 export const CATEGORIES_DETAIL_CALCUL = [
   'collectee_20',
   'collectee_10',
@@ -536,7 +539,8 @@ export const CATEGORIES_DETAIL_CALCUL = [
   'collectee_2_1',
   'deductible_abs',
   'deductible_immo',
-  'autoliquidation_due',
+  'autoliquidation_due_btp',
+  'autoliquidation_due_intracom',
   'autoliquidation_deductible',
 ] as const;
 export type CategorieDetailCalcul = (typeof CATEGORIES_DETAIL_CALCUL)[number];
@@ -545,6 +549,29 @@ export interface DetailCalculLigne {
   categorie: CategorieDetailCalcul;
   montant: number;
   ajuste: boolean;
+}
+
+// Onglet Déclaration (brief v49) — première version, affichage seulement
+// des montants à reporter dans la CA3 pour un calcul donné (déclarer
+// réellement viendra plus tard). GET /calculs/:calculId/declaration.
+// `disponible` : les 4 lignes valent toujours false pour l'instant
+// (phases 2 à 4 du chantier pas commencées) — jamais un 0€ à leur place,
+// qui laisserait croire à tort que la ligne est vide plutôt que non
+// calculée.
+export interface DeclarationCalcul {
+  ligne01CollecteTotal: number;
+  ligne02ParTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
+  ligne04DueIntracom: number;
+  autresOperationsImposablesBtp: number;
+  ligne08DeductibleAbs: number;
+  ligne09DeductibleImmo: number;
+  solde: { sens: 'a_decaisser' | 'credit'; montant: number };
+  disponible: {
+    ligne03BaseHt: boolean;
+    ligne05Export: boolean;
+    ligne06IntracomExonere: boolean;
+    ligne10CreditAnterieur: boolean;
+  };
 }
 
 // --- Authentification (brief v25) — remplace l'ancienne identité saisie à

@@ -6,6 +6,7 @@ import { ProgressionPanel } from './components/ProgressionPanel';
 import { Sidebar, ZONES, type Zone } from './components/Sidebar';
 import { ConfigurationZone, type SousOngletConfiguration } from './components/zones/ConfigurationZone';
 import { CycleZone } from './components/zones/CycleZone';
+import { DeclarationZone } from './components/zones/DeclarationZone';
 import { HistoriqueZone } from './components/zones/HistoriqueZone';
 import { UtilisateursZone } from './components/zones/UtilisateursZone';
 import { definirJeton, fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresDossier, surSessionExpiree } from './api';
@@ -301,6 +302,7 @@ export function App() {
                   onCompteNonReconnuClic={allerVersConventionsGeneriques}
                 />
               )}
+              {zone === 'declaration' && <DeclarationZone cabinetId={cabinetId} dossierId={dossier.id} />}
               {zone === 'parametres' && (
                 <ParametresPanel
                   cabinetId={cabinetId}

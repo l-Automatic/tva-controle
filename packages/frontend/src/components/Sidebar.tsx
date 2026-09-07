@@ -4,7 +4,7 @@ import { ApiError, fetchDossiers } from '../api';
 import { ICONE_ZONE } from '../icons';
 import { LIBELLE_ROLE, type Dossier, type Role } from '../types';
 
-export type Zone = 'cycle' | 'configuration' | 'historique' | 'parametres' | 'utilisateurs';
+export type Zone = 'cycle' | 'configuration' | 'historique' | 'declaration' | 'parametres' | 'utilisateurs';
 
 export const ZONES: { id: Zone; libelle: string; description: string; roles?: Role[] }[] = [
   {
@@ -23,6 +23,12 @@ export const ZONES: { id: Zone; libelle: string; description: string; roles?: Ro
     id: 'historique',
     libelle: 'Historique',
     description: 'Calculs et anomalies de toutes les périodes passées, journal d’audit complet.',
+  },
+  {
+    id: 'declaration',
+    libelle: 'Déclaration',
+    description:
+      "Montants à reporter dans la CA3 pour un calcul donné — première version, affichage seulement (déclarer réellement viendra plus tard).",
   },
   {
     id: 'parametres',

@@ -6,6 +6,7 @@ import type {
   CompteACategoriser,
   CompteTvaAConfirmer,
   ConfigurationOnboarding,
+  DeclarationCalcul,
   DetailCalculLigne,
   Dossier,
   DossierComplet,
@@ -830,6 +831,11 @@ export function fetchAjustementsCalcul(cabinetId: string, calculId: string): Pro
 // transfert entre deux catégories précises.
 export function fetchDetailCalcul(cabinetId: string, calculId: string): Promise<DetailCalculLigne[]> {
   return request<DetailCalculLigne[]>(`/calculs/${calculId}/detail`, cabinetId);
+}
+
+// Onglet Déclaration (brief v49) — première version, affichage seulement.
+export function fetchDeclarationCalcul(cabinetId: string, calculId: string): Promise<DeclarationCalcul> {
+  return request<DeclarationCalcul>(`/calculs/${calculId}/declaration`, cabinetId);
 }
 
 export function ajusterMontantCalcul(

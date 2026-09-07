@@ -10,6 +10,7 @@ import {
   CircleX,
   Clock,
   Copy,
+  FileText,
   HandCoins,
   Hash,
   HelpCircle,
@@ -30,10 +31,14 @@ import {
 } from 'lucide-react';
 import type { TypeElementATraiter } from './types';
 
-export const ICONE_ZONE: Record<'cycle' | 'configuration' | 'historique' | 'parametres' | 'utilisateurs', LucideIcon> = {
+export const ICONE_ZONE: Record<
+  'cycle' | 'configuration' | 'historique' | 'declaration' | 'parametres' | 'utilisateurs',
+  LucideIcon
+> = {
   cycle: RefreshCw,
   configuration: Settings2,
   historique: History,
+  declaration: FileText,
   parametres: Settings,
   utilisateurs: Users,
 };

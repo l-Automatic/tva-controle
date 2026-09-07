@@ -684,6 +684,12 @@ button:focus-visible {
   background: var(--bg-raised);
 }
 
+/* Calcul sélectionné dans l'onglet Déclaration (brief v49). */
+.card.actif {
+  border-left-color: var(--accent);
+  background: var(--accent-soft-bg);
+}
+
 .card.gravite-bloquant {
   border-left-color: var(--danger);
 }

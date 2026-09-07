@@ -46,6 +46,11 @@ interface CycleFormProps {
   onComptesTvaAConfirmerManquant?: (() => void) | undefined;
 }
 
+// autoliquidation_due séparée en deux côté backend (brief v49, chantier
+// déclaration CA3) : autoliquidation_due_btp / autoliquidation_due_intracom,
+// plus jamais produite sous l'ancien nom unique — corrigé ici partout où il
+// était référencé, sinon ces montants disparaissent silencieusement des
+// sommes qui s'y fient (CATEGORIES_COLLECTEE juste en dessous).
 export const LIBELLE_CATEGORIE: Record<string, string> = {
   collectee_20: 'Collectée 20 %',
   collectee_10: 'Collectée 10 %',
@@ -53,7 +58,8 @@ export const LIBELLE_CATEGORIE: Record<string, string> = {
   collectee_2_1: 'Collectée 2,1 %',
   deductible_abs: 'Déductible (biens/services)',
   deductible_immo: 'Déductible (immobilisations)',
-  autoliquidation_due: 'Autoliquidation due',
+  autoliquidation_due_btp: 'Autoliquidation due (BTP)',
+  autoliquidation_due_intracom: 'Autoliquidation due (intracom)',
   autoliquidation_deductible: 'Autoliquidation déductible',
 };
 
@@ -64,7 +70,14 @@ function formatMontant(montant: number): string {
 // Même regroupement que calculerTva (calcul-module7/src/calcul.ts) :
 // l'autoliquidation due s'ajoute au côté collecté, l'autoliquidation
 // déductible au côté déductible — tvaNette = collectée - déductible.
-const CATEGORIES_COLLECTEE = ['collectee_20', 'collectee_10', 'collectee_5_5', 'collectee_2_1', 'autoliquidation_due'];
+const CATEGORIES_COLLECTEE = [
+  'collectee_20',
+  'collectee_10',
+  'collectee_5_5',
+  'collectee_2_1',
+  'autoliquidation_due_btp',
+  'autoliquidation_due_intracom',
+];
 const CATEGORIES_DEDUCTIBLE = ['deductible_abs', 'deductible_immo', 'autoliquidation_deductible'];
 
 function sommeCategories(lignes: LigneCalcul[], categories: string[]): number {
