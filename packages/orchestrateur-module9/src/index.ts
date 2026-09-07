@@ -108,6 +108,8 @@ export {
   appliquerCorrectionTauxCollecte,
   appliquerCorrectionTvaHotel,
   qualifierTvaHotel,
+  qualifierFraisVehicule,
+  appliquerCorrectionFraisVehicule,
   appliquerTransfertImmobilisation,
   appliquerCorrectionVehiculeTourisme,
   enregistrerRapprochementPaiementAchat,
