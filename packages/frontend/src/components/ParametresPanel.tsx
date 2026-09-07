@@ -15,6 +15,7 @@ import {
 import { useToast } from '../toast';
 import { Accordion } from './Accordion';
 import {
+  CLE_DATE_DEBUT_EXERCICE,
   CLE_PENNYLANE_FIRM_API_KEY,
   CLE_REGIME_TVA_ENCAISSEMENT,
   CLE_THEME_DEGRADE,
@@ -700,6 +701,92 @@ function RegimeTvaSection({
   );
 }
 
+// Paramètre dossier dédié à la ligne 10 de la CA3 (crédit de TVA
+// antérieur, brief v53) — distinct de "Date début exercice" dans
+// Identité du dossier (colonne administrative dossiers.date_debut_exercice,
+// jamais synchronisée avec ce paramètre-ci). Écrit via la route générique
+// des paramètres dossier, comme demandé par le brief, plutôt que de
+// réutiliser ou dédoubler le champ d'Identité.
+function DateDebutExerciceSection({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+}) {
+  const [valeur, setValeur] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function charger() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchParametresDossier(cabinetId, dossierId);
+      const param = data.find((p) => p.cle === CLE_DATE_DEBUT_EXERCICE);
+      setValeur(typeof param?.valeur === 'string' ? param.valeur : '');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Impossible de charger la date de début d'exercice");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (cabinetId && dossierId) void charger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId, dossierId]);
+
+  async function handleEnregistrer() {
+    if (!valeur) {
+      setError('Une date est requise');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await definirParametreDossier(cabinetId, dossierId, utilisateurId, CLE_DATE_DEBUT_EXERCICE, valeur);
+      notifier("Date de début d'exercice enregistrée");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="panel panel-full">
+      <div className="panel-header">
+        <h2>Date de début d'exercice (crédit de TVA antérieur)</h2>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <div className="cycle-form">
+        <label>
+          Date de début d'exercice
+          <input
+            type="date"
+            value={valeur}
+            onChange={(e) => setValeur(e.target.value)}
+            disabled={loading || submitting}
+          />
+        </label>
+        <button onClick={() => void handleEnregistrer()} disabled={loading || submitting}>
+          {submitting ? '…' : 'Enregistrer'}
+        </button>
+      </div>
+      <p className="reference cycle-form-warning">
+        Nécessaire pour calculer la ligne 10 de la CA3 (crédit de TVA antérieur, solde débiteur du 44567 depuis le
+        début de l'exercice) — tant qu'elle n'est pas renseignée, cette ligne reste indisponible dans l'onglet
+        Déclaration. Distinct de « Date début exercice » dans Identité du dossier.
+      </p>
+    </section>
+  );
+}
+
 function DossierSection({
   cabinetId,
   dossierId,
@@ -765,7 +852,7 @@ function DossierSection({
       </p>
       {(() => {
         const visibles = parametres.filter(
-          (p) => p.cle !== CLE_THEME_DEGRADE && p.cle !== CLE_REGIME_TVA_ENCAISSEMENT
+          (p) => p.cle !== CLE_THEME_DEGRADE && p.cle !== CLE_REGIME_TVA_ENCAISSEMENT && p.cle !== CLE_DATE_DEBUT_EXERCICE
         );
         return (
           <>
@@ -831,6 +918,7 @@ export function ParametresPanel({
       {role === 'admin_cabinet' && <DossiersActivationSection cabinetId={cabinetId} />}
       <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      <DateDebutExerciceSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <DegradeSection
         cabinetId={cabinetId}
         dossierId={dossierId}

@@ -21,7 +21,12 @@ function formatMontantEntier(montant: number): string {
 // Une ligne CA3 = un numéro de ligne officiel + un montant, ou "Pas encore
 // disponible" pour les lignes dont le calcul n'est pas encore construit
 // (brief v49, chantier en cours) — jamais un 0€ à la place, qui laisserait
-// croire à tort que la ligne est vide plutôt que non calculée.
+// croire à tort que la ligne est vide plutôt que non calculée. `disponible`
+// entièrement retiré de la réponse backend (brief v53) — seule la ligne 10
+// garde ce cas de figure désormais, dérivé de ligne10CreditAnterieur ===
+// null (paramètre date_debut_exercice pas encore défini) plutôt que d'un
+// flag séparé ; 0 reste un vrai montant (crédit nul), jamais confondu
+// avec "pas encore disponible".
 function LigneDeclaration({
   numero,
   libelle,
@@ -116,8 +121,8 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
       <LigneDeclaration
         numero="Ligne 10"
         libelle="Crédit de TVA antérieur"
-        montant={0}
-        disponible={declaration.disponible.ligne10CreditAnterieur}
+        montant={declaration.ligne10CreditAnterieur ?? 0}
+        disponible={declaration.ligne10CreditAnterieur !== null}
       />
       <li className="card">
         <p className="label montant-principal">

@@ -479,6 +479,13 @@ export interface Vehicule {
 
 export const CLE_REGIME_TVA_ENCAISSEMENT = 'regime_tva_encaissement';
 
+// Paramètre dossier distinct de dossiers.date_debut_exercice (colonne
+// administrative éditée dans Identité du dossier) — celui-ci alimente
+// spécifiquement le calcul de la ligne 10 (crédit de TVA antérieur, brief
+// v53), lu côté backend via parametreDossierValeur, jamais synchronisé
+// avec la colonne homonyme. Valeur attendue : chaîne 'YYYY-MM-DD'.
+export const CLE_DATE_DEBUT_EXERCICE = 'date_debut_exercice';
+
 export const VALEURS_REGIME_TVA_ENCAISSEMENT = ['service', 'bien', 'mixte'] as const;
 export type RegimeTvaEncaissement = (typeof VALEURS_REGIME_TVA_ENCAISSEMENT)[number];
 
@@ -554,14 +561,13 @@ export interface DetailCalculLigne {
 // Onglet Déclaration (brief v49) — première version, affichage seulement
 // des montants à reporter dans la CA3 pour un calcul donné (déclarer
 // réellement viendra plus tard). GET /calculs/:calculId/declaration.
-// `disponible` : ces lignes valent toujours false pour l'instant (phases
-// 2 et 4 du chantier pas commencées — la 3 est disponible depuis le brief
-// v50) — jamais un 0€ à leur place, qui laisserait croire à tort que la
-// ligne est vide plutôt que non calculée.
 // ligne05Export renommée ligne06Export (brief v51 — l'export est la ligne
 // 6 de la CA3, pas la 5, erreur de nommage du brief v49) ; ligne07IntracomExoneree
-// nouvelle. Les deux sont désormais toujours calculées (retirées de
-// `disponible`, qui n'a plus que ligne10CreditAnterieur).
+// nouvelle. `disponible` entièrement retiré (brief v53, chantier CA3
+// terminé) — ligne10CreditAnterieur vaut désormais soit un nombre (y
+// compris 0, un vrai crédit nul), soit null quand le paramètre dossier
+// date_debut_exercice n'est pas encore défini. Bien distinguer les deux :
+// null → "Pas encore disponible", 0 → "0 €", jamais confondus.
 export interface DeclarationCalcul {
   ligne01CollecteTotal: number;
   ligne02ParTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
@@ -572,10 +578,8 @@ export interface DeclarationCalcul {
   ligne07IntracomExoneree: number;
   ligne08DeductibleAbs: number;
   ligne09DeductibleImmo: number;
+  ligne10CreditAnterieur: number | null;
   solde: { sens: 'a_decaisser' | 'credit'; montant: number };
-  disponible: {
-    ligne10CreditAnterieur: boolean;
-  };
 }
 
 // --- Authentification (brief v25) — remplace l'ancienne identité saisie à
