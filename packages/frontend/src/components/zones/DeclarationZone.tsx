@@ -85,12 +85,11 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
         libelle="TVA due — acquisitions intracommunautaires"
         montant={declaration.ligne04DueIntracom}
       />
-      <LigneDeclaration numero="Ligne 5" libelle="Exportations" montant={0} disponible={declaration.disponible.ligne05Export} />
+      <LigneDeclaration numero="Ligne 6" libelle="Exportations" montant={declaration.ligne06Export} />
       <LigneDeclaration
-        numero="Ligne 6"
+        numero="Ligne 7"
         libelle="Livraisons intracommunautaires exonérées"
-        montant={0}
-        disponible={declaration.disponible.ligne06IntracomExonere}
+        montant={declaration.ligne07IntracomExoneree}
       />
       <li className="card">
         <p className="label">Autres opérations imposables (sous-traitance BTP)</p>

@@ -558,18 +558,22 @@ export interface DetailCalculLigne {
 // 2 et 4 du chantier pas commencées — la 3 est disponible depuis le brief
 // v50) — jamais un 0€ à leur place, qui laisserait croire à tort que la
 // ligne est vide plutôt que non calculée.
+// ligne05Export renommée ligne06Export (brief v51 — l'export est la ligne
+// 6 de la CA3, pas la 5, erreur de nommage du brief v49) ; ligne07IntracomExoneree
+// nouvelle. Les deux sont désormais toujours calculées (retirées de
+// `disponible`, qui n'a plus que ligne10CreditAnterieur).
 export interface DeclarationCalcul {
   ligne01CollecteTotal: number;
   ligne02ParTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
   ligne03BaseHt: { total: number; parTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number } };
   ligne04DueIntracom: number;
   autresOperationsImposablesBtp: number;
+  ligne06Export: number;
+  ligne07IntracomExoneree: number;
   ligne08DeductibleAbs: number;
   ligne09DeductibleImmo: number;
   solde: { sens: 'a_decaisser' | 'credit'; montant: number };
   disponible: {
-    ligne05Export: boolean;
-    ligne06IntracomExonere: boolean;
     ligne10CreditAnterieur: boolean;
   };
 }

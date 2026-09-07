@@ -18,6 +18,18 @@ interface CategorisationPopupProps {
   onClose: () => void;
 }
 
+// comptes_vente_export (brief v51) — censée être la seule catégorie
+// jamais bloquante : n'affecte que l'affichage déclaratif (lignes 6/7 de
+// la CA3), jamais le calcul de TVA, peut rester non confirmée
+// indéfiniment sans bloquer un cycle. Ajoutée ici comme les 8 autres
+// (même route générique de conventions) — MAIS un compte confirmé sous
+// cette clé n'est aujourd'hui PAS exempté de la porte de catégorisation
+// obligatoire côté backend (verifierComptesACategoriser ne passe pas
+// comptesVenteExport à identifierComptesACategoriser, alors que la
+// fonction de détection elle-même le supporte déjà) : tant que ce n'est
+// pas corrigé côté backend, ce compte réapparaîtra dans ce même popup à
+// chaque cycle malgré la confirmation, contrairement à ce que ce brief
+// demande. Signalé, pas corrigé ici (hors périmètre frontend).
 const CHOIX = [
   { cle: 'comptes_vente_service', libelle: 'Vente de service' },
   { cle: 'comptes_charge_service', libelle: 'Charge de service' },
@@ -27,6 +39,7 @@ const CHOIX = [
   { cle: 'comptes_immobilisation', libelle: 'Immobilisation' },
   { cle: 'comptes_entretien_vehicule', libelle: 'Entretien véhicule' },
   { cle: 'comptes_location_vehicule', libelle: 'Location véhicule' },
+  { cle: 'comptes_vente_export', libelle: 'Vente export' },
 ] as const;
 
 function CompteCard({
@@ -211,7 +224,7 @@ export function CategorisationPopup({
           </button>
         </div>
         <p className="reference">
-          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 8 conventions. Les
+          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 9 conventions. Les
           comptes non traités réapparaîtront au prochain cycle.
         </p>
         {comptes.length === 0 ? (
