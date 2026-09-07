@@ -284,7 +284,8 @@ const TOUTES_CATEGORIES = [
   'collectee_2_1',
   'deductible_abs',
   'deductible_immo',
-  'autoliquidation_due',
+  'autoliquidation_due_btp',
+  'autoliquidation_due_intracom',
   'autoliquidation_deductible',
 ] as const;
 
