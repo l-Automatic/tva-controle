@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { ApiError, ajouterConvention, confirmerConvention, fetchComptesTvaAConfirmer } from '../api';
+import { useEffect, useState } from 'react';
+import {
+  ApiError,
+  ajouterConvention,
+  confirmerConvention,
+  fetchComptesTvaAConfirmer,
+  fetchConventions,
+  rejeterConvention,
+} from '../api';
 import { useToast } from '../toast';
 import type { CompteTvaAConfirmer } from '../types';
 
@@ -92,6 +99,87 @@ function CompteCard({
   );
 }
 
+// Rétrograder un compte TVA déjà confirmé (brief v59) — le mécanisme
+// backend (POST /conventions/:id/rejeter) existait déjà sans changement,
+// il manquait seulement ce bouton côté interface : jusqu'ici le bouton
+// "rejeter" n'était affiché nulle part pour un compte déjà confirmé (les 4
+// rôles dû/déductible, BTP/intracom), seulement pour les candidats en
+// attente ci-dessus. Une fois rejeté, le compte redevient candidat au
+// prochain contrôle (verifierComptesTvaAConfirmer relit la convention
+// depuis conventions_dossier, plus rien à confirmer une fois son statut
+// passé à 'rejected').
+function ComptesTvaConfirmesSection({ cabinetId, dossierId, utilisateurId }: ComptesTvaAConfirmerPanelProps) {
+  const [confirmes, setConfirmes] = useState<{ id: string; cle: string; compte: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rejet, setRejet] = useState<string | null>(null);
+  const notifier = useToast();
+
+  async function charger() {
+    setLoading(true);
+    setError(null);
+    try {
+      const conventions = await fetchConventions(cabinetId, dossierId, 'confirmed');
+      const clesConnues = new Set<string>(CHOIX.map((c) => c.cle));
+      setConfirmes(
+        conventions
+          .filter((c) => c.cle && clesConnues.has(c.cle) && typeof c.valeur === 'string')
+          .map((c) => ({ id: c.id, cle: c.cle as string, compte: c.valeur as string }))
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger les comptes TVA déjà confirmés');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (cabinetId && dossierId) void charger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId, dossierId]);
+
+  async function handleRejeter(id: string, compte: string) {
+    setRejet(id);
+    setError(null);
+    try {
+      await rejeterConvention(cabinetId, id, utilisateurId);
+      notifier(`Compte ${compte} redevenu à confirmer`);
+      setConfirmes((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : `Échec du rejet du compte ${compte}`);
+    } finally {
+      setRejet(null);
+    }
+  }
+
+  if (!loading && confirmes.length === 0) return null;
+
+  return (
+    <>
+      <div className="panel-separateur" />
+      <h2>Comptes TVA déjà confirmés{!loading ? ` (${confirmes.length})` : ''}</h2>
+      <p className="reference">
+        Déjà confirmés dans l'un des 4 rôles. Rejeter renvoie le compte parmi les comptes à confirmer au prochain
+        contrôle.
+      </p>
+      {error && <p className="error">{error}</p>}
+      <ul className="card-list">
+        {confirmes.map((c) => (
+          <li key={c.id} className="card">
+            <p className="label">Compte {c.compte}</p>
+            <p className="reference">{CHOIX.find((choix) => choix.cle === c.cle)?.libelle ?? c.cle}</p>
+            <div className="actions">
+              <button className="secondary" disabled={rejet === c.id} onClick={() => void handleRejeter(c.id, c.compte)}>
+                {rejet === c.id ? '…' : 'Rejeter'}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 export function ComptesTvaAConfirmerPanel({
   cabinetId,
   dossierId,
@@ -169,6 +257,7 @@ export function ComptesTvaAConfirmerPanel({
           ))}
         </ul>
       )}
+      <ComptesTvaConfirmesSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
     </section>
   );
 }

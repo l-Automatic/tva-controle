@@ -4,6 +4,7 @@ import { ApiError, fetchPortesObligatoires } from '../api';
 import type { EtatPortesObligatoires } from '../types';
 import { CategorisationContenu } from './CategorisationPopup';
 import { ComptesTvaAConfirmerPanel } from './ComptesTvaAConfirmerPanel';
+import { JaugeChargement } from './JaugeChargement';
 import { RapprochementPaiementAchatContenu } from './RapprochementPaiementAchatPopup';
 import { VehiculesPanel } from './VehiculesPanel';
 
@@ -63,40 +64,63 @@ export function PortesObligatoiresPopup({
   onClose,
 }: PortesObligatoiresPopupProps) {
   const [etat, setEtat] = useState<EtatPortesObligatoires | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Même jauge que le lancement de cycle (brief v59) — un seul appel
+  // réseau, la jauge ne reflète aucune vraie progression interne. La coche
+  // de fin ('succes') signale uniquement la FIN du chargement, jamais
+  // l'absence d'éléments à traiter : elle apparaît systématiquement dès
+  // que la réponse arrive, que les 4 portes soient vides ou non — seul le
+  // message qui l'accompagne varie selon ce qui a été trouvé.
+  const [phase, setPhase] = useState<'chargement' | 'succes' | null>('chargement');
   const [error, setError] = useState<string | null>(null);
   const [sousOnglet, setSousOnglet] = useState<SousOngletPorte>('categorisation');
 
+  const ongletActif = ONGLETS_PORTES.find((o) => o.id === sousOnglet);
+
+  function compteur(id: SousOngletPorte, source: EtatPortesObligatoires): number {
+    if (id === 'categorisation') {
+      return source.categorisation.comptesACategoriser.length + source.categorisation.comptesServiceSansSousCategorieAutoliquidation.length;
+    }
+    if (id === 'comptesTva') return source.comptesTvaAConfirmer.length;
+    if (id === 'rapprochement') return source.rapprochementsPaiementAchat.length;
+    return source.parcVehiculesNonRenseigne ? 1 : 0;
+  }
+
   useEffect(() => {
     let annule = false;
-    setLoading(true);
+    let idTimeout: ReturnType<typeof setTimeout> | undefined;
+    setPhase('chargement');
     setError(null);
     fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin)
       .then((data) => {
-        if (!annule) setEtat(data);
+        if (annule) return;
+        setEtat(data);
+        setPhase('succes');
+        idTimeout = setTimeout(() => {
+          if (!annule) setPhase(null);
+        }, 1100);
       })
       .catch((err) => {
-        if (!annule) setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
-      })
-      .finally(() => {
-        if (!annule) setLoading(false);
+        if (annule) return;
+        setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
+        setPhase(null);
       });
     return () => {
       annule = true;
+      if (idTimeout) clearTimeout(idTimeout);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId, dossierId, periodeDebut, periodeFin]);
 
-  const ongletActif = ONGLETS_PORTES.find((o) => o.id === sousOnglet);
-
-  function compteur(id: SousOngletPorte): number {
-    if (!etat) return 0;
-    if (id === 'categorisation') {
-      return etat.categorisation.comptesACategoriser.length + etat.categorisation.comptesServiceSansSousCategorieAutoliquidation.length;
-    }
-    if (id === 'comptesTva') return etat.comptesTvaAConfirmer.length;
-    if (id === 'rapprochement') return etat.rapprochementsPaiementAchat.length;
-    return etat.parcVehiculesNonRenseigne ? 1 : 0;
-  }
+  const totalAregler = etat
+    ? (['categorisation', 'comptesTva', 'rapprochement', 'vehicules'] as SousOngletPorte[]).reduce(
+        (acc, id) => acc + compteur(id, etat),
+        0
+      )
+    : 0;
+  const messageSucces =
+    totalAregler === 0
+      ? 'Vérification terminée, aucune porte obligatoire à régler pour cette période'
+      : `Vérification terminée, ${totalAregler} élément(s) à régler`;
 
   return (
     <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Portes obligatoires avant le cycle">
@@ -107,13 +131,17 @@ export function PortesObligatoiresPopup({
             <X size={18} />
           </button>
         </div>
-        {loading && <p className="empty">Chargement…</p>}
+        {phase && (
+          <div className="popup-cycle-loading">
+            <JaugeChargement phase={phase} messageSucces={messageSucces} />
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
-        {etat && (
+        {!phase && etat && (
           <>
             <nav className="sous-onglets">
               {ONGLETS_PORTES.map((o) => {
-                const n = compteur(o.id);
+                const n = compteur(o.id, etat);
                 return (
                   <button
                     key={o.id}
