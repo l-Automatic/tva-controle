@@ -118,4 +118,22 @@ describe('detecterComptesTvaNonReconnus — TVA intracom (10/08)', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.compte).toBe('4452');
   });
+
+  it('option 1 (10/08, décidée avec Rami) : 445622 n’est JAMAIS reconnu par le préfixe générique 44562, exige une confirmation explicite', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('445622', 1)], {});
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.compte).toBe('445622');
+  });
+
+  it('reconnaît 445622 une fois la convention immo intracom confirmée', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('445622', 1)], {
+      compteAutoliquidationDeductibleImmoIntracom: '445622',
+    });
+    expect(anomalies).toEqual([]);
+  });
+
+  it('un compte 44562 classique (pas 445622) reste reconnu par le préfixe générique, jamais affecté par le carve-out', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('44562', 1), ecriture('445621', 2)], {});
+    expect(anomalies).toEqual([]);
+  });
 });
