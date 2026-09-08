@@ -108,9 +108,9 @@ function TiersConfianceSection({ cabinetId, dossierId, utilisateurId }: SectionP
     }
   }
 
-  const tiersAffiches = tiers.filter((t) =>
-    sousOnglet === 'clients' ? t.numeroCompteTiers.startsWith('411') : t.numeroCompteTiers.startsWith('401')
-  );
+  const tiersAffiches = tiers
+    .filter((t) => (sousOnglet === 'clients' ? t.numeroCompteTiers.startsWith('411') : t.numeroCompteTiers.startsWith('401')))
+    .sort((a, b) => (a.nomTiers ?? a.numeroCompteTiers).localeCompare(b.nomTiers ?? b.numeroCompteTiers));
   const ongletActif = ONGLETS_TIERS.find((o) => o.id === sousOnglet);
 
   return (
