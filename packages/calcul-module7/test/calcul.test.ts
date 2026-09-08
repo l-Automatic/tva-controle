@@ -378,4 +378,31 @@ describe('calculerTva — TVA intracom, deuxième paire d’autoliquidation (10/
     // Le résultat net global reste inchangé — seules les catégories internes sont séparées.
     expect(resultat.tvaNette).toBeCloseTo(300);
   });
+
+  it('immo intracom (445622) route vers deductible_immo, pas autoliquidation_deductible (10/08)', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '445622', debit: 1200, ledgerEntryId: 1 }) });
+    const resultat = calculerTva([e], [], [], [], {
+      compteAutoliquidationDeductibleImmoIntracom: '445622',
+      tauxAutoliquidation: 20,
+    });
+    const ligneImmo = resultat.lignes.find((l) => l.categorie === 'deductible_immo');
+    const ligneAutoliqDeductible = resultat.lignes.find((l) => l.categorie === 'autoliquidation_deductible');
+    expect(ligneImmo).toBeDefined();
+    expect(ligneImmo?.montant).toBeCloseTo(200); // 1200 TTC-équivalent -> 200 de TVA à 20%
+    expect(ligneAutoliqDeductible).toBeUndefined();
+  });
+
+  it('445622 n’est jamais interprété comme un compte immo classique (généré à tort par le préfixe 44562)', () => {
+    const e = ecriture({ ligneTva: ligneTva({ compte: '445622', debit: 1200, ledgerEntryId: 1 }) });
+    const resultat = calculerTva([e], [], [], [], {
+      compteAutoliquidationDeductibleImmoIntracom: '445622',
+      tauxAutoliquidation: 20,
+    });
+    // Si traité à tort comme un 44562 classique (pas d'extraction), le
+    // montant serait 1200 tel quel, jamais 200 — cette assertion aurait
+    // échoué avant l'interception dédiée.
+    const ligneImmo = resultat.lignes.find((l) => l.categorie === 'deductible_immo');
+    expect(ligneImmo?.montant).not.toBe(1200);
+    expect(ligneImmo?.montant).toBeCloseTo(200);
+  });
 });
