@@ -99,6 +99,9 @@ export interface ConfigPreControles {
   // plus de celle du BTP, jamais à sa place.
   compteAutoliquidationDueIntracom?: string;
   compteAutoliquidationDeductibleIntracom?: string;
+  // Immo intracom (10/08, demande de Rami) — même compte dû que l'achat
+  // intracom courant, contrepartie déductible différente selon la nature.
+  compteAutoliquidationDeductibleImmoIntracom?: string;
   // Mémoire de dossier (taux_historique, conventions...) — quand fournie,
   // prend le pas sur tauxNominalParCompte pour le contrôle de cohérence des
   // taux. Optionnel : un dossier tout juste onboardé n'en a pas encore.
@@ -137,12 +140,17 @@ export function executerPreControles(
     // TVA intracom : vérification séparée, seulement si les deux comptes
     // sont confirmés (pas de valeur par défaut sensée ici, contrairement
     // au BTP — passer undefined ferait tourner verifierAutoliquidationEquilibree
-    // sur les valeurs par défaut BTP par erreur).
-    ...(config.compteAutoliquidationDueIntracom && config.compteAutoliquidationDeductibleIntracom
+    // sur les valeurs par défaut BTP par erreur). Combine 445662 et 445622
+    // (immo intracom, 10/08) : chaque pièce cherche sa contrepartie parmi
+    // les deux, jamais un seul compte fixé d'avance.
+    ...(config.compteAutoliquidationDueIntracom &&
+    (config.compteAutoliquidationDeductibleIntracom || config.compteAutoliquidationDeductibleImmoIntracom)
       ? verifierAutoliquidationEquilibree(
           ecritures,
           config.compteAutoliquidationDueIntracom,
-          config.compteAutoliquidationDeductibleIntracom
+          [config.compteAutoliquidationDeductibleIntracom, config.compteAutoliquidationDeductibleImmoIntracom].filter(
+            (c): c is string => typeof c === 'string' && c.length > 0
+          )
         )
       : []),
     ...verifierAvoirs(ecritures),
@@ -158,6 +166,9 @@ export function executerPreControles(
         : {}),
       ...(config.compteAutoliquidationDeductibleIntracom !== undefined
         ? { compteAutoliquidationDeductibleIntracom: config.compteAutoliquidationDeductibleIntracom }
+        : {}),
+      ...(config.compteAutoliquidationDeductibleImmoIntracom !== undefined
+        ? { compteAutoliquidationDeductibleImmoIntracom: config.compteAutoliquidationDeductibleImmoIntracom }
         : {}),
     }),
   ];
