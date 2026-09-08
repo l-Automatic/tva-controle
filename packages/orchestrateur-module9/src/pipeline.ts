@@ -302,6 +302,14 @@ export async function executerCycleTva(
     contexteDossier,
     'compte_tva_deductible_autoliquidee_intracom'
   );
+  // Immo intracom (10/08, demande de Rami, option 1) — même compte dû que
+  // l'achat intracom courant (confirmé), contrepartie déductible
+  // différente. Optionnel : un dossier sans immo intracom n'a rien à
+  // confirmer ici.
+  const compteAutoliquidationDeductibleImmoIntracom = conventionValeur(
+    contexteDossier,
+    'compte_tva_deductible_autoliquidee_immo_intracom'
+  );
   const comptesChargeAutoliquidationIntracom =
     conventionListe(contexteDossier, 'comptes_charge_autoliquidation_intracom') ?? [];
   const comptesVenteIntracomExoneree = conventionListe(contexteDossier, 'comptes_vente_intracom_exoneree') ?? [];
@@ -499,6 +507,9 @@ export async function executerCycleTva(
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
     ...(compteAutoliquidationDueIntracom !== undefined ? { compteAutoliquidationDueIntracom } : {}),
     ...(compteAutoliquidationDeductibleIntracom !== undefined ? { compteAutoliquidationDeductibleIntracom } : {}),
+    ...(compteAutoliquidationDeductibleImmoIntracom !== undefined
+      ? { compteAutoliquidationDeductibleImmoIntracom }
+      : {}),
   });
 
   // Paiement partiel, volet ventes (10/08) — purement déterministe : on
@@ -1073,6 +1084,9 @@ export async function executerCycleTva(
     ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
     ...(compteAutoliquidationDueIntracom !== undefined ? { compteAutoliquidationDueIntracom } : {}),
     ...(compteAutoliquidationDeductibleIntracom !== undefined ? { compteAutoliquidationDeductibleIntracom } : {}),
+    ...(compteAutoliquidationDeductibleImmoIntracom !== undefined
+      ? { compteAutoliquidationDeductibleImmoIntracom }
+      : {}),
   });
 
   // Encaissements en compte d'attente déjà qualifiés 'vente' par un humain
