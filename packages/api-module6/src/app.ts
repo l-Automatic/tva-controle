@@ -1569,6 +1569,43 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
+  // --- Parc de véhicules, sans passer par un cycle complet (10/08) ---
+  // Jusqu'ici uniquement noyé dans l'appel groupé portes-obligatoires —
+  // exposé séparément pour permettre un vrai suivi de progression côté
+  // frontend (chantier UX, popup portes obligatoires), le frontend
+  // appelant les 4 routes une par une plutôt que l'agrégateur en une
+  // seule boîte noire.
+  app.get<{ Params: { dossierId: string }; Querystring: { periodeDebut: string; periodeFin: string } }>(
+    '/dossiers/:dossierId/parc-vehicules-non-renseigne',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      const { periodeDebut, periodeFin } = request.query;
+      if (!periodeDebut || !periodeFin) {
+        return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+      }
+
+      let client;
+      try {
+        client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+      } catch (err) {
+        if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+        if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+          return reply.code(400).send({ erreur: err.message });
+        }
+        throw err;
+      }
+
+      const nonRenseigne = await verifierParcVehicules(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        client,
+        periodeDebut,
+        periodeFin,
+      });
+      return { nonRenseigne };
+    }
+  );
+
   // --- Comptes TVA à confirmer, sans passer par un cycle complet (10/08) ---
   // Pour l'écran dédié — consultable à tout moment, pas seulement en
   // réaction au 409 du lancement de cycle (cf. le verrou juste au-dessus).
