@@ -116,9 +116,15 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
         Détermine la déductibilité du carburant (80 % tourisme / 100 % utilitaire) et signale les cas de flotte
         mixte — renseigné une fois pour toutes, sans workflow de confirmation.
       </p>
-      <p className="reference">
-        Pensez à ajouter aussi les véhicules en location/crédit-bail à ce parc, et à les retirer une fois le
-        contrat terminé.
+      {/* Passait trop inaperçu en simple texte de référence (brief v54) —
+          même classe que MessageCalculIncomplet (CalculsPanel.tsx), seul
+          autre rappel de ce genre dans l'app, plus gras pour renforcer
+          encore la mise en évidence. */}
+      <p className="avertissement">
+        <strong>
+          Pensez à ajouter aussi les véhicules en location/crédit-bail à ce parc, et à les retirer une fois le
+          contrat terminé.
+        </strong>
       </p>
       {error && <p className="error">{error}</p>}
       {!loading && vehicules.length === 0 && <p className="empty">Aucun véhicule renseigné pour ce dossier.</p>}
