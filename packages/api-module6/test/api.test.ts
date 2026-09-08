@@ -330,6 +330,45 @@ describe('API Module 6 — cycle de vie d’une anomalie', () => {
     });
     expect(resListeResolues.json()).toHaveLength(1);
   });
+
+  it('bug réel corrigé (10/08) : un utilisateurId usurpé dans le corps est ignoré — c’est le propriétaire du jeton qui est retenu', async () => {
+    const client = await pool.connect();
+    let anomalieUsurpationId = '';
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT set_config('app.current_cabinet_id', $1, true)`, [cabinetId]);
+      const res = await client.query<{ id: string }>(
+        `INSERT INTO anomalies (dossier_id, periode, type_anomalie, gravite, reference_piece, description, statut)
+         VALUES ($1, '2025-01-01', 'taux_incoherent', 'bloquant', '998', 'test usurpation', 'ouvert') RETURNING id`,
+        [dossierId]
+      );
+      anomalieUsurpationId = res.rows[0]!.id;
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+
+    // Jeton du collaborateur, mais utilisateurId de l'ADMIN envoyé dans le
+    // corps — avant le correctif, l'audit aurait attribué cette résolution
+    // à l'admin, jamais au vrai auteur de l'action.
+    const resResoudre = await app.inject({
+      method: 'POST',
+      url: `/anomalies/${anomalieUsurpationId}/resoudre`,
+      headers: { authorization: `Bearer ${jetonCollab}` },
+      payload: { utilisateurId: utilisateurAdminId, commentaire: 'Tentative usurpation' },
+    });
+    expect(resResoudre.statusCode).toBe(204);
+
+    const resAudit = await app.inject({
+      method: 'GET',
+      url: `/dossiers/${dossierId}/audit?typeEvenement=anomalie_resolue`,
+      headers: { authorization: `Bearer ${jetonCollab}` },
+    });
+    const evenements = resAudit.json() as { acteurUtilisateurId: string; acteurNom: string }[];
+    const evenementUsurpation = evenements.find((e) => e.acteurNom === 'Collaborateur Test');
+    expect(evenementUsurpation?.acteurUtilisateurId).toBe(utilisateurId); // le vrai auteur (collab)
+    expect(evenementUsurpation?.acteurUtilisateurId).not.toBe(utilisateurAdminId); // jamais la valeur usurpée
+  });
 });
 
 describe('API Module 6 — qualification d’un encaissement non affecté (compte 471)', () => {
