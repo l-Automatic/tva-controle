@@ -74,7 +74,13 @@ export function determinerExigibiliteTva(
   ecritures: EcritureTvaComplete[],
   config: ConfigExigibiliteTva,
   prorataParEcriture: Map<number, number> = new Map(),
-  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set()
+  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set(),
+  // Fournisseurs ayant opté eux-mêmes pour la TVA sur les débits (10/08,
+  // demande de Rami) — jamais déduit automatiquement, coché manuellement
+  // par le collaborateur (numeros de compte tiers, ex: ['401123']). Ne
+  // s'applique QU'au côté déductible (achats) : le fait qu'un fournisseur
+  // ait fait ce choix fiscal n'a aucun rapport avec notre propre collecte.
+  comptesTiersOptantDebits: Set<string> = new Set()
 ): { statuts: StatutExigibilite[]; anomalies: Anomalie[]; prorataAppliques: ProrataApplique[] } {
   const statuts: StatutExigibilite[] = [];
   const anomalies: Anomalie[] = [];
@@ -114,6 +120,24 @@ export function determinerExigibiliteTva(
         natureOperation: 'service',
         exigible: true,
         motif: 'Compte systématiquement payé au comptant (frais de déplacement, postaux, bancaires...) : exigible sans vérification de lettrage.',
+      });
+      continue;
+    }
+
+    // Fournisseur ayant opté pour la TVA sur les débits (10/08) — court-
+    // circuite la vérification de lettrage habituelle pour un service : ce
+    // fournisseur facture sa propre TVA dès facturation, donc on peut la
+    // déduire dès facturation nous aussi, peu importe si SON paiement a
+    // déjà eu lieu de notre côté. Uniquement côté déductible (achats) —
+    // le choix fiscal d'un fournisseur ne concerne jamais notre collecte.
+    const compteTiersEcriture = ecriture.lignesTiers[0]?.compte;
+    if (estDeductible && compteTiersEcriture && comptesTiersOptantDebits.has(compteTiersEcriture)) {
+      statuts.push({
+        ledgerEntryId,
+        compte,
+        natureOperation: 'service',
+        exigible: true,
+        motif: 'Fournisseur ayant opté pour la TVA sur les débits : déductible dès facturation, sans attendre le paiement.',
       });
       continue;
     }
