@@ -972,6 +972,20 @@ export function corrigerNiveauConfianceTiers(
   });
 }
 
+// Fournisseur ayant opté pour la TVA sur les débits (brief v56) : sa TVA
+// est déductible dès facturation, sans attendre le paiement du service.
+export function definirOpteTvaDebitsTiers(
+  cabinetId: string,
+  dossierId: string,
+  numeroCompteTiers: string,
+  opteTvaDebits: boolean
+): Promise<void> {
+  return request<void>(`/dossiers/${dossierId}/tiers/opte-tva-debits`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify({ numeroCompteTiers, opteTvaDebits }),
+  });
+}
+
 // --- Taux assigné par compte (produit/charge) — assignation directe, pas
 // de workflow candidate/confirmed. ---
 

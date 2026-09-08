@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import {
   ApiError,
   corrigerNiveauConfianceTiers,
+  definirOpteTvaDebitsTiers,
   fetchConventions,
   fetchTauxHistorique,
   fetchTauxHistoriqueTiers,
@@ -34,11 +35,28 @@ const LIBELLE_NIVEAU_CONFIANCE: Record<NiveauConfianceTiers, string> = {
   confiance: 'Confiance',
 };
 
+// Deux sous-onglets, même principe que la scission de l'onglet Paramètres
+// (cabinet/dossier) : distinction client/fournisseur par préfixe de compte
+// (411/401), comme le reste de l'app (brief v56).
+type SousOngletTiers = 'clients' | 'fournisseurs';
+
+const ONGLETS_TIERS: { id: SousOngletTiers; libelle: string; description: string }[] = [
+  { id: 'clients', libelle: 'Clients', description: 'Comptes clients (411) suivis pour ce dossier.' },
+  {
+    id: 'fournisseurs',
+    libelle: 'Fournisseurs',
+    description:
+      "Comptes fournisseurs (401) suivis pour ce dossier. Un fournisseur ayant opté pour la TVA sur les débits facture sa propre TVA dès facturation, donc sa TVA est déductible dès facturation même si le service n'est pas encore payé.",
+  },
+];
+
 function TiersConfianceSection({ cabinetId, dossierId, utilisateurId }: SectionProps) {
   const [tiers, setTiers] = useState<TiersReference[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [correction, setCorrection] = useState<string | null>(null);
+  const [optionEnCours, setOptionEnCours] = useState<string | null>(null);
+  const [sousOnglet, setSousOnglet] = useState<SousOngletTiers>('clients');
   const notifier = useToast();
 
   async function charger() {
@@ -72,39 +90,92 @@ function TiersConfianceSection({ cabinetId, dossierId, utilisateurId }: SectionP
     }
   }
 
+  async function handleOpteTvaDebits(numeroCompteTiers: string, opteTvaDebits: boolean) {
+    setOptionEnCours(numeroCompteTiers);
+    setError(null);
+    try {
+      await definirOpteTvaDebitsTiers(cabinetId, dossierId, numeroCompteTiers, opteTvaDebits);
+      notifier(
+        opteTvaDebits
+          ? 'Fournisseur marqué comme ayant opté pour la TVA sur les débits'
+          : 'Option TVA sur les débits retirée'
+      );
+      await charger();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Échec de la mise à jour de l'option TVA sur les débits");
+    } finally {
+      setOptionEnCours(null);
+    }
+  }
+
+  const tiersAffiches = tiers.filter((t) =>
+    sousOnglet === 'clients' ? t.numeroCompteTiers.startsWith('411') : t.numeroCompteTiers.startsWith('401')
+  );
+  const ongletActif = ONGLETS_TIERS.find((o) => o.id === sousOnglet);
+
   return (
     <Accordion titre="Confiance des tiers" meta={<span className="reference">{tiers.length}</span>}>
       {error && <p className="error">{error}</p>}
-      {!loading && tiers.length === 0 && <p className="empty">Aucun tiers suivi pour ce dossier.</p>}
-      <ul className="card-list">
-        {tiers.map((t) => (
-          <li key={t.numeroCompteTiers} className="card">
-            <div className="card-header">
-              <span className={`badge niveau-confiance-${t.niveauConfiance}`}>
-                {LIBELLE_NIVEAU_CONFIANCE[t.niveauConfiance]}
-              </span>
-              <span className="reference">{t.nbControlesSansAnomalie} cycle(s) sans anomalie</span>
-            </div>
-            <p className="label">
-              {t.numeroCompteTiers}
-              {t.nomTiers && ` (${t.nomTiers})`}
-            </p>
-            <div className="actions">
-              <select
-                value={t.niveauConfiance}
-                disabled={correction === t.numeroCompteTiers}
-                onChange={(e) => void handleCorriger(t.numeroCompteTiers, e.target.value as NiveauConfianceTiers)}
-              >
-                {(Object.keys(LIBELLE_NIVEAU_CONFIANCE) as NiveauConfianceTiers[]).map((n) => (
-                  <option key={n} value={n}>
-                    {LIBELLE_NIVEAU_CONFIANCE[n]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </li>
+      <nav className="sous-onglets">
+        {ONGLETS_TIERS.map((o) => (
+          <button
+            key={o.id}
+            className={`sous-onglet${sousOnglet === o.id ? ' actif' : ''}`}
+            onClick={() => setSousOnglet(o.id)}
+          >
+            {o.libelle}
+          </button>
         ))}
-      </ul>
+      </nav>
+      {ongletActif && <p className="sous-onglet-description">{ongletActif.description}</p>}
+      <div key={sousOnglet} className="sous-onglet-contenu">
+        {!loading && tiersAffiches.length === 0 && (
+          <p className="empty">
+            {sousOnglet === 'clients' ? 'Aucun compte client suivi' : 'Aucun compte fournisseur suivi'} pour ce
+            dossier.
+          </p>
+        )}
+        <ul className="card-list">
+          {tiersAffiches.map((t) => (
+            <li key={t.numeroCompteTiers} className="card">
+              <div className="card-header">
+                <span className={`badge niveau-confiance-${t.niveauConfiance}`}>
+                  {LIBELLE_NIVEAU_CONFIANCE[t.niveauConfiance]}
+                </span>
+                <span className="reference">{t.nbControlesSansAnomalie} cycle(s) sans anomalie</span>
+              </div>
+              <p className="label">
+                {t.numeroCompteTiers}
+                {t.nomTiers && ` (${t.nomTiers})`}
+              </p>
+              <div className="actions">
+                <select
+                  value={t.niveauConfiance}
+                  disabled={correction === t.numeroCompteTiers}
+                  onChange={(e) => void handleCorriger(t.numeroCompteTiers, e.target.value as NiveauConfianceTiers)}
+                >
+                  {(Object.keys(LIBELLE_NIVEAU_CONFIANCE) as NiveauConfianceTiers[]).map((n) => (
+                    <option key={n} value={n}>
+                      {LIBELLE_NIVEAU_CONFIANCE[n]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {sousOnglet === 'fournisseurs' && (
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={t.opteTvaDebits}
+                    disabled={optionEnCours === t.numeroCompteTiers}
+                    onChange={(e) => void handleOpteTvaDebits(t.numeroCompteTiers, e.target.checked)}
+                  />
+                  A opté pour la TVA sur les débits
+                </label>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
     </Accordion>
   );
 }

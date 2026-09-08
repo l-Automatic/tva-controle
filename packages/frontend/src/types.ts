@@ -359,6 +359,7 @@ export interface TiersReference {
   niveauConfiance: NiveauConfianceTiers;
   nbControlesSansAnomalie: number;
   derniereDateControle: string | null;
+  opteTvaDebits: boolean;
 }
 
 // --- Taux assigné par compte (produit/charge) — assignation directe, pas
