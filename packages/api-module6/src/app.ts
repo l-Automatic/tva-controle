@@ -52,6 +52,7 @@ import {
   rejeterTauxHistoriqueTiers,
   listerTiersReference,
   corrigerNiveauConfianceTiers,
+  definirOpteTvaDebitsTiers,
   ajouterVehiculeManuel,
   retirerVehicule,
   listerVehicules,
@@ -1259,6 +1260,29 @@ export function buildApp(pool: Pool): FastifyInstance {
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
         corrigerNiveauConfianceTiers(client, request.params.dossierId, numeroCompteTiers, niveauConfiance, utilisateurId)
+      );
+      reply.code(204).send();
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('introuvable')) {
+        return reply.code(404).send({ erreur: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // TVA sur les débits côté fournisseur (10/08, demande de Rami) — cf.
+  // exigibilite.ts. Même mécanisme exactement que la correction du niveau
+  // de confiance ci-dessus.
+  app.post<{
+    Params: { dossierId: string };
+    Body: { numeroCompteTiers: string; opteTvaDebits: boolean };
+  }>('/dossiers/:dossierId/tiers/opte-tva-debits', async (request, reply) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { numeroCompteTiers, opteTvaDebits } = request.body;
+    try {
+      await avecContexteCabinet(pool, cabinetId, (client) =>
+        definirOpteTvaDebitsTiers(client, request.params.dossierId, numeroCompteTiers, opteTvaDebits, utilisateurId)
       );
       reply.code(204).send();
     } catch (err) {
