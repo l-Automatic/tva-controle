@@ -14,17 +14,20 @@ import type { Anomalie } from '@tva-controle/core';
 // telles quelles (jamais dupliqué de logique).
 //
 // Bug réel corrigé (10/08, trouvé par Rami en conditions réelles — "too
-// many requests" au clic du bouton) : lancées en parallèle (Promise.all),
-// ces 4 fonctions déclenchent chacune plusieurs appels Pennylane en
-// interne, potentiellement 15-20+ appels quasi simultanés au total — la
-// limite documentée de 25 requêtes/5 secondes (cf. client.ts) peut être
-// dépassée d'un coup, et si plusieurs appels retentent après le même délai
-// (retry-after), ils se re-cognent les uns les autres jusqu'à épuiser
-// leurs tentatives. Corrigé en séquentiel : chaque fonction termine tous
-// ses appels avant que la suivante ne commence, ce qui laisse au
-// mécanisme de nouvelle tentative existant (client.ts) le temps de
-// vraiment absorber la charge, au prix d'un popup un peu plus long à
-// charger — préférable à un échec visible pour l'utilisateur.
+// many requests" au clic du bouton, persistant même après le passage en
+// séquentiel ci-dessous) : chaque fonction déclenche plusieurs appels
+// Pennylane en interne (potentiellement 15-20+ au total), et une exécution
+// séquentielle SANS pause entre les fonctions reste une vraie rafale si
+// chaque appel individuel est rapide — la limite documentée de 25
+// requêtes/5 secondes (cf. client.ts, firmClient.ts) peut toujours être
+// dépassée. Deux corrections combinées : maxRetries429 relevé de 3 à 8
+// côté client (cf. app.ts, resoudreClientPennylane), ET une vraie pause
+// explicite ici entre chaque fonction, pour réduire la sévérité de la
+// rafale plutôt que de compter uniquement sur les nouvelles tentatives.
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface ParametresPortesObligatoires {
   cabinetId: string;
   dossierId: string;
@@ -45,8 +48,11 @@ export async function chargerPortesObligatoires(
   params: ParametresPortesObligatoires
 ): Promise<EtatPortesObligatoires> {
   const categorisation = await verifierComptesACategoriser(pool, params);
+  await sleep(1200);
   const comptesTvaAConfirmer = await verifierComptesTvaAConfirmer(pool, params);
+  await sleep(1200);
   const rapprochementsPaiementAchat = await preparerRapprochementsPaiementAchat(pool, params);
+  await sleep(1200);
   const parcVehiculesNonRenseigne = await verifierParcVehicules(pool, params);
 
   return { categorisation, comptesTvaAConfirmer, rapprochementsPaiementAchat, parcVehiculesNonRenseigne };
