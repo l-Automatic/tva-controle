@@ -86,3 +86,62 @@ describe('identifierFacturesCandidatesAcompte', () => {
     expect(avecException).toHaveLength(1);
   });
 });
+
+function ecritureAutoliquidation(opts: { compteTva: string; compteCharge: string; estLettree: boolean }): EcritureTvaComplete {
+  return {
+    ledgerEntryId: 1,
+    ligneTva: {
+      id: 1,
+      compte: opts.compteTva,
+      compteId: 1,
+      libelle: 'Sous-traitance',
+      debit: 100,
+      credit: 0,
+      date: '2025-01-15',
+      ledgerEntryId: 1,
+      lettrage: { estLettree: false, groupeIds: [] },
+    },
+    autresLignes: [{ id: 1, compte: opts.compteCharge, compteId: 1, libelle: null, debit: 500, credit: 0 }],
+    lignesTiers: [
+      {
+        compte: '401SOUS01',
+        compteId: 42,
+        libelleCompte: null,
+        debit: 0,
+        credit: 600,
+        lettrage: { estLettree: opts.estLettree, groupeIds: opts.estLettree ? [1, 2] : [] },
+      },
+    ],
+  };
+}
+
+describe('identifierFacturesCandidatesAcompte — autoliquidation (10/08, bug réel corrigé)', () => {
+  it('BTP (445664) non payé, compte de charge en comptesChargeAutoliquidation : candidat', () => {
+    const e = ecritureAutoliquidation({ compteTva: '445664', compteCharge: '604000', estLettree: false });
+    const resultat = identifierFacturesCandidatesAcompte(
+      [e],
+      [], // comptesChargeService vide — c'est comptesChargeAutoliquidation qui doit matcher
+      new Set(),
+      ['604000']
+    );
+    expect(resultat).toHaveLength(1);
+  });
+
+  it('BTP (445664) non payé, sans comptesChargeAutoliquidation confirmé : jamais candidat', () => {
+    const e = ecritureAutoliquidation({ compteTva: '445664', compteCharge: '604000', estLettree: false });
+    const resultat = identifierFacturesCandidatesAcompte([e], [], new Set(), []);
+    expect(resultat).toEqual([]);
+  });
+
+  it('intracom (445662) jamais candidat, même non payé et même compte de charge confirmé — exigibilité indépendante du paiement', () => {
+    const e = ecritureAutoliquidation({ compteTva: '445662', compteCharge: '604000', estLettree: false });
+    const resultat = identifierFacturesCandidatesAcompte(
+      [e],
+      [],
+      new Set(),
+      ['604000'], // même si le compte de charge est confirmé
+      ['445662'] // explicitement exclu
+    );
+    expect(resultat).toEqual([]);
+  });
+});
