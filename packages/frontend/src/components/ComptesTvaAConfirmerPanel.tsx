@@ -108,7 +108,24 @@ function CompteCard({
 // prochain contrôle (verifierComptesTvaAConfirmer relit la convention
 // depuis conventions_dossier, plus rien à confirmer une fois son statut
 // passé à 'rejected').
-function ComptesTvaConfirmesSection({ cabinetId, dossierId, utilisateurId }: ComptesTvaAConfirmerPanelProps) {
+function ComptesTvaConfirmesSection({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  refreshKey,
+}: {
+  cabinetId: string;
+  dossierId: string;
+  utilisateurId: string;
+  // Bug réel corrigé (brief v60) : cette section ne se rechargeait qu'à son
+  // propre montage. Depuis que les 4 onglets du popup portes obligatoires
+  // restent montés en permanence (plus de démontage/remontage au
+  // changement d'onglet, cf. PortesObligatoiresPopup.tsx), un compte
+  // confirmé juste au-dessus (CompteCard) ne faisait plus jamais
+  // réapparaître cette section à jour — bumpé par le parent
+  // (ComptesTvaAConfirmerPanel) à chaque confirmation réussie.
+  refreshKey: number;
+}) {
   const [confirmes, setConfirmes] = useState<{ id: string; cle: string; compte: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +153,7 @@ function ComptesTvaConfirmesSection({ cabinetId, dossierId, utilisateurId }: Com
   useEffect(() => {
     if (cabinetId && dossierId) void charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cabinetId, dossierId]);
+  }, [cabinetId, dossierId, refreshKey]);
 
   async function handleRejeter(id: string, compte: string) {
     setRejet(id);
@@ -191,6 +208,7 @@ export function ComptesTvaAConfirmerPanel({
   const [comptes, setComptes] = useState<CompteTvaAConfirmer[] | null>(donneesInitiales?.comptes ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshConfirmes, setRefreshConfirmes] = useState(0);
 
   async function charger() {
     if (!periodeDebut || !periodeFin) {
@@ -210,6 +228,7 @@ export function ComptesTvaAConfirmerPanel({
 
   function retirer(compte: string) {
     setComptes((prev) => prev?.filter((c) => c.compte !== compte) ?? null);
+    setRefreshConfirmes((k) => k + 1);
   }
 
   return (
@@ -257,7 +276,12 @@ export function ComptesTvaAConfirmerPanel({
           ))}
         </ul>
       )}
-      <ComptesTvaConfirmesSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+      <ComptesTvaConfirmesSection
+        cabinetId={cabinetId}
+        dossierId={dossierId}
+        utilisateurId={utilisateurId}
+        refreshKey={refreshConfirmes}
+      />
     </section>
   );
 }

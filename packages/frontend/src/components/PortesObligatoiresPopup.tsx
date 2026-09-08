@@ -155,37 +155,45 @@ export function PortesObligatoiresPopup({
               })}
             </nav>
             {ongletActif && <p className="sous-onglet-description">{ongletActif.description}</p>}
-            <div key={sousOnglet} className="sous-onglet-contenu">
-              {sousOnglet === 'categorisation' && (
-                <CategorisationContenu
-                  cabinetId={cabinetId}
-                  dossierId={dossierId}
-                  utilisateurId={utilisateurId}
-                  comptes={etat.categorisation.comptesACategoriser}
-                  comptesSousCategorieAutoliquidation={etat.categorisation.comptesServiceSansSousCategorieAutoliquidation}
-                />
-              )}
-              {sousOnglet === 'comptesTva' && (
-                <ComptesTvaAConfirmerPanel
-                  cabinetId={cabinetId}
-                  dossierId={dossierId}
-                  utilisateurId={utilisateurId}
-                  donneesInitiales={{ periodeDebut, periodeFin, comptes: etat.comptesTvaAConfirmer }}
-                />
-              )}
-              {sousOnglet === 'rapprochement' && (
-                <RapprochementPaiementAchatContenu
-                  cabinetId={cabinetId}
-                  dossierId={dossierId}
-                  utilisateurId={utilisateurId}
-                  periodeDebut={periodeDebut}
-                  periodeFin={periodeFin}
-                  factures={etat.rapprochementsPaiementAchat}
-                />
-              )}
-              {sousOnglet === 'vehicules' && (
-                <VehiculesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-              )}
+            {/* Bug réel corrigé (brief v60) : les 4 onglets restent montés en
+                permanence, seule leur visibilité bascule (hidden), au lieu
+                d'un rendu conditionnel exclusif qui démontait/remontait le
+                composant de l'onglet quitté. Chaque onglet gère localement
+                l'état des éléments déjà traités (retirés de sa propre liste
+                sans re-fetch) — un démontage perdait cet état à chaque
+                retour sur l'onglet, faisant réapparaître des comptes déjà
+                confirmés ou des factures déjà rapprochées, parfois en double
+                avec les listes qui, elles, se rechargent réellement (ex :
+                "Comptes TVA déjà confirmés"). */}
+            <div className="sous-onglet-contenu" hidden={sousOnglet !== 'categorisation'}>
+              <CategorisationContenu
+                cabinetId={cabinetId}
+                dossierId={dossierId}
+                utilisateurId={utilisateurId}
+                comptes={etat.categorisation.comptesACategoriser}
+                comptesSousCategorieAutoliquidation={etat.categorisation.comptesServiceSansSousCategorieAutoliquidation}
+              />
+            </div>
+            <div className="sous-onglet-contenu" hidden={sousOnglet !== 'comptesTva'}>
+              <ComptesTvaAConfirmerPanel
+                cabinetId={cabinetId}
+                dossierId={dossierId}
+                utilisateurId={utilisateurId}
+                donneesInitiales={{ periodeDebut, periodeFin, comptes: etat.comptesTvaAConfirmer }}
+              />
+            </div>
+            <div className="sous-onglet-contenu" hidden={sousOnglet !== 'rapprochement'}>
+              <RapprochementPaiementAchatContenu
+                cabinetId={cabinetId}
+                dossierId={dossierId}
+                utilisateurId={utilisateurId}
+                periodeDebut={periodeDebut}
+                periodeFin={periodeFin}
+                factures={etat.rapprochementsPaiementAchat}
+              />
+            </div>
+            <div className="sous-onglet-contenu" hidden={sousOnglet !== 'vehicules'}>
+              <VehiculesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
             </div>
           </>
         )}
