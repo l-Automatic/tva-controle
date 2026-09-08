@@ -629,7 +629,24 @@ export async function executerCycleTva(
     prorataAppliques,
   } = determinerExigibiliteTva(
     ecritures,
-    { comptesVenteService, comptesChargeService, comptesPaiementComptant },
+    {
+      comptesVenteService,
+      comptesChargeService,
+      comptesPaiementComptant,
+      // Autoliquidation (10/08, bug réel corrigé) : sans ces 5 champs,
+      // determinerExigibiliteTva reste dans son ancien comportement
+      // (skip silencieux, toujours inclus peu importe le paiement) —
+      // cf. son propre commentaire sur ConfigExigibiliteTva.
+      ...(compteAutoliquidationDue !== undefined ? { compteAutoliquidationDue } : {}),
+      ...(compteAutoliquidationDeductible !== undefined ? { compteAutoliquidationDeductible } : {}),
+      ...(compteAutoliquidationDueIntracom !== undefined ? { compteAutoliquidationDueIntracom } : {}),
+      ...(compteAutoliquidationDeductibleIntracom !== undefined
+        ? { compteAutoliquidationDeductibleIntracom }
+        : {}),
+      ...(compteAutoliquidationDeductibleImmoIntracom !== undefined
+        ? { compteAutoliquidationDeductibleImmoIntracom }
+        : {}),
+    },
     prorataParEcriture,
     ledgerEntryIdsHotel,
     comptesTiersOptantDebits
