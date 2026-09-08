@@ -54,5 +54,9 @@ export async function verifierComptesTvaAConfirmer(
       contexteDossier,
       'compte_tva_deductible_autoliquidee_intracom'
     ),
+    compteAutoliquidationDeductibleImmoIntracom: conventionValeur(
+      contexteDossier,
+      'compte_tva_deductible_autoliquidee_immo_intracom'
+    ),
   });
 }
