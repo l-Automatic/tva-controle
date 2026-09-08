@@ -1011,6 +1011,35 @@ export async function corrigerNiveauConfianceTiers(
   });
 }
 
+// Coche/décoche la TVA sur les débits pour ce fournisseur (10/08, demande
+// de Rami) — cf. exigibilite.ts pour l'usage. Même mécanisme exactement
+// que corrigerNiveauConfianceTiers.
+export async function definirOpteTvaDebitsTiers(
+  client: PoolClient,
+  dossierId: string,
+  numeroCompteTiers: string,
+  opteTvaDebits: boolean,
+  utilisateurId: string
+): Promise<void> {
+  const res = await client.query<{ id: string }>(
+    `UPDATE tiers_reference SET opte_tva_debits = $3
+     WHERE dossier_id = $1 AND numero_compte_tiers = $2
+     RETURNING id`,
+    [dossierId, numeroCompteTiers, opteTvaDebits]
+  );
+  if (res.rows.length === 0) {
+    throw new Error(`Tiers ${numeroCompteTiers} introuvable pour ce dossier.`);
+  }
+  await enregistrerEvenementAudit(client, {
+    dossierId,
+    typeEvenement: 'tiers_opte_tva_debits_modifie',
+    moduleSource: 'module6_validation',
+    acteur: 'utilisateur',
+    acteurUtilisateurId: utilisateurId,
+    details: { numeroCompteTiers, opteTvaDebits },
+  });
+}
+
 // ============================================================================
 // TAUX ASSIGNÉ PAR COMPTE (produit ou charge) — assignation directe, pas
 // une observation. Cf. migration 010 pour le raisonnement complet.
