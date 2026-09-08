@@ -14,6 +14,27 @@ export interface ConfigExigibiliteTva {
   // lettrage n'a rien à apporter et peut même induire une exclusion à tort
   // (ex: une pièce mal lettrée dans Pennylane alors que payée en réalité).
   comptesPaiementComptant?: string[];
+  // Comptes d'autoliquidation (10/08, bug réel corrigé — trouvé par Rami
+  // en conditions réelles) : ces comptes étaient jusqu'ici entièrement
+  // ignorés par ce contrôle (ni collecte ni déductible standard), donc
+  // toujours inclus dans le calcul peu importe le paiement fournisseur —
+  // fiscalement faux. Deux régimes différents, confirmés par Rami :
+  // - BTP (Due/Deductible) : toujours des services, jamais d'option TVA
+  //   sur les débits chez un sous-traitant -> exigibilité dépend du
+  //   paiement, exactement comme un achat de service classique.
+  // - Intracom (DueIntracom/DeductibleIntracom/DeductibleImmoIntracom) :
+  //   l'exigibilité suit le fait générateur (approximé par la date de la
+  //   pièce comptable, faute de mieux dans un FEC), PAS le paiement du
+  //   fournisseur — différence structurante avec le régime domestique.
+  //   Exigible par défaut, jamais de vérification de lettrage.
+  //   Exception acompte anticipé (mouvement 401/512 antérieur à la
+  //   facture) volontairement non traitée pour l'instant — chantier
+  //   séparé, à faire plus tard.
+  compteAutoliquidationDue?: string;
+  compteAutoliquidationDeductible?: string;
+  compteAutoliquidationDueIntracom?: string;
+  compteAutoliquidationDeductibleIntracom?: string;
+  compteAutoliquidationDeductibleImmoIntracom?: string;
 }
 
 export type NatureOperation = 'bien' | 'service' | 'indetermine';
@@ -91,9 +112,63 @@ export function determinerExigibiliteTva(
     const estCollecte = compte.startsWith(PREFIXE_COLLECTE);
     const estDeductible = PREFIXES_DEDUCTIBLE.some((p) => compte.startsWith(p));
 
-    // Comptes d'autoliquidation (4454/445664...) : logique d'exigibilité
-    // différente (liée à l'achat lui-même, pas à un encaissement client) —
-    // hors scope de ce contrôle, couverte par verifierAutoliquidationEquilibree.
+    // Comptes d'autoliquidation (10/08, bug réel corrigé) : deux régimes
+    // distincts, cf. commentaire sur ConfigExigibiliteTva. Traité AVANT
+    // le reste (paiement comptant, TVA sur les débits...) qui suppose
+    // tous estCollecte/estDeductible sur un compte 44571/44566 standard,
+    // jamais pertinent ici.
+    const estAutoliquidationBtp = compte === config.compteAutoliquidationDue || compte === config.compteAutoliquidationDeductible;
+    const estAutoliquidationIntracom =
+      compte === config.compteAutoliquidationDueIntracom ||
+      compte === config.compteAutoliquidationDeductibleIntracom ||
+      compte === config.compteAutoliquidationDeductibleImmoIntracom;
+
+    if (estAutoliquidationIntracom) {
+      statuts.push({
+        ledgerEntryId,
+        compte,
+        natureOperation: 'service',
+        exigible: true,
+        motif: 'Acquisition intracommunautaire : exigible au fait générateur (date de la pièce comptable), indépendamment du paiement fournisseur.',
+      });
+      continue;
+    }
+
+    if (estAutoliquidationBtp) {
+      // Toujours des services (confirmé par Rami), jamais d'option TVA
+      // sur les débits chez un sous-traitant — comportement identique au
+      // service classique plus bas dans cette fonction, dupliqué ici
+      // volontairement plutôt que factorisé : la condition de sortie
+      // (autoliquidation vs standard) doit rester lisible d'un coup
+      // d'œil, pas noyée dans un chemin partagé à plusieurs branches.
+      if (ecriture.lignesTiers.length === 0) {
+        statuts.push({
+          ledgerEntryId,
+          compte,
+          natureOperation: 'service',
+          exigible: false,
+          motif: 'Autoliquidation BTP sans ligne fournisseur (cas qui ne devrait jamais se produire en pratique) : jamais exigible par prudence.',
+        });
+        continue;
+      }
+      const ligneTiersBtp = ecriture.lignesTiers[0]!;
+      const exigibleBtp = ligneTiersBtp.lettrage.estLettree;
+      statuts.push({
+        ledgerEntryId,
+        compte,
+        natureOperation: 'service',
+        exigible: exigibleBtp,
+        motif: exigibleBtp
+          ? 'Autoliquidation BTP : fournisseur payé (ligne lettrée) -> exigible.'
+          : 'Autoliquidation BTP : fournisseur pas encore payé -> pas exigible, à exclure du calcul de la période.',
+      });
+      continue;
+    }
+
+    // Comptes d'autoliquidation non identifiés par une convention
+    // confirmée (4454/445664... sans configuration) : hors scope de ce
+    // contrôle, couverte par verifierAutoliquidationEquilibree/
+    // detecterComptesTvaNonReconnus.
     if (!estCollecte && !estDeductible) continue;
 
     // Comptes "toujours payé comptant" (10/08) : court-circuite tout le
