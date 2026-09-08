@@ -416,12 +416,12 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string; commentaire?: string } }>(
+  app.post<{ Params: { id: string }; Body: { commentaire?: string } }>(
     '/anomalies/:id/resoudre',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        resoudreAnomalie(client, request.params.id, request.body.utilisateurId, request.body.commentaire)
+        resoudreAnomalie(client, request.params.id, request.utilisateur!.utilisateurId, request.body.commentaire)
       );
       reply.code(204).send();
     }
@@ -430,11 +430,12 @@ export function buildApp(pool: Pool): FastifyInstance {
   // Résolution en masse — pense à filtrer côté frontend AVANT d'appeler ça
   // (par type d'anomalie, cf. filtre demandé) : ce n'est pas cette route qui
   // décide quoi inclure, elle prend juste la liste d'ids déjà choisie.
-  app.post<{ Body: { anomalieIds: string[]; utilisateurId: string; commentaire: string } }>(
+  app.post<{ Body: { anomalieIds: string[]; commentaire: string } }>(
     '/anomalies/resoudre-en-masse',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
-      const { anomalieIds, utilisateurId, commentaire } = request.body;
+      const utilisateurId = request.utilisateur!.utilisateurId;
+      const { anomalieIds, commentaire } = request.body;
       if (!commentaire) {
         return reply.code(400).send({ erreur: 'commentaire requis pour une resolution en masse' });
       }
@@ -445,12 +446,12 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string; commentaire: string } }>(
+  app.post<{ Params: { id: string }; Body: { commentaire: string } }>(
     '/anomalies/:id/justifier',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        justifierAnomalie(client, request.params.id, request.body.utilisateurId, request.body.commentaire)
+        justifierAnomalie(client, request.params.id, request.utilisateur!.utilisateurId, request.body.commentaire)
       );
       reply.code(204).send();
     }
@@ -461,13 +462,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // vente+motif), pas juste un commentaire libre — cf. qualifierEncaissementNonAffecte.
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string } & (
-      | { decision: 'vente'; taux: number }
-      | { decision: 'hors_vente'; motif: string }
-    );
+    Body: { decision: 'vente'; taux: number } | { decision: 'hors_vente'; motif: string };
   }>('/anomalies/:id/qualifier', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, ...qualification } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const qualification = request.body;
     if (qualification.decision === 'vente' && typeof qualification.taux !== 'number') {
       return reply.code(400).send({ erreur: 'taux (nombre) requis pour une qualification "vente"' });
     }
@@ -493,10 +492,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // par "Vérifier à nouveau" (route suivante), pas par cette qualification.
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; type: 'avoir' | 'od' };
+    Body: { type: 'avoir' | 'od' };
   }>('/anomalies/:id/qualifier-avoir', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, type } = request.body;
+    const { type } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
     if (type !== 'avoir' && type !== 'od') {
       return reply.code(400).send({ erreur: "type doit être 'avoir' ou 'od'" });
     }
@@ -521,12 +521,13 @@ export function buildApp(pool: Pool): FastifyInstance {
   // disparaît si corrigée — jamais l'inverse.
   app.post<{
     Params: { dossierId: string };
-    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string };
   }>('/dossiers/:dossierId/verifier-avoirs', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, utilisateurId } = request.body;
-    if (!periodeDebut || !periodeFin || !utilisateurId) {
-      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    const { periodeDebut, periodeFin } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
 
     let client;
@@ -556,10 +557,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // Jamais d'ajustement direct ici — seul "Vérifier à nouveau" le fait.
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; type: 'confirme_tourisme' | 'pas_tourisme' };
+    Body: { type: 'confirme_tourisme' | 'pas_tourisme' };
   }>('/anomalies/:id/qualifier-vehicule-tourisme', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, type } = request.body;
+    const { type } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
     if (type !== 'confirme_tourisme' && type !== 'pas_tourisme') {
       return reply.code(400).send({ erreur: "type doit être 'confirme_tourisme' ou 'pas_tourisme'" });
     }
@@ -582,12 +584,13 @@ export function buildApp(pool: Pool): FastifyInstance {
   // ouvert sinon.
   app.post<{
     Params: { dossierId: string };
-    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string };
   }>('/dossiers/:dossierId/verifier-vehicule-tourisme', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, utilisateurId } = request.body;
-    if (!periodeDebut || !periodeFin || !utilisateurId) {
-      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    const { periodeDebut, periodeFin } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
 
     let client;
@@ -616,10 +619,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // nouveau") ou ignore (achat correctement en charge, rien à faire).
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; type: 'confirme_immo' | 'ignore' };
+    Body: { type: 'confirme_immo' | 'ignore' };
   }>('/anomalies/:id/qualifier-immobilisation', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, type } = request.body;
+    const { type } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
     if (type !== 'confirme_immo' && type !== 'ignore') {
       return reply.code(400).send({ erreur: "type doit être 'confirme_immo' ou 'ignore'" });
     }
@@ -644,10 +648,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // prochain cycle, rien n'ayant été vraiment tranché.
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; type: 'valide' | 'ignore' };
+    Body: { type: 'valide' | 'ignore' };
   }>('/anomalies/:id/qualifier-nouveau-tiers', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, type } = request.body;
+    const { type } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
     if (type !== 'valide' && type !== 'ignore') {
       return reply.code(400).send({ erreur: "type doit être 'valide' ou 'ignore'" });
     }
@@ -672,10 +677,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // la vraie règle générale, jamais utilisée ici).
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; type: 'bon_taux' | 'mauvais_taux'; nouveauTaux?: number };
+    Body: { type: 'bon_taux' | 'mauvais_taux'; nouveauTaux?: number };
   }>('/anomalies/:id/qualifier-encaissement-client-taux', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, type, nouveauTaux } = request.body;
+    const { type, nouveauTaux } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
     if (type !== 'bon_taux' && type !== 'mauvais_taux') {
       return reply.code(400).send({ erreur: "type doit être 'bon_taux' ou 'mauvais_taux'" });
     }
@@ -702,10 +708,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // jugement IA était faux).
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; type: 'confirme' | 'ignore' };
+    Body: { type: 'confirme' | 'ignore' };
   }>('/anomalies/:id/qualifier-tva-hotel', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, type } = request.body;
+    const { type } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
     if (type !== 'confirme' && type !== 'ignore') {
       return reply.code(400).send({ erreur: "type doit être 'confirme' ou 'ignore'" });
     }
@@ -726,12 +733,13 @@ export function buildApp(pool: Pool): FastifyInstance {
   // déduite du calcul brouillon si la correction est constatée.
   app.post<{
     Params: { dossierId: string };
-    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string };
   }>('/dossiers/:dossierId/verifier-tva-hotel', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, utilisateurId } = request.body;
-    if (!periodeDebut || !periodeFin || !utilisateurId) {
-      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    const { periodeDebut, periodeFin } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
 
     let client;
@@ -761,10 +769,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // (le jugement IA était faux).
   app.post<{
     Params: { id: string };
-    Body: { utilisateurId: string; typeAnomalie: string; type: 'confirme' | 'ignore' };
+    Body: { typeAnomalie: string; type: 'confirme' | 'ignore' };
   }>('/anomalies/:id/qualifier-frais-vehicule', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, typeAnomalie, type } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { typeAnomalie, type } = request.body;
     if (type !== 'confirme' && type !== 'ignore') {
       return reply.code(400).send({ erreur: "type doit être 'confirme' ou 'ignore'" });
     }
@@ -786,12 +795,13 @@ export function buildApp(pool: Pool): FastifyInstance {
   // si la correction est constatée.
   app.post<{
     Params: { dossierId: string };
-    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string };
   }>('/dossiers/:dossierId/verifier-frais-vehicule', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, utilisateurId } = request.body;
-    if (!periodeDebut || !periodeFin || !utilisateurId) {
-      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    const { periodeDebut, periodeFin } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
 
     let client;
@@ -1024,12 +1034,13 @@ export function buildApp(pool: Pool): FastifyInstance {
   // a bien eu lieu côté Pennylane, laisse ouvert sinon.
   app.post<{
     Params: { dossierId: string };
-    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string };
   }>('/dossiers/:dossierId/verifier-immobilisation', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, utilisateurId } = request.body;
-    if (!periodeDebut || !periodeFin || !utilisateurId) {
-      return reply.code(400).send({ erreur: 'periodeDebut, periodeFin et utilisateurId sont requis' });
+    const { periodeDebut, periodeFin } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    if (!periodeDebut || !periodeFin) {
+      return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
     }
 
     let client;
@@ -1068,13 +1079,14 @@ export function buildApp(pool: Pool): FastifyInstance {
   // comptes non couvertes par la découverte automatique du Module 3 :
   // comptes_vente_service, comptes_charge_service, comptes_equipement,
   // comptes_carburant). Reste 'candidate' — voir ajouterConventionManuelle.
-  app.post<{ Params: { dossierId: string }; Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
+  app.post<{ Params: { dossierId: string }; Body: { cle: string; valeur: unknown } }>(
     '/dossiers/:dossierId/conventions',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
-      const { utilisateurId, cle, valeur } = request.body;
-      if (!utilisateurId || !cle || valeur === undefined) {
-        return reply.code(400).send({ erreur: 'utilisateurId, cle et valeur sont requis' });
+      const { cle, valeur } = request.body;
+      const utilisateurId = request.utilisateur!.utilisateurId;
+      if (!cle || valeur === undefined) {
+        return reply.code(400).send({ erreur: 'cle et valeur sont requis' });
       }
       const id = await avecContexteCabinet(pool, cabinetId, (client) =>
         ajouterConventionManuelle(client, request.params.dossierId, utilisateurId, cle, valeur)
@@ -1083,23 +1095,23 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/conventions/:id/confirmer',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        confirmerConvention(client, request.params.id, request.body.utilisateurId)
+        confirmerConvention(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/conventions/:id/rejeter',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        rejeterConvention(client, request.params.id, request.body.utilisateurId)
+        rejeterConvention(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
@@ -1109,11 +1121,12 @@ export function buildApp(pool: Pool): FastifyInstance {
   // comptes_charge_service) — pas de nouveau cycle candidate/confirmed,
   // UPDATE direct. dossierId + cle dans le corps car ce n'est pas une
   // ligne précise qu'on cible mais une clé de convention pour ce dossier.
-  app.post<{ Body: { dossierId: string; cle: string; compte: string; utilisateurId: string } }>(
+  app.post<{ Body: { dossierId: string; cle: string; compte: string } }>(
     '/conventions/retirer-compte',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
-      const { dossierId, cle, compte, utilisateurId } = request.body;
+      const utilisateurId = request.utilisateur!.utilisateurId;
+      const { dossierId, cle, compte } = request.body;
       try {
         await avecContexteCabinet(pool, cabinetId, (client) =>
           retirerCompteConvention(client, dossierId, cle, compte, utilisateurId)
@@ -1139,23 +1152,23 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/taux-historique/:id/confirmer',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        confirmerTauxHistorique(client, request.params.id, request.body.utilisateurId)
+        confirmerTauxHistorique(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/taux-historique/:id/rejeter',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        rejeterTauxHistorique(client, request.params.id, request.body.utilisateurId)
+        rejeterTauxHistorique(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
@@ -1174,23 +1187,23 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/taux-historique-tiers/:id/confirmer',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        confirmerTauxHistoriqueTiers(client, request.params.id, request.body.utilisateurId)
+        confirmerTauxHistoriqueTiers(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/taux-historique-tiers/:id/rejeter',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        rejeterTauxHistoriqueTiers(client, request.params.id, request.body.utilisateurId)
+        rejeterTauxHistoriqueTiers(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
@@ -1206,22 +1219,23 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   app.post<{
     Params: { dossierId: string };
-    Body: VehiculeManuel & { utilisateurId: string };
+    Body: VehiculeManuel;
   }>('/dossiers/:dossierId/vehicules', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { utilisateurId, ...vehicule } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const vehicule = request.body;
     const id = await avecContexteCabinet(pool, cabinetId, (client) =>
       ajouterVehiculeManuel(client, request.params.dossierId, vehicule, utilisateurId)
     );
     reply.code(201).send({ id });
   });
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/vehicules/:id/retirer',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        retirerVehicule(client, request.params.id, request.body.utilisateurId)
+        retirerVehicule(client, request.params.id, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     }
@@ -1237,10 +1251,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // du collaborateur.
   app.post<{
     Params: { dossierId: string };
-    Body: { numeroCompteTiers: string; niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance'; utilisateurId: string };
+    Body: { numeroCompteTiers: string; niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance' };
   }>('/dossiers/:dossierId/tiers/corriger', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { numeroCompteTiers, niveauConfiance, utilisateurId } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { numeroCompteTiers, niveauConfiance } = request.body;
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
         corrigerNiveauConfianceTiers(client, request.params.dossierId, numeroCompteTiers, niveauConfiance, utilisateurId)
@@ -1265,10 +1280,11 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   app.post<{
     Params: { dossierId: string };
-    Body: { compte: string; taux: TauxAssigne; utilisateurId: string };
+    Body: { compte: string; taux: TauxAssigne };
   }>('/dossiers/:dossierId/taux-assignes', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { compte, taux, utilisateurId } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { compte, taux } = request.body;
     await avecContexteCabinet(pool, cabinetId, (client) =>
       assignerTauxCompte(client, request.params.dossierId, compte, taux, utilisateurId)
     );
@@ -1280,10 +1296,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // directement, pas de candidate à valider séparément.
   app.post<{
     Params: { dossierId: string };
-    Body: { numeroCompteTiers: string; tauxHabituel: number | 'mixte'; utilisateurId: string };
+    Body: { numeroCompteTiers: string; tauxHabituel: number | 'mixte' };
   }>('/dossiers/:dossierId/taux-historique-tiers/assigner', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { numeroCompteTiers, tauxHabituel, utilisateurId } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { numeroCompteTiers, tauxHabituel } = request.body;
     await avecContexteCabinet(pool, cabinetId, (client) =>
       assignerTauxHistoriqueTiersManuel(client, request.params.dossierId, numeroCompteTiers, tauxHabituel, utilisateurId)
     );
@@ -1311,13 +1328,13 @@ export function buildApp(pool: Pool): FastifyInstance {
     return avecContexteCabinet(pool, cabinetId, (client) => chargerDeclarationCalcul(client, request.params.calculId));
   });
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string } }>(
+  app.post<{ Params: { id: string } }>(
     '/calculs/:id/valider',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
       try {
         await avecContexteCabinet(pool, cabinetId, (client) =>
-          validerCalcul(client, request.params.id, request.body.utilisateurId)
+          validerCalcul(client, request.params.id, request.utilisateur!.utilisateurId)
         );
         reply.code(204).send();
       } catch (err) {
@@ -1332,7 +1349,7 @@ export function buildApp(pool: Pool): FastifyInstance {
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { utilisateurId: string; motif: string } }>(
+  app.post<{ Params: { id: string }; Body: { motif: string } }>(
     '/calculs/:id/rejeter',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
@@ -1341,7 +1358,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       }
       try {
         await avecContexteCabinet(pool, cabinetId, (client) =>
-          rejeterCalcul(client, request.params.id, request.body.utilisateurId, request.body.motif)
+          rejeterCalcul(client, request.params.id, request.utilisateur!.utilisateurId, request.body.motif)
         );
         reply.code(204).send();
       } catch (err) {
@@ -1368,11 +1385,11 @@ export function buildApp(pool: Pool): FastifyInstance {
       montantOriginal: number;
       montantAjuste: number;
       justification: string;
-      utilisateurId: string;
     };
   }>('/calculs/:id/ajustements', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { typeMontant, montantOriginal, montantAjuste, justification, utilisateurId } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { typeMontant, montantOriginal, montantAjuste, justification } = request.body;
     if (!justification || justification.trim().length === 0) {
       return reply.code(400).send({ erreur: 'justification requise pour ajuster un montant' });
     }
@@ -1391,12 +1408,11 @@ export function buildApp(pool: Pool): FastifyInstance {
 
   app.post<{
     Params: { id: string; typeMontant: 'collectee_totale' | 'deductible_totale' };
-    Body: { utilisateurId: string };
   }>('/calculs/:id/ajustements/:typeMontant/retirer', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
     try {
       await avecContexteCabinet(pool, cabinetId, (client) =>
-        retirerAjustementCalcul(client, request.params.id, request.params.typeMontant, request.body.utilisateurId)
+        retirerAjustementCalcul(client, request.params.id, request.params.typeMontant, request.utilisateur!.utilisateurId)
       );
       reply.code(204).send();
     } catch (err) {
@@ -1555,11 +1571,11 @@ export function buildApp(pool: Pool): FastifyInstance {
       factureLedgerEntryId: number;
       montantFactureTotal: number;
       paiementsValides: { ledgerEntryId: number; montant: number }[];
-      utilisateurId: string;
     };
   }>('/dossiers/:dossierId/rapprochements-paiement-achat', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periode, factureLedgerEntryId, montantFactureTotal, paiementsValides, utilisateurId } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
+    const { periode, factureLedgerEntryId, montantFactureTotal, paiementsValides } = request.body;
 
     if (!periode || typeof factureLedgerEntryId !== 'number' || typeof montantFactureTotal !== 'number' || !Array.isArray(paiementsValides)) {
       return reply.code(400).send({
@@ -1734,10 +1750,11 @@ export function buildApp(pool: Pool): FastifyInstance {
   // chaque cycle — cf. analyserMotifNumerotation.ts pour le raisonnement.
   app.post<{
     Params: { dossierId: string };
-    Body: { periodeDebut: string; periodeFin: string; utilisateurId: string };
+    Body: { periodeDebut: string; periodeFin: string };
   }>('/dossiers/:dossierId/motif-numerotation/analyser', async (request, reply) => {
     const cabinetId = request.utilisateur!.cabinetId;
-    const { periodeDebut, periodeFin, utilisateurId } = request.body;
+    const { periodeDebut, periodeFin } = request.body;
+    const utilisateurId = request.utilisateur!.utilisateurId;
 
     if (!periodeDebut || !periodeFin) {
       return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
@@ -1824,14 +1841,15 @@ export function buildApp(pool: Pool): FastifyInstance {
     return avecContexteCabinet(pool, cabinetId, (client) => listerParametresCabinet(client, cabinetId));
   });
 
-  app.put<{ Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
+  app.put<{ Body: { cle: string; valeur: unknown } }>(
     '/parametres-cabinet',
     async (request, reply) => {
       if (request.utilisateur!.role !== 'admin_cabinet') {
         return reply.code(403).send({ erreur: 'Réservé aux administrateurs de cabinet.' });
       }
       const cabinetId = request.utilisateur!.cabinetId;
-      const { utilisateurId, cle, valeur } = request.body;
+      const { cle, valeur } = request.body;
+      const utilisateurId = request.utilisateur!.utilisateurId;
       if (!cle) {
         return reply.code(400).send({ erreur: 'cle requise' });
       }
@@ -1850,11 +1868,12 @@ export function buildApp(pool: Pool): FastifyInstance {
     );
   });
 
-  app.put<{ Params: { dossierId: string }; Body: { utilisateurId: string; cle: string; valeur: unknown } }>(
+  app.put<{ Params: { dossierId: string }; Body: { cle: string; valeur: unknown } }>(
     '/dossiers/:dossierId/parametres',
     async (request, reply) => {
       const cabinetId = request.utilisateur!.cabinetId;
-      const { utilisateurId, cle, valeur } = request.body;
+      const { cle, valeur } = request.body;
+      const utilisateurId = request.utilisateur!.utilisateurId;
       if (!cle) {
         return reply.code(400).send({ erreur: 'cle requise' });
       }
