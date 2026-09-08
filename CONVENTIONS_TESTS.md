@@ -49,7 +49,8 @@ DELETE FROM dossiers WHERE nom NOT IN ('Electricien Sandbox Reel');
 ALTER TABLE calculs_tva_lignes ENABLE TRIGGER ALL;
 ```
 
-Le trigger de protection sur `calculs_tva_lignes` doit être désactivé
-temporairement pour ce nettoyage — bloque à tort une suppression en
-cascade (pas seulement une modification directe hors brouillon), bug
-réel trouvé le 10/08 en pratique, en cours de correction.
+Le contournement ci-dessus (DISABLE/ENABLE TRIGGER) n'est plus
+nécessaire depuis la migration 027 (10/08) — le trigger bloquait à tort
+une suppression en cascade légitime (le calcul parent déjà supprimé
+faisait lire un statut NULL, jamais géré correctement). Gardé ici pour
+mémoire, au cas où une base de test n'aurait pas encore cette migration.
