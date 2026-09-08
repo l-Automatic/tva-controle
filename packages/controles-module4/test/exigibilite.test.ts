@@ -516,3 +516,93 @@ describe('determinerExigibiliteTva — prudence inversée achats vs ventes sur g
     expect(statuts[0]?.motif).not.toContain('payé au comptant');
   });
 });
+
+function ecritureAchatService(overrides: {
+  compteTiers: string;
+  lettree: boolean;
+  ledgerEntryId?: number;
+}): EcritureTvaComplete {
+  const ledgerEntryId = overrides.ledgerEntryId ?? 1;
+  return {
+    ledgerEntryId,
+    ligneTva: {
+      id: 1,
+      compte: '44566',
+      compteId: 1,
+      libelle: 'Achat service',
+      debit: 100,
+      credit: 0,
+      date: '2025-01-15',
+      ledgerEntryId,
+      lettrage: { estLettree: false, groupeIds: [] },
+    },
+    autresLignes: [{ id: 2, compte: '611000', compteId: 2, libelle: null, debit: 500, credit: 0 }],
+    lignesTiers: [
+      {
+        compte: overrides.compteTiers,
+        compteId: 3,
+        debit: 0,
+        credit: 600,
+        libelleCompte: 'Fournisseur test',
+        lettrage: { estLettree: overrides.lettree, groupeIds: overrides.lettree ? [1, 2] : [] },
+      },
+    ],
+  };
+}
+
+describe('opte_tva_debits — fournisseur ayant opté pour la TVA sur les débits', () => {
+  it('service NON payé, fournisseur ayant opté pour les débits : déductible quand même', () => {
+    const e = ecritureAchatService({ compteTiers: '401OPTEDEBITS', lettree: false });
+    const { statuts } = determinerExigibiliteTva(
+      [e],
+      configReelle,
+      new Map(),
+      new Set(),
+      new Set(['401OPTEDEBITS'])
+    );
+    expect(statuts[0]?.exigible).toBe(true);
+    expect(statuts[0]?.motif).toContain('opté pour la TVA sur les débits');
+  });
+
+  it('service NON payé, fournisseur NON dans la liste : comportement normal, pas déductible', () => {
+    const e = ecritureAchatService({ compteTiers: '401NORMAL', lettree: false });
+    const { statuts } = determinerExigibiliteTva(
+      [e],
+      configReelle,
+      new Map(),
+      new Set(),
+      new Set(['401OPTEDEBITS']) // liste non vide, mais ce fournisseur n'y est pas
+    );
+    expect(statuts[0]?.exigible).toBe(false);
+  });
+
+  it('ne concerne jamais la collecte (ventes) — uniquement le déductible', () => {
+    const eVente = ecritureRousseau({
+      lignesTiers: [
+        {
+          compte: '411OPTEDEBITS',
+          compteId: 3,
+          debit: 100,
+          credit: 0,
+          libelleCompte: 'Client test',
+          lettrage: { estLettree: false, groupeIds: [] },
+        },
+      ],
+    });
+    const { statuts } = determinerExigibiliteTva(
+      [eVente],
+      configReelle,
+      new Map(),
+      new Set(),
+      new Set(['411OPTEDEBITS']) // même numéro de compte, côté vente cette fois
+    );
+    // Toujours pas exigible : l'option d'un tiers ne s'applique jamais à la collecte.
+    expect(statuts[0]?.exigible).toBe(false);
+  });
+
+  it('sans le paramètre (comportement par défaut) : rien ne change', () => {
+    const e = ecritureAchatService({ compteTiers: '401OPTEDEBITS', lettree: false });
+    const { statuts } = determinerExigibiliteTva([e], configReelle);
+    expect(statuts[0]?.exigible).toBe(false);
+  });
+});
