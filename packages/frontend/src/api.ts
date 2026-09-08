@@ -11,6 +11,7 @@ import type {
   Dossier,
   DossierComplet,
   ElementATraiter,
+  EtatPortesObligatoires,
   FactureARapprocher,
   InfosIdentiteDossier,
   MotifNumerotation,
@@ -753,6 +754,20 @@ export function fetchRapprochementsPaiementAchat(
 ): Promise<FactureARapprocher[]> {
   const params = new URLSearchParams({ periodeDebut, periodeFin });
   return request<FactureARapprocher[]>(`/dossiers/${dossierId}/rapprochements-paiement-achat?${params}`, cabinetId);
+}
+
+// Popup unique à onglets pour les 4 portes obligatoires (brief v58) — un
+// seul appel au lieu des 3 routes séparées ci-dessus + une détection
+// indirecte pour le parc de véhicules (auparavant seulement visible via un
+// message d'erreur au lancement du cycle).
+export function fetchPortesObligatoires(
+  cabinetId: string,
+  dossierId: string,
+  periodeDebut: string,
+  periodeFin: string
+): Promise<EtatPortesObligatoires> {
+  const params = new URLSearchParams({ periodeDebut, periodeFin });
+  return request<EtatPortesObligatoires>(`/dossiers/${dossierId}/portes-obligatoires?${params}`, cabinetId);
 }
 
 // paiementsValides peut être vide — le collaborateur estime qu'aucun

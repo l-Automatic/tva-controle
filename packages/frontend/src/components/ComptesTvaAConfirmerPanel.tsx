@@ -7,6 +7,13 @@ interface ComptesTvaAConfirmerPanelProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
+  // Popup unique des portes obligatoires (brief v58) : évite un second
+  // aller-retour réseau quand la période et les comptes ont déjà été
+  // récupérés par GET /portes-obligatoires — la période est pré-remplie et
+  // les résultats affichés immédiatement, mais reste modifiable via le
+  // formulaire habituel (bouton "Vérifier") si besoin. Absent = comportement
+  // inchangé pour l'usage autonome (Configuration du dossier).
+  donneesInitiales?: { periodeDebut: string; periodeFin: string; comptes: CompteTvaAConfirmer[] };
 }
 
 // Quatrième porte obligatoire avant un cycle (brief v46) — même principe
@@ -85,10 +92,15 @@ function CompteCard({
   );
 }
 
-export function ComptesTvaAConfirmerPanel({ cabinetId, dossierId, utilisateurId }: ComptesTvaAConfirmerPanelProps) {
-  const [periodeDebut, setPeriodeDebut] = useState('');
-  const [periodeFin, setPeriodeFin] = useState('');
-  const [comptes, setComptes] = useState<CompteTvaAConfirmer[] | null>(null);
+export function ComptesTvaAConfirmerPanel({
+  cabinetId,
+  dossierId,
+  utilisateurId,
+  donneesInitiales,
+}: ComptesTvaAConfirmerPanelProps) {
+  const [periodeDebut, setPeriodeDebut] = useState(donneesInitiales?.periodeDebut ?? '');
+  const [periodeFin, setPeriodeFin] = useState(donneesInitiales?.periodeFin ?? '');
+  const [comptes, setComptes] = useState<CompteTvaAConfirmer[] | null>(donneesInitiales?.comptes ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

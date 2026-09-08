@@ -191,6 +191,19 @@ export interface ParametresRapprochementPaiementAchat {
   utilisateurId: string;
 }
 
+// GET /dossiers/:dossierId/portes-obligatoires (brief v58) — agrège en un
+// seul appel l'état des 4 portes obligatoires avant un cycle, pour peupler
+// le popup unique à onglets. Chaque champ a exactement la même forme que ce
+// que renvoyaient déjà les routes séparées ; parcVehiculesNonRenseigne est
+// le seul nouveau champ (aucun moyen avant ce chantier de connaître l'état
+// du parc sans tenter un cycle et se faire bloquer).
+export interface EtatPortesObligatoires {
+  categorisation: ResultatComptesACategoriser;
+  comptesTvaAConfirmer: CompteTvaAConfirmer[];
+  rapprochementsPaiementAchat: FactureARapprocher[];
+  parcVehiculesNonRenseigne: boolean;
+}
+
 // Comptes produit/charge (classes 6/7) mouvementés sans taux assigné, et
 // comptes clients mouvementés sans taux historique ni assignation manuelle
 // — suggestions pour l'onglet Taux assigné (brief v4, section 4), même

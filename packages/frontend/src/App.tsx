@@ -208,23 +208,6 @@ export function App() {
     setZone('configuration');
   }
 
-  // Troisième porte obligatoire avant un cycle (brief v38), même principe
-  // que la catégorisation ci-dessus mais sans données à pré-remplir — un
-  // 409 sur le parc de véhicules manquant amène directement sur l'écran
-  // de gestion du parc.
-  function allerVersParcVehicules() {
-    setSousOngletConfiguration('vehicules');
-    setZone('configuration');
-  }
-
-  // Quatrième porte obligatoire avant un cycle (brief v46), même principe
-  // que le parc de véhicules ci-dessus — un 409 sur les comptes TVA à
-  // confirmer amène directement sur l'écran dédié.
-  function allerVersComptesTvaAConfirmer() {
-    setSousOngletConfiguration('comptesTva');
-    setZone('configuration');
-  }
-
   return (
     <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
       <Sidebar
@@ -270,8 +253,6 @@ export function App() {
                   }}
                   onSuggestionsAutoliquidation={setSuggestionsAutoliquidation}
                   onCompteNonReconnuClic={allerVersConventionsGeneriques}
-                  onParcVehiculesManquant={allerVersParcVehicules}
-                  onComptesTvaAConfirmerManquant={allerVersComptesTvaAConfirmer}
                 />
               )}
               {zone === 'configuration' && (

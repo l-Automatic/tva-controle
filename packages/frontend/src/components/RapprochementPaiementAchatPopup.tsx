@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
 import { ApiError, enregistrerRapprochementPaiementAchat, fetchRapprochementsPaiementAchat } from '../api';
 import { formatDate } from '../dateUtils';
 import { useToast } from '../toast';
 import { formatMontant } from './CalculsPanel';
 import type { ConfianceSuggestionIA, FactureARapprocher } from '../types';
 
-interface RapprochementPaiementAchatPopupProps {
+interface RapprochementPaiementAchatContenuProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
@@ -18,7 +17,6 @@ interface RapprochementPaiementAchatPopupProps {
   periodeDebut: string;
   periodeFin: string;
   factures: FactureARapprocher[];
-  onClose: () => void;
 }
 
 const LIBELLE_CONFIANCE: Record<ConfianceSuggestionIA, string> = {
@@ -134,26 +132,25 @@ function FactureCard({
   );
 }
 
-// Remplace l'ancien mécanisme automatique (brief v34) — une facture de
-// service non payée est présentée avec tous ses paiements candidats sur
-// toute la fenêtre de l'exercice, précochés par l'IA quand fiable, jamais
-// une décision finale prise par le LLM seul. Porte obligatoire avant un
-// cycle, comme la catégorisation (CategorisationPopup) : fermer sans tout
-// traiter est normal, les factures non traitées réapparaîtront au
-// prochain essai de lancement de cycle.
+// Contenu seul, sans l'enveloppe popup — onglet du popup unique des portes
+// obligatoires (brief v58, remplace l'ancienne popup dédiée dont c'était
+// jusqu'ici le seul appelant). Une facture de service non payée est
+// présentée avec tous ses paiements candidats sur toute la fenêtre de
+// l'exercice, précochés par l'IA quand fiable, jamais une décision finale
+// prise par le LLM seul. Fermer sans tout traiter est normal, les factures
+// non traitées réapparaîtront au prochain essai de lancement de cycle.
 //
 // Déjà triée côté backend par compte fournisseur puis par date (brief
 // v35) — jamais re-triée ici. Les factures sans aucun candidat sont
 // désormais résolues automatiquement côté backend, absentes de la liste.
-export function RapprochementPaiementAchatPopup({
+export function RapprochementPaiementAchatContenu({
   cabinetId,
   dossierId,
   utilisateurId,
   periodeDebut,
   periodeFin,
   factures: facturesInitiales,
-  onClose,
-}: RapprochementPaiementAchatPopupProps) {
+}: RapprochementPaiementAchatContenuProps) {
   const [factures, setFactures] = useState(facturesInitiales);
   const [rechargement, setRechargement] = useState(false);
 
@@ -177,39 +174,31 @@ export function RapprochementPaiementAchatPopup({
   }
 
   return (
-    <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Rapprochement des paiements achats">
-      <div className="popup">
-        <div className="popup-header">
-          <h2>Rapprochement des paiements achats ({factures.length})</h2>
-          <button className="popup-close" onClick={onClose} aria-label="Fermer">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="reference">
-          Factures de service non payées, avec leurs paiements candidats trouvés sur toute la fenêtre de l'exercice.
-          Les cases précochées reflètent une suggestion IA quand disponible, à valider ou corriger avant d'envoyer.
-        </p>
-        {rechargement && <p className="empty">Actualisation…</p>}
-        {!rechargement && factures.length === 0 ? (
-          <p className="empty">Toutes les factures ont été rapprochées.</p>
-        ) : (
-          !rechargement && (
-            <ul className="card-list">
-              {factures.map((f) => (
-                <FactureCard
-                  key={f.ledgerEntryId}
-                  facture={f}
-                  cabinetId={cabinetId}
-                  dossierId={dossierId}
-                  utilisateurId={utilisateurId}
-                  periodeDebut={periodeDebut}
-                  onTraite={() => void recharger()}
-                />
-              ))}
-            </ul>
-          )
-        )}
-      </div>
-    </div>
+    <>
+      <p className="reference">
+        Factures de service non payées, avec leurs paiements candidats trouvés sur toute la fenêtre de l'exercice.
+        Les cases précochées reflètent une suggestion IA quand disponible, à valider ou corriger avant d'envoyer.
+      </p>
+      {rechargement && <p className="empty">Actualisation…</p>}
+      {!rechargement && factures.length === 0 ? (
+        <p className="empty">Toutes les factures ont été rapprochées.</p>
+      ) : (
+        !rechargement && (
+          <ul className="card-list">
+            {factures.map((f) => (
+              <FactureCard
+                key={f.ledgerEntryId}
+                facture={f}
+                cabinetId={cabinetId}
+                dossierId={dossierId}
+                utilisateurId={utilisateurId}
+                periodeDebut={periodeDebut}
+                onTraite={() => void recharger()}
+              />
+            ))}
+          </ul>
+        )
+      )}
+    </>
   );
 }

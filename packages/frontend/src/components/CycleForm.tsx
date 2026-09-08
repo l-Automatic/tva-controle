@@ -1,13 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  ApiError,
-  ajusterMontantCalcul,
-  fetchAjustementsCalcul,
-  fetchComptesACategoriser,
-  fetchRapprochementsPaiementAchat,
-  lancerCycle,
-  retirerAjustementCalcul,
-} from '../api';
+import { ApiError, ajusterMontantCalcul, fetchAjustementsCalcul, lancerCycle, retirerAjustementCalcul } from '../api';
 import { useToast } from '../toast';
 import type {
   AjustementCalcul,
@@ -19,10 +11,9 @@ import type {
   TypeMontantAjustement,
 } from '../types';
 import { MessageCalculIncomplet } from './CalculsPanel';
-import { CategorisationPopup } from './CategorisationPopup';
 import { CycleLoadingPopup } from './CycleLoadingPopup';
 import { InfoTooltip } from './InfoTooltip';
-import { RapprochementPaiementAchatPopup } from './RapprochementPaiementAchatPopup';
+import { PortesObligatoiresPopup } from './PortesObligatoiresPopup';
 
 interface CycleFormProps {
   cabinetId: string;
@@ -34,16 +25,6 @@ interface CycleFormProps {
   // panneau "Calcul de la période" juste en dessous, qui affiche sinon une
   // TVA nette périmée après un ajustement fait ici.
   onAjustementChange?: () => void;
-  // Troisième porte obligatoire (brief v38), même principe que les deux
-  // précédentes mais sans payload structuré — juste un message d'erreur à
-  // reconnaître, pour rediriger vers Configuration du dossier → Parc de
-  // véhicules plutôt que d'afficher le 409 brut.
-  onParcVehiculesManquant?: (() => void) | undefined;
-  // Quatrième porte obligatoire (brief v46) — comme le parc de véhicules,
-  // pas de payload à pré-remplir ici (l'écran dédié Configuration du
-  // dossier → Comptes TVA à confirmer refait l'appel lui-même), juste une
-  // redirection sur 409 avec comptesTvaAConfirmer.
-  onComptesTvaAConfirmerManquant?: (() => void) | undefined;
 }
 
 // autoliquidation_due séparée en deux côté backend (brief v49, chantier
@@ -368,8 +349,6 @@ export function CycleForm({
   utilisateurId,
   onCycleLance,
   onAjustementChange = () => {},
-  onParcVehiculesManquant = () => {},
-  onComptesTvaAConfirmerManquant = () => {},
 }: CycleFormProps) {
   const [periodeDebut, setPeriodeDebut] = useState('');
   const [periodeFin, setPeriodeFin] = useState('');
@@ -379,20 +358,15 @@ export function CycleForm({
   const [resultat, setResultat] = useState<ResultatCycle | null>(null);
   const [phasePopup, setPhasePopup] = useState<'chargement' | 'succes' | null>(null);
   const [messageSucces, setMessageSucces] = useState('');
-  // Deux portes obligatoires avant un cycle (brief v34) — jamais rattrapées
-  // après coup, contrairement à encaissement_non_affecte. Popups ouverts
-  // soit directement (boutons "Vérifier…", consultable à tout moment, pas
-  // seulement en réaction à un 409), soit pré-remplis depuis le corps d'un
-  // 409 de lancerCycle, sans second appel réseau.
-  // Objet à deux champs depuis brief v46 (comptesServiceSansSousCategorieAutoliquidation
-  // en plus de comptesACategoriser) — un seul état plutôt que deux, la
-  // popup montre les deux sections quand l'une ou l'autre est non vide.
-  const [categorisation, setCategorisation] = useState<{
-    comptesACategoriser: CompteACategoriser[];
-    comptesServiceSansSousCategorieAutoliquidation: CompteACategoriser[];
-  } | null>(null);
-  const [facturesARapprocher, setFacturesARapprocher] = useState<FactureARapprocher[] | null>(null);
-  const [verificationEnCours, setVerificationEnCours] = useState<'categorisation' | 'rapprochement' | null>(null);
+  // Les 4 portes obligatoires avant un cycle (brief v34, v38, v46) tiennent
+  // maintenant dans un seul popup à onglets (brief v58) — jamais rattrapées
+  // après coup, contrairement à encaissement_non_affecte. Ouvert soit
+  // directement (bouton "Vérifier les portes obligatoires", consultable à
+  // tout moment, pas seulement en réaction à un 409), soit sur un 409 de
+  // lancerCycle correspondant à l'une des 4 portes — le popup refait dans
+  // les deux cas le même appel réseau unique (GET /portes-obligatoires),
+  // jamais besoin de pré-remplir depuis le corps du 409.
+  const [portesObligatoiresOuvertes, setPortesObligatoiresOuvertes] = useState(false);
   const notifier = useToast();
 
   async function handleLancer() {
@@ -432,25 +406,19 @@ export function CycleForm({
               facturesARapprocher?: FactureARapprocher[];
             }
           | undefined;
-        if (corps?.comptesACategoriser || corps?.comptesServiceSansSousCategorieAutoliquidation) {
-          // Les deux motifs de blocage de la même porte (brief v46) —
-          // jamais les deux à la fois dans un seul 409 (la route s'arrête au
-          // premier détecté), mais la popup les affiche toujours ensemble.
-          setCategorisation({
-            comptesACategoriser: corps.comptesACategoriser ?? [],
-            comptesServiceSansSousCategorieAutoliquidation: corps.comptesServiceSansSousCategorieAutoliquidation ?? [],
-          });
-        } else if (corps?.facturesARapprocher) {
-          setFacturesARapprocher(corps.facturesARapprocher);
-        } else if (corps?.comptesTvaAConfirmer) {
-          // Quatrième porte (brief v46) — comme le parc de véhicules, pas de
-          // payload à pré-remplir : l'écran dédié refait l'appel lui-même.
-          onComptesTvaAConfirmerManquant();
-        } else if (err.message.includes('parc de véhicules')) {
-          // Troisième porte (brief v38) — pas de payload structuré à
-          // pré-remplir cette fois, juste une redirection vers l'écran de
-          // gestion du parc (Configuration du dossier → Parc de véhicules).
-          onParcVehiculesManquant();
+        // Une des 4 portes obligatoires (brief v34, v38, v46) : le popup
+        // unique (brief v58) refait lui-même l'appel réseau complet, jamais
+        // besoin de distinguer laquelle a bloqué ici. Seul le 409 restant
+        // (cycle déjà validé pour cette période) ne correspond à aucune des
+        // 4 portes et garde son propre message.
+        const estUnePorteObligatoire =
+          corps?.comptesACategoriser ||
+          corps?.comptesServiceSansSousCategorieAutoliquidation ||
+          corps?.facturesARapprocher ||
+          corps?.comptesTvaAConfirmer ||
+          err.message.includes('parc de véhicules');
+        if (estUnePorteObligatoire) {
+          setPortesObligatoiresOuvertes(true);
         } else {
           setDejaValide(true);
         }
@@ -463,46 +431,13 @@ export function CycleForm({
     }
   }
 
-  async function handleVerifierCategorisation() {
+  function handleVerifierPortesObligatoires() {
     if (!periodeDebut || !periodeFin) {
       setError('Période de début et période de fin sont requises');
       return;
     }
-    setVerificationEnCours('categorisation');
     setError(null);
-    try {
-      const resultat = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
-      if (resultat.comptesACategoriser.length === 0 && resultat.comptesServiceSansSousCategorieAutoliquidation.length === 0) {
-        notifier('Aucun compte à catégoriser pour cette période');
-      } else {
-        setCategorisation(resultat);
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Échec de la vérification de la catégorisation');
-    } finally {
-      setVerificationEnCours(null);
-    }
-  }
-
-  async function handleVerifierRapprochement() {
-    if (!periodeDebut || !periodeFin) {
-      setError('Période de début et période de fin sont requises');
-      return;
-    }
-    setVerificationEnCours('rapprochement');
-    setError(null);
-    try {
-      const factures = await fetchRapprochementsPaiementAchat(cabinetId, dossierId, periodeDebut, periodeFin);
-      if (factures.length === 0) {
-        notifier('Aucune facture à rapprocher pour cette période');
-      } else {
-        setFacturesARapprocher(factures);
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Échec de la vérification du rapprochement');
-    } finally {
-      setVerificationEnCours(null);
-    }
+    setPortesObligatoiresOuvertes(true);
   }
 
   return (
@@ -525,22 +460,12 @@ export function CycleForm({
         </button>
       </div>
 
-      {/* Deux portes obligatoires (brief v34) — consultables à tout moment,
-          pas seulement en réaction à un 409 au lancement du cycle. */}
+      {/* Les 4 portes obligatoires (brief v34, v38, v46) tiennent dans un
+          seul popup à onglets (brief v58) — consultable à tout moment, pas
+          seulement en réaction à un 409 au lancement du cycle. */}
       <div className="cycle-form">
-        <button
-          className="secondary"
-          onClick={() => void handleVerifierCategorisation()}
-          disabled={verificationEnCours !== null}
-        >
-          {verificationEnCours === 'categorisation' ? '…' : 'Vérifier la catégorisation'}
-        </button>
-        <button
-          className="secondary"
-          onClick={() => void handleVerifierRapprochement()}
-          disabled={verificationEnCours !== null}
-        >
-          {verificationEnCours === 'rapprochement' ? '…' : 'Vérifier les rapprochements paiements achats'}
+        <button className="secondary" onClick={handleVerifierPortesObligatoires}>
+          Vérifier les portes obligatoires
         </button>
       </div>
 
@@ -554,25 +479,14 @@ export function CycleForm({
         />
       )}
       {phasePopup && <CycleLoadingPopup phase={phasePopup} messageSucces={messageSucces} />}
-      {categorisation && (
-        <CategorisationPopup
-          cabinetId={cabinetId}
-          dossierId={dossierId}
-          utilisateurId={utilisateurId}
-          comptes={categorisation.comptesACategoriser}
-          comptesSousCategorieAutoliquidation={categorisation.comptesServiceSansSousCategorieAutoliquidation}
-          onClose={() => setCategorisation(null)}
-        />
-      )}
-      {facturesARapprocher && (
-        <RapprochementPaiementAchatPopup
+      {periodeDebut && periodeFin && portesObligatoiresOuvertes && (
+        <PortesObligatoiresPopup
           cabinetId={cabinetId}
           dossierId={dossierId}
           utilisateurId={utilisateurId}
           periodeDebut={periodeDebut}
           periodeFin={periodeFin}
-          factures={facturesARapprocher}
-          onClose={() => setFacturesARapprocher(null)}
+          onClose={() => setPortesObligatoiresOuvertes(false)}
         />
       )}
     </div>

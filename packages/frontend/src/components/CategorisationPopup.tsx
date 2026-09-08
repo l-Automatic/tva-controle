@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { ApiError, ajouterConvention, confirmerConvention } from '../api';
 import { useToast } from '../toast';
 import { SuggestionIABlock } from './SuggestionIABlock';
 import type { CompteACategoriser } from '../types';
 
-interface CategorisationPopupProps {
+interface CategorisationContenuProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
@@ -15,6 +15,14 @@ interface CategorisationPopupProps {
   // n'a jamais été tranché. Optionnel : les appelants pré-v46 (aucun ici en
   // pratique, mais gardé simple) n'ont qu'à ne pas le passer.
   comptesSousCategorieAutoliquidation?: CompteACategoriser[];
+  // Popup unique à onglets (brief v58) — remonte le nombre de comptes
+  // restants pour que l'enveloppe (CategorisationPopup ci-dessous, ou le
+  // futur popup à onglets) puisse l'afficher dans son propre titre sans
+  // dupliquer la logique de retrait locale.
+  onCountChange?: (n: number) => void;
+}
+
+interface CategorisationPopupProps extends Omit<CategorisationContenuProps, 'onCountChange'> {
   onClose: () => void;
 }
 
@@ -195,16 +203,25 @@ function CompteSousCategorieAutoliquidationCard({
 // suggestion : jamais de validation automatique, l'ajout requiert toujours
 // un clic explicite sur "Ajouter". Fermer sans tout traiter est normal :
 // les comptes non traités réapparaîtront au prochain cycle.
-export function CategorisationPopup({
+// Contenu seul, sans l'enveloppe popup — extrait pour être réutilisable
+// tel quel comme onglet du popup unique des portes obligatoires (brief
+// v58), sans dupliquer la logique de retrait local ni les gestes de
+// catégorisation.
+export function CategorisationContenu({
   cabinetId,
   dossierId,
   utilisateurId,
   comptes: comptesInitiaux,
   comptesSousCategorieAutoliquidation: comptesSousCategorieInitiaux = [],
-  onClose,
-}: CategorisationPopupProps) {
+  onCountChange,
+}: CategorisationContenuProps) {
   const [comptes, setComptes] = useState(comptesInitiaux);
   const [comptesSousCategorie, setComptesSousCategorie] = useState(comptesSousCategorieInitiaux);
+
+  useEffect(() => {
+    onCountChange?.(comptes.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comptes.length]);
 
   function retirer(compte: string) {
     setComptes((prev) => prev.filter((c) => c.compte !== compte));
@@ -215,57 +232,68 @@ export function CategorisationPopup({
   }
 
   return (
-    <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Catégorisation des comptes">
-      <div className="popup">
-        <div className="popup-header">
-          <h2>Comptes à catégoriser ({comptes.length})</h2>
-          <button className="popup-close" onClick={onClose} aria-label="Fermer">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="reference">
-          Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 9 conventions. Les
-          comptes non traités réapparaîtront au prochain cycle.
-        </p>
-        {comptes.length === 0 ? (
-          <p className="empty">Tous les comptes ont été traités.</p>
-        ) : (
+    <>
+      <p className="reference">
+        Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 9 conventions. Les
+        comptes non traités réapparaîtront au prochain cycle.
+      </p>
+      {comptes.length === 0 ? (
+        <p className="empty">Tous les comptes ont été traités.</p>
+      ) : (
+        <ul className="card-list">
+          {comptes.map((c) => (
+            <CompteCard
+              key={c.compte}
+              compte={c}
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              onTraite={() => retirer(c.compte)}
+            />
+          ))}
+        </ul>
+      )}
+
+      {comptesSousCategorie.length > 0 && (
+        <>
+          <div className="panel-separateur" />
+          <h2>Sous-catégorisation autoliquidation ({comptesSousCategorie.length})</h2>
+          <p className="reference">
+            Ces comptes de charge de service sont déjà catégorisés, mais leur lien avec l'autoliquidation
+            (sous-traitance) n'a jamais été tranché.
+          </p>
           <ul className="card-list">
-            {comptes.map((c) => (
-              <CompteCard
+            {comptesSousCategorie.map((c) => (
+              <CompteSousCategorieAutoliquidationCard
                 key={c.compte}
                 compte={c}
                 cabinetId={cabinetId}
                 dossierId={dossierId}
                 utilisateurId={utilisateurId}
-                onTraite={() => retirer(c.compte)}
+                onTraite={() => retirerSousCategorie(c.compte)}
               />
             ))}
           </ul>
-        )}
+        </>
+      )}
+    </>
+  );
+}
 
-        {comptesSousCategorie.length > 0 && (
-          <>
-            <div className="panel-separateur" />
-            <h2>Sous-catégorisation autoliquidation ({comptesSousCategorie.length})</h2>
-            <p className="reference">
-              Ces comptes de charge de service sont déjà catégorisés, mais leur lien avec l'autoliquidation
-              (sous-traitance) n'a jamais été tranché.
-            </p>
-            <ul className="card-list">
-              {comptesSousCategorie.map((c) => (
-                <CompteSousCategorieAutoliquidationCard
-                  key={c.compte}
-                  compte={c}
-                  cabinetId={cabinetId}
-                  dossierId={dossierId}
-                  utilisateurId={utilisateurId}
-                  onTraite={() => retirerSousCategorie(c.compte)}
-                />
-              ))}
-            </ul>
-          </>
-        )}
+export function CategorisationPopup(props: CategorisationPopupProps) {
+  const { onClose } = props;
+  const [count, setCount] = useState(props.comptes.length);
+
+  return (
+    <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Catégorisation des comptes">
+      <div className="popup">
+        <div className="popup-header">
+          <h2>Comptes à catégoriser ({count})</h2>
+          <button className="popup-close" onClick={onClose} aria-label="Fermer">
+            <X size={18} />
+          </button>
+        </div>
+        <CategorisationContenu {...props} onCountChange={setCount} />
       </div>
     </div>
   );
