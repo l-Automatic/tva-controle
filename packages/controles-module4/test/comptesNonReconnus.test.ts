@@ -136,4 +136,35 @@ describe('detecterComptesTvaNonReconnus — TVA intracom (10/08)', () => {
     const anomalies = detecterComptesTvaNonReconnus([ecriture('44562', 1), ecriture('445621', 2)], {});
     expect(anomalies).toEqual([]);
   });
+
+  it('bug réel corrigé (10/08, trouvé par Rami en conditions réelles) : 445664 (BTP déductible) n’est JAMAIS reconnu par le préfixe générique 44566, exige une confirmation explicite', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('445664', 1)], {});
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.compte).toBe('445664');
+  });
+
+  it('bug réel corrigé (10/08) : 445662 (intracom déductible) n’est JAMAIS reconnu par le préfixe générique 44566, exige une confirmation explicite', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('445662', 1)], {});
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.compte).toBe('445662');
+  });
+
+  it('reconnaît 445664 une fois la convention BTP confirmée', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('445664', 1)], {
+      compteAutoliquidationDeductible: '445664',
+    });
+    expect(anomalies).toEqual([]);
+  });
+
+  it('reconnaît 445662 une fois la convention intracom confirmée', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('445662', 1)], {
+      compteAutoliquidationDeductibleIntracom: '445662',
+    });
+    expect(anomalies).toEqual([]);
+  });
+
+  it('un compte 44566 classique (pas 445664/445662) reste reconnu par le préfixe générique, jamais affecté par le carve-out', () => {
+    const anomalies = detecterComptesTvaNonReconnus([ecriture('44566', 1), ecriture('445661', 2)], {});
+    expect(anomalies).toEqual([]);
+  });
 });
