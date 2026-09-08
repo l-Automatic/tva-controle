@@ -218,7 +218,14 @@ export function buildApp(pool: Pool): FastifyInstance {
       parametreDossierValeur(client, dossierId, 'pennylane_company_api_key')
     );
     if (typeof jetonDossier === 'string' && jetonDossier.length > 0) {
-      return new PennylaneClient({ token: jetonDossier });
+      // maxRetries429 relevé de 3 (défaut) à 8 (10/08, bug réel trouvé par
+      // Rami en conditions réelles) — l'agrégateur des portes obligatoires
+      // (portesObligatoires.ts) peut désormais générer une vraie rafale
+      // d'appels (4 fonctions, chacune paginant potentiellement plusieurs
+      // fois) même en séquentiel. Sans risque pour les autres routes : ce
+      // paramètre n'a d'effet que si un vrai 429 survient, jamais sur un
+      // appel qui aboutit normalement.
+      return new PennylaneClient({ token: jetonDossier, maxRetries429: 8 });
     }
 
     const jetonCabinet = await avecContexteCabinet(pool, cabinetId, (client) =>
@@ -230,7 +237,15 @@ export function buildApp(pool: Pool): FastifyInstance {
       );
     }
 
-    return new FirmApiClient({ token: jetonCabinet, companyId: dossier.externalCompanyId });
+    // maxRetries429 relevé de 3 (défaut) à 8 (10/08, bug réel trouvé par
+    // Rami en conditions réelles — c'est CE chemin, Firm API, le chemin
+    // normal pour un dossier synchronisé, pas le chemin Company API
+    // ci-dessus où j'avais d'abord cru le problème). L'agrégateur des
+    // portes obligatoires (portesObligatoires.ts) peut générer une vraie
+    // rafale d'appels (4 fonctions, chacune paginant potentiellement
+    // plusieurs fois) même en séquentiel. Sans risque pour les autres
+    // routes : ce paramètre n'a d'effet que si un vrai 429 survient.
+    return new FirmApiClient({ token: jetonCabinet, companyId: dossier.externalCompanyId, maxRetries429: 8 });
   }
 
   // --- Authentification ---
