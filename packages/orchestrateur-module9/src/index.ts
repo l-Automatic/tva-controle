@@ -133,6 +133,7 @@ export {
   definirParametreDossier,
   synchroniserTiersReference,
   corrigerNiveauConfianceTiers,
+  definirOpteTvaDebitsTiers,
   ajouterVehiculeManuel,
   retirerVehicule,
   type VehiculeManuel,
