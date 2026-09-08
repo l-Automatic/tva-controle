@@ -70,6 +70,7 @@ import {
   listerAnomaliesTraiteesParTypeEtPiece,
   listerTauxAssignes,
   parametreDossierValeur,
+  listerTiersReference,
   parametreCabinetValeur,
   listerRapprochementsPaiementAchat,
 } from './db/readRepository.js';
@@ -602,6 +603,15 @@ export async function executerCycleTva(
     prorataParEcriture.set(r.factureLedgerEntryId, prorata);
   }
 
+  // Fournisseurs ayant opté pour la TVA sur les débits (10/08) — cf.
+  // exigibilite.ts. Lecture pure en base, jamais déduit automatiquement.
+  const tiersOptantDebits = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    listerTiersReference(client, params.dossierId)
+  );
+  const comptesTiersOptantDebits = new Set(
+    tiersOptantDebits.filter((t) => t.opteTvaDebits).map((t) => t.numeroCompteTiers)
+  );
+
   const {
     statuts: statutsExigibilite,
     anomalies: anomaliesExigibilite,
@@ -610,7 +620,8 @@ export async function executerCycleTva(
     ecritures,
     { comptesVenteService, comptesChargeService, comptesPaiementComptant },
     prorataParEcriture,
-    ledgerEntryIdsHotel
+    ledgerEntryIdsHotel,
+    comptesTiersOptantDebits
   );
 
   const { statuts: statutsCarburant, anomalies: anomaliesCarburant } = determinerDeductibiliteCarburant(
