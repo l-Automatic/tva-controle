@@ -56,7 +56,7 @@ function JaugeCompletude({ tauxCompletude, nbCandidates }: { tauxCompletude: num
           </div>
           <p className="jauge-legende">
             Dossier configuré à {Math.round(tauxCompletude)} %
-            {nbCandidates > 0 && ` — ${nbCandidates} en attente`}
+            {nbCandidates > 0 && ` (${nbCandidates} en attente)`}
           </p>
         </>
       )}

@@ -75,16 +75,16 @@ function DetailsProrataCollecte({ details }: { details: DetailProrataCollecte[] 
         {details.map((d) => (
           <li key={d.ledgerEntryId} className="card">
             <p className="label">
-              Compte {d.compte} — client {d.compteTiers} : <strong>{d.prorataPourcent} % exigible</strong>
+              Compte {d.compte}, client {d.compteTiers} : <strong>{d.prorataPourcent} % exigible</strong>
             </p>
             {d.montantExigible !== null ? (
               <p className="reference">
                 TVA exigible : {formatMontant(d.montantExigible)}
-                {d.montantExclu !== null && ` — TVA exclue (paiement restant) : ${formatMontant(d.montantExclu)}`}
+                {d.montantExclu !== null && `, TVA exclue (paiement restant) : ${formatMontant(d.montantExclu)}`}
               </p>
             ) : (
               <p className="reference">
-                Montant non isolable — plusieurs pièces agrégées dans la même ligne de calcul.
+                Montant non isolable, plusieurs pièces agrégées dans la même ligne de calcul.
               </p>
             )}
           </li>

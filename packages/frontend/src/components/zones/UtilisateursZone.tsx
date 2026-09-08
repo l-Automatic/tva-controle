@@ -101,12 +101,12 @@ function UtilisateurRow({
   return (
     <li className={`card${estActif ? '' : ' utilisateur-inactif'}`}>
       <p className="label">
-        {utilisateur.nom} — <strong>{LIBELLE_ROLE[utilisateur.role]}</strong>
+        {utilisateur.nom}, <strong>{LIBELLE_ROLE[utilisateur.role]}</strong>
         {!estActif && <span className="badge statut-rejete"> Inactif</span>}
       </p>
       <p className="reference">{utilisateur.email}</p>
       {!utilisateur.aUnMotDePasse && (
-        <p className="empty">N'a jamais pu se connecter — aucun mot de passe défini.</p>
+        <p className="empty">N'a jamais pu se connecter, aucun mot de passe défini.</p>
       )}
       {error && <p className="error">{error}</p>}
       {reinitOuvert ? (

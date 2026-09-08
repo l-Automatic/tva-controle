@@ -153,7 +153,7 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   parc_vehicules_non_renseigne: 'Parc de véhicules non renseigné',
   immobilisation_potentielle_non_passee: 'Immobilisation potentielle non passée',
   nouveau_tiers_a_verifier: 'Nouveau tiers à vérifier',
-  encaissement_client_taux_applique: 'Encaissement client — taux appliqué',
+  encaissement_client_taux_applique: 'Encaissement client, taux appliqué',
   tva_hotel_a_verifier: 'TVA hôtel à vérifier',
   tva_hotel_a_tort: 'TVA hôtel déduite à tort',
   trou_numerotation_facture: 'Trou dans la numérotation des factures',
@@ -161,9 +161,9 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   autoliquidation_desequilibree: 'Autoliquidation déséquilibrée',
   autoliquidation_incomplete: 'Autoliquidation incomplète',
   immobilisation_sur_compte_tva_incorrect: 'Immobilisation sur compte de TVA incorrect',
-  incoherence_taux_autoliquidation: 'Incohérence de taux — autoliquidation',
-  incoherence_taux_produit: 'Incohérence de taux — compte produit',
-  cadeau_client_seuil_depasse: 'Cadeau client — seuil de 73€ dépassé',
+  incoherence_taux_autoliquidation: 'Incohérence de taux (autoliquidation)',
+  incoherence_taux_produit: 'Incohérence de taux (compte produit)',
+  cadeau_client_seuil_depasse: 'Cadeau client, seuil de 73€ dépassé',
   entretien_vehicule_tourisme_deduit_a_tort: 'Entretien véhicule tourisme déduit à tort',
   location_vehicule_tourisme_deduite_a_tort: 'Location véhicule tourisme déduite à tort',
 };
@@ -254,7 +254,7 @@ function detailsResiduels(details: unknown): string | null {
   // besoin de l'afficher séparément plutôt que de laisser croire que
   // "Compte : 445711" est le compte client/fournisseur concerné.
   if (Array.isArray(d.groupeIds)) {
-    const compteTiers = typeof d.compteTiers === 'string' ? `Compte tiers : ${d.compteTiers} — ` : '';
+    const compteTiers = typeof d.compteTiers === 'string' ? `Compte tiers : ${d.compteTiers}. ` : '';
     return `${compteTiers}Autres pièces du même groupe de lettrage : ${d.groupeIds.join(', ')}`;
   }
   const clesRestantes = Object.keys(d).filter((k) => !CLES_DEJA_AFFICHEES.has(k));
@@ -428,7 +428,7 @@ function VerificationComptesNonReconnus({
       const { anomalies } = await verifierComptesNonReconnus(cabinetId, dossierId, { periodeDebut, periodeFin });
       notifier(
         anomalies === 0
-          ? 'Aucun compte non reconnu sur cette période — anomalie levée'
+          ? 'Aucun compte non reconnu sur cette période, anomalie levée'
           : `${anomalies} compte(s) toujours non reconnu(s) sur cette période`
       );
       setOuvert(false);
@@ -452,11 +452,11 @@ function VerificationComptesNonReconnus({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -561,8 +561,8 @@ function VerificationAvoirs({
       });
       notifier(
         corrections > 0
-          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
-          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) avoir toujours ouverte(s) sur cette période`
+          ? `${corrections} correction(s) appliquée(s) au calcul, montant mis à jour`
+          : `Aucune correction détectée, ${anomaliesOuvertes} anomalie(s) avoir toujours ouverte(s) sur cette période`
       );
       setOuvert(false);
       onChanged();
@@ -585,11 +585,11 @@ function VerificationAvoirs({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -689,8 +689,8 @@ function VerificationVehiculeTourisme({
       });
       notifier(
         corrections > 0
-          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
-          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) véhicule de tourisme toujours ouverte(s) sur cette période`
+          ? `${corrections} correction(s) appliquée(s) au calcul, montant mis à jour`
+          : `Aucune correction détectée, ${anomaliesOuvertes} anomalie(s) véhicule de tourisme toujours ouverte(s) sur cette période`
       );
       setOuvert(false);
       onChanged();
@@ -713,11 +713,11 @@ function VerificationVehiculeTourisme({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -822,8 +822,8 @@ function VerificationImmobilisation({
       });
       notifier(
         corrections > 0
-          ? `${corrections} correction(s) appliquée(s) au calcul — transfert charges/immobilisations effectué`
-          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) immobilisation toujours ouverte(s) sur cette période`
+          ? `${corrections} correction(s) appliquée(s) au calcul, transfert charges/immobilisations effectué`
+          : `Aucune correction détectée, ${anomaliesOuvertes} anomalie(s) immobilisation toujours ouverte(s) sur cette période`
       );
       setOuvert(false);
       onChanged();
@@ -846,11 +846,11 @@ function VerificationImmobilisation({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -890,7 +890,7 @@ function QualificationNouveauTiers({
     setError(null);
     try {
       await qualifierNouveauTiers(cabinetId, anomalie.id, utilisateurId, type);
-      notifier(type === 'valide' ? 'Tiers validé — ne sera plus signalé' : 'Ignoré pour cette occurrence');
+      notifier(type === 'valide' ? 'Tiers validé, ne sera plus signalé' : 'Ignoré pour cette occurrence');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
@@ -945,7 +945,7 @@ function QualificationEncaissementClientTaux({
     setError(null);
     try {
       await qualifierEncaissementClientTaux(cabinetId, anomalie.id, utilisateurId, { type: 'bon_taux' });
-      notifier('Taux confirmé — aucun changement au calcul');
+      notifier('Taux confirmé, aucun changement au calcul');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
@@ -966,7 +966,7 @@ function QualificationEncaissementClientTaux({
         type: 'mauvais_taux',
         nouveauTaux: Number.parseFloat(nouveauTaux),
       });
-      notifier('Taux corrigé — montant transféré entre les deux catégories du calcul');
+      notifier('Taux corrigé, montant transféré entre les deux catégories du calcul');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
@@ -1009,7 +1009,7 @@ function QualificationEncaissementClientTaux({
         </div>
       )}
       <p className="reference">
-        Correction ponctuelle sur cette ligne uniquement — ne change pas le taux historique retenu pour ce
+        Correction ponctuelle sur cette ligne uniquement. Ne change pas le taux historique retenu pour ce
         client, l'anomalie se représentera sur un futur encaissement non lettré du même client.
       </p>
       {error && <p className="error">{error}</p>}
@@ -1042,7 +1042,7 @@ function QualificationTvaHotel({
     setError(null);
     try {
       await qualifierTvaHotel(cabinetId, anomalie.id, utilisateurId, type);
-      notifier(type === 'confirme' ? 'TVA hôtel à vérifier confirmée' : 'Ignoré — jugement IA écarté');
+      notifier(type === 'confirme' ? 'TVA hôtel à vérifier confirmée' : 'Ignoré, jugement IA écarté');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
@@ -1107,8 +1107,8 @@ function VerificationTvaHotel({
       });
       notifier(
         corrections > 0
-          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
-          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) TVA hôtel toujours ouverte(s) sur cette période`
+          ? `${corrections} correction(s) appliquée(s) au calcul, montant mis à jour`
+          : `Aucune correction détectée, ${anomaliesOuvertes} anomalie(s) TVA hôtel toujours ouverte(s) sur cette période`
       );
       setOuvert(false);
       onChanged();
@@ -1131,11 +1131,11 @@ function VerificationTvaHotel({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -1174,7 +1174,7 @@ function QualificationFraisVehicule({
     setError(null);
     try {
       await qualifierFraisVehicule(cabinetId, anomalie.id, utilisateurId, anomalie.typeAnomalie, type);
-      notifier(type === 'confirme' ? 'Frais véhicule à vérifier confirmé' : 'Ignoré — jugement IA écarté');
+      notifier(type === 'confirme' ? 'Frais véhicule à vérifier confirmé' : 'Ignoré, jugement IA écarté');
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la qualification');
@@ -1238,8 +1238,8 @@ function VerificationFraisVehicule({
       });
       notifier(
         corrections > 0
-          ? `${corrections} correction(s) appliquée(s) au calcul — montant mis à jour`
-          : `Aucune correction détectée — ${anomaliesOuvertes} anomalie(s) frais véhicule toujours ouverte(s) sur cette période`
+          ? `${corrections} correction(s) appliquée(s) au calcul, montant mis à jour`
+          : `Aucune correction détectée, ${anomaliesOuvertes} anomalie(s) frais véhicule toujours ouverte(s) sur cette période`
       );
       setOuvert(false);
       onChanged();
@@ -1262,11 +1262,11 @@ function VerificationFraisVehicule({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -1316,8 +1316,8 @@ function VerificationNumerotation({
       const toujoursOuvert = estDoublon ? doublonOuvert : trouOuvert;
       notifier(
         toujoursOuvert
-          ? `Anomalie toujours ouverte — des ${estDoublon ? 'doublons' : 'numéros manquants'} subsistent sur cette période`
-          : `Tous les ${estDoublon ? 'doublons' : 'numéros manquants'} ont été corrigés — anomalie levée`
+          ? `Anomalie toujours ouverte, des ${estDoublon ? 'doublons' : 'numéros manquants'} subsistent sur cette période`
+          : `Tous les ${estDoublon ? 'doublons' : 'numéros manquants'} ont été corrigés, anomalie levée`
       );
       setOuvert(false);
       onChanged();
@@ -1340,11 +1340,11 @@ function VerificationNumerotation({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -1401,7 +1401,7 @@ function VerificationSimple({
       const { anomaliesOuvertes } = await verifier(cabinetId, dossierId, { periodeDebut, periodeFin });
       notifier(
         anomaliesOuvertes === 0
-          ? `Anomalie ${nomAnomalie} levée — plus rien à signaler sur cette période`
+          ? `Anomalie ${nomAnomalie} levée, plus rien à signaler sur cette période`
           : `${anomaliesOuvertes} anomalie(s) ${nomAnomalie} toujours ouverte(s) sur cette période`
       );
       setOuvert(false);
@@ -1425,11 +1425,11 @@ function VerificationSimple({
   return (
     <div className="cycle-form">
       <label>
-        Période — début
+        Période de début
         <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
       </label>
       <label>
-        Période — fin
+        Période de fin
         <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
       </label>
       <button onClick={() => void handleVerifier()} disabled={submitting}>
@@ -1602,13 +1602,13 @@ function AnomalieRow({
               </ul>
             )}
             <p className="reference piece-technique">
-              (pièce {anomalie.referencePiece ?? '—'}
-              {date ? ` — ${date}` : ''})
+              (pièce {anomalie.referencePiece ?? 'inconnue'}
+              {date ? `, ${date}` : ''})
             </p>
           </>
         ) : (
           <p className="reference">
-            {date ? `${date} — ` : ''}
+            {date ? `${date}. ` : ''}
             {anomalie.referencePiece ? `Pièce : ${anomalie.referencePiece}` : 'Pièce inconnue'}
           </p>
         )}
@@ -1673,7 +1673,7 @@ function AnomalieRow({
                       ? 'incohérence taux produit'
                       : estIncoherenceTauxAutoliquidation
                         ? 'incohérence taux autoliquidation'
-                        : 'cadeau client — seuil dépassé'
+                        : 'cadeau client, seuil dépassé'
               }
             />
           </div>

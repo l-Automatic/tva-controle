@@ -163,7 +163,7 @@ function AjustementLigne({
     setError(null);
     try {
       await retirerAjustementCalcul(cabinetId, calculId, typeMontant, utilisateurId);
-      notifier('Ajustement retiré — montant d’origine rétabli');
+      notifier('Ajustement retiré, montant d’origine rétabli');
       onChange();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec du retrait de l’ajustement');
@@ -287,7 +287,7 @@ function ResultatCycleView({
         {aUnAjustementActif && <span className="reference"> (recalculée à partir des montants ajustés)</span>}
       </p>
       {anomaliesBloquantesOuvertes > 0 && <MessageCalculIncomplet nombre={anomaliesBloquantesOuvertes} />}
-      <p className="reference">Calcul {id} (brouillon — à valider dans le panneau « Calculs »)</p>
+      <p className="reference">Calcul {id} (brouillon, à valider dans le panneau « Calculs »)</p>
 
       <ul className="card-list">
         <AjustementLigne
@@ -344,7 +344,7 @@ function ResultatCycleView({
             {calcul.ecrituresExclues.map((e, i) => (
               <li key={i} className="card">
                 <p className="label">
-                  Compte {e.compte} — pièce {e.ledgerEntryId}
+                  Compte {e.compte}, pièce {e.ledgerEntryId}
                 </p>
                 <p className="reference">{e.motif}</p>
               </li>
@@ -355,7 +355,7 @@ function ResultatCycleView({
 
       {anomalies.length > 0 && (
         <>
-          <p className="reference">{anomalies.length} anomalie(s) non bloquante(s) — voir le panneau « Anomalies ».</p>
+          <p className="reference">{anomalies.length} anomalie(s) non bloquante(s), voir le panneau « Anomalies ».</p>
         </>
       )}
     </div>
@@ -412,7 +412,7 @@ export function CycleForm({
       setResultat(res);
       const message =
         res.anomaliesBloquantesOuvertes > 0
-          ? `Cycle calculé — ${res.anomaliesBloquantesOuvertes} anomalie(s) bloquante(s) à traiter`
+          ? `Cycle calculé, ${res.anomaliesBloquantesOuvertes} anomalie(s) bloquante(s) à traiter`
           : 'Cycle calculé';
       notifier(message);
       setMessageSucces(message);
@@ -513,11 +513,11 @@ export function CycleForm({
 
       <div className="cycle-form">
         <label>
-          Période — début
+          Période de début
           <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} />
         </label>
         <label>
-          Période — fin
+          Période de fin
           <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} />
         </label>
         <button onClick={() => void handleLancer()} disabled={submitting}>

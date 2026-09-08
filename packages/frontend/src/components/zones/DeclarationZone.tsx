@@ -95,7 +95,7 @@ function DeclarationCalculView({ cabinetId, calculId }: { cabinetId: string; cal
       </li>
       <LigneDeclaration
         numero="Ligne 4"
-        libelle="TVA due — acquisitions intracommunautaires"
+        libelle="TVA due, acquisitions intracommunautaires"
         montant={declaration.ligne04DueIntracom}
       />
       <LigneDeclaration numero="Ligne 6" libelle="Exportations" montant={declaration.ligne06Export} />
@@ -166,7 +166,7 @@ export function DeclarationZone({ cabinetId, dossierId }: DeclarationZoneProps) 
             <li key={c.id} className={`card${calculSelectionne?.id === c.id ? ' actif' : ''}`}>
               <button className="secondary" onClick={() => setCalculSelectionne(c)}>
                 <BadgeStatut statut={c.statut} libelle={LIBELLE_STATUT_CALCUL[c.statut]} />
-                {formatDate(c.periodeDebut)} — {formatDate(c.periodeFin)}
+                {formatDate(c.periodeDebut)} au {formatDate(c.periodeFin)}
               </button>
             </li>
           ))}

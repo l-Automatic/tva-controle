@@ -17,7 +17,7 @@ export const ZONES: { id: Zone; libelle: string; description: string; roles?: Ro
     id: 'configuration',
     libelle: 'Configuration du dossier',
     description:
-      "Réglages fiscaux durables du dossier — s'appliquent à tous les cycles tant qu'ils ne sont pas modifiés.",
+      "Réglages fiscaux durables du dossier. S'appliquent à tous les cycles tant qu'ils ne sont pas modifiés.",
   },
   {
     id: 'historique',
@@ -28,13 +28,13 @@ export const ZONES: { id: Zone; libelle: string; description: string; roles?: Ro
     id: 'declaration',
     libelle: 'Déclaration',
     description:
-      "Montants à reporter dans la CA3 pour un calcul donné — première version, affichage seulement (déclarer réellement viendra plus tard).",
+      "Montants à reporter dans la CA3 pour un calcul donné. Première version, affichage seulement (déclarer réellement viendra plus tard).",
   },
   {
     id: 'parametres',
     libelle: 'Paramètres',
     description:
-      'Réglages techniques — clé Mistral (cabinet), et décisions déjà validées modifiables (confiance des tiers, comptes retirés d’une convention, taux rejetés).',
+      'Réglages du cabinet (clé Mistral, jeton Pennylane, dégradé du volet latéral) et réglages du dossier (régime TVA, décisions déjà validées modifiables).',
   },
   {
     id: 'utilisateurs',

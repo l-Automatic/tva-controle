@@ -32,7 +32,7 @@ export function formatMontant(montant: number): string {
 export function MessageCalculIncomplet({ nombre }: { nombre: number }) {
   return (
     <p className="avertissement">
-      Ce calcul n'est pas définitif — {nombre} anomalie{nombre > 1 ? 's' : ''} critique{nombre > 1 ? 's' : ''} à
+      Ce calcul n'est pas définitif : {nombre} anomalie{nombre > 1 ? 's' : ''} critique{nombre > 1 ? 's' : ''} à
       résoudre avant validation.
     </p>
   );
@@ -169,7 +169,7 @@ export function CalculRow({
       <div className="card-header">
         <BadgeStatut statut={calcul.statut} libelle={LIBELLE_STATUT_CALCUL[calcul.statut]} />
         <span className="periode">
-          {formatDate(calcul.periodeDebut)} — {formatDate(calcul.periodeFin)}
+          {formatDate(calcul.periodeDebut)} au {formatDate(calcul.periodeFin)}
         </span>
       </div>
       <p className={montantEnGrand ? 'label montant-principal' : 'label'}>
@@ -212,7 +212,7 @@ export function CalculRow({
           <button
             onClick={() => void handleValider()}
             disabled={submitting !== null || estIncomplet}
-            title={estIncomplet ? 'Anomalies bloquantes encore ouvertes — résolvez-les avant de valider' : undefined}
+            title={estIncomplet ? 'Anomalies bloquantes encore ouvertes, résolvez-les avant de valider' : undefined}
           >
             <ICONE_ACTION.valider size={14} aria-hidden="true" />
             {submitting === 'valider' ? '…' : 'Valider'}
@@ -223,9 +223,9 @@ export function CalculRow({
           </button>
         </div>
       ) : calcul.statut === 'rejete' ? (
-        <p className="reference">Rejeté — redeviendra brouillon si un cycle est relancé sur cette période.</p>
+        <p className="reference">Rejeté, redeviendra brouillon si un cycle est relancé sur cette période.</p>
       ) : (
-        <p className="reference">Immuable — plus aucune modification possible après validation.</p>
+        <p className="reference">Immuable, plus aucune modification possible après validation.</p>
       )}
       {error && <p className={conflit ? 'error error-409' : 'error'}>{error}</p>}
     </li>

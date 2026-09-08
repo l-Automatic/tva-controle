@@ -77,8 +77,8 @@ function FactureCard({
       });
       notifier(
         paiementsValides.length === 0
-          ? 'Facture rapprochée — aucun paiement correspondant'
-          : `Facture rapprochée — ${paiementsValides.length} paiement(s) validé(s)`
+          ? 'Facture rapprochée, aucun paiement correspondant'
+          : `Facture rapprochée, ${paiementsValides.length} paiement(s) validé(s)`
       );
       onTraite();
     } catch (err) {
@@ -96,10 +96,10 @@ function FactureCard({
           l'information. */}
       <p className="label">
         {facture.compteFournisseur}
-        {facture.libelleCompteFournisseur && ` — ${facture.libelleCompteFournisseur}`}
+        {facture.libelleCompteFournisseur && ` (${facture.libelleCompteFournisseur})`}
       </p>
       <p className="reference">
-        {formatDate(facture.date)} — {facture.libelle ?? 'Facture sans libellé'} — pièce {facture.ledgerEntryId}
+        {formatDate(facture.date)}, {facture.libelle ?? 'Facture sans libellé'} (pièce {facture.ledgerEntryId})
       </p>
       <p className="label">
         Montant TTC : <strong>{formatMontant(facture.montantFactureTotal)}</strong>
@@ -117,7 +117,7 @@ function FactureCard({
                   onChange={() => toggle(c.ledgerEntryId)}
                   disabled={submitting}
                 />
-                {c.libelle ?? 'Paiement sans libellé'} — {formatMontant(c.montant)} ({formatDate(c.date)})
+                {c.libelle ?? 'Paiement sans libellé'}, {formatMontant(c.montant)} ({formatDate(c.date)})
               </label>
               {c.confiance && <span className={`badge confiance-${c.confiance}`}>{LIBELLE_CONFIANCE[c.confiance]}</span>}
             </li>
@@ -187,7 +187,7 @@ export function RapprochementPaiementAchatPopup({
         </div>
         <p className="reference">
           Factures de service non payées, avec leurs paiements candidats trouvés sur toute la fenêtre de l'exercice.
-          Les cases précochées reflètent une suggestion IA quand disponible — à valider ou corriger avant d'envoyer.
+          Les cases précochées reflètent une suggestion IA quand disponible, à valider ou corriger avant d'envoyer.
         </p>
         {rechargement && <p className="empty">Actualisation…</p>}
         {!rechargement && factures.length === 0 ? (

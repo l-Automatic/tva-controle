@@ -35,6 +35,12 @@ import {
 } from '../types';
 import { ParametresDecisionsPanel } from './ParametresDecisionsPanel';
 
+// Scindé en deux sous-onglets (brief v55) — même principe de structure que
+// ConfigurationZone.tsx (SousOngletConfiguration/ONGLETS), pour distinguer
+// clairement ce qui s'applique à tout le cabinet de ce qui est propre à ce
+// dossier précis, plutôt qu'un seul onglet mélangeant tout.
+export type SousOngletParametres = 'cabinet' | 'dossier';
+
 interface ParametresPanelProps {
   cabinetId: string;
   dossierId: string;
@@ -42,6 +48,8 @@ interface ParametresPanelProps {
   role: Role;
   degradeActif: string;
   onDegradeChange: (degrade: string) => void;
+  sousOnglet: SousOngletParametres;
+  onChangeSousOnglet: (onglet: SousOngletParametres) => void;
   // Appelé après une synchronisation réussie (brief v27), pour que la
   // liste des dossiers affichée dans le volet latéral (Sidebar.tsx) se
   // rafraîchisse et montre les nouveaux dossiers immédiatement.
@@ -50,6 +58,21 @@ interface ParametresPanelProps {
   // liste des dossiers à configurer (brief v28) après une synchronisation.
   dossiersRefreshKey?: number;
 }
+
+const ONGLETS_PARAMETRES: { id: SousOngletParametres; libelle: string; description: string }[] = [
+  {
+    id: 'cabinet',
+    libelle: 'Paramètres cabinet',
+    description:
+      "Réglages qui s'appliquent à tout le cabinet, tous dossiers confondus : clé Mistral, jeton API Cabinet Pennylane, synchronisation et activation des dossiers, apparence du volet latéral.",
+  },
+  {
+    id: 'dossier',
+    libelle: 'Paramètres dossier',
+    description:
+      "Réglages propres à ce dossier précis : régime TVA sur encaissement, date de début d'exercice, paramètres libres, décisions déjà validées modifiables.",
+  },
+];
 
 const CLE_MISTRAL = 'mistral_api_key';
 
@@ -112,7 +135,7 @@ function ChampSecretCabinet({
     <div className="parametre-secret-cabinet">
       <p className="reference">
         {libelle} : <strong>{loading ? '…' : (valeurAffichee ?? 'Non définie')}</strong>
-        {parametre && ` — dernière mise à jour ${formatDate(parametre.updatedAt)}`}
+        {parametre && ` (dernière mise à jour ${formatDate(parametre.updatedAt)})`}
       </p>
       <div className="cycle-form">
         <label className="cycle-form-token">
@@ -244,7 +267,7 @@ function CabinetSection({
         onDefini={() => void charger()}
       />
       <p className="reference cycle-form-warning">
-        Remplace la saisie manuelle d'un token à chaque cycle — un seul jeton pour tout le cabinet, résolu
+        Remplace la saisie manuelle d'un token à chaque cycle. Un seul jeton pour tout le cabinet, résolu
         automatiquement pour chaque dossier Pennylane.
       </p>
       <div className="panel-separateur" />
@@ -371,7 +394,7 @@ function DossiersOnboardingSection({
         <h2>Dossiers à configurer</h2>
       </div>
       <p className="reference">
-        Dossiers découverts via la synchronisation, avec un régime fiscal par défaut ("réel normal") — à confirmer
+        Dossiers découverts via la synchronisation, avec un régime fiscal par défaut ("réel normal"). À confirmer
         avant utilisation normale.
       </p>
       {error && <p className="error">{error}</p>}
@@ -566,15 +589,18 @@ function DossiersActivationSection({ cabinetId }: { cabinetId: string }) {
   );
 }
 
+// Cabinet-wide depuis le brief v55 (auparavant un paramètre dossier,
+// rechargé et réécrit à chaque dossier) : un seul choix pour tout le
+// cabinet, réservé à admin_cabinet (masqué entièrement pour un
+// collaborateur dans ParametresPanel ci-dessous, même principe que
+// CabinetSection). Écrit via definirParametreCabinet, plus definirParametreDossier.
 function DegradeSection({
   cabinetId,
-  dossierId,
   utilisateurId,
   degradeActif,
   onDegradeChange,
 }: {
   cabinetId: string;
-  dossierId: string;
   utilisateurId: string;
   degradeActif: string;
   onDegradeChange: (degrade: string) => void;
@@ -587,9 +613,9 @@ function DegradeSection({
     setSubmitting(degrade);
     setError(null);
     try {
-      await definirParametreDossier(cabinetId, dossierId, utilisateurId, CLE_THEME_DEGRADE, degrade);
+      await definirParametreCabinet(cabinetId, utilisateurId, CLE_THEME_DEGRADE, degrade);
       onDegradeChange(degrade);
-      notifier('Dégradé du volet mis à jour');
+      notifier('Dégradé du cabinet mis à jour');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
     } finally {
@@ -603,8 +629,8 @@ function DegradeSection({
         <h2>Apparence</h2>
       </div>
       <p className="reference">
-        Dégradé du volet latéral pour ce dossier — sert aussi de couleur secondaire pour les boutons principaux et
-        les badges actifs.
+        Dégradé du volet latéral pour tout le cabinet (tous les dossiers), sert aussi de couleur secondaire pour
+        les boutons principaux et les badges actifs. Réservé aux administrateurs du cabinet.
       </p>
       <div className="degrade-grille">
         {DEGRADES_SIDEBAR.map((degrade) => (
@@ -780,7 +806,7 @@ function DateDebutExerciceSection({
       </div>
       <p className="reference cycle-form-warning">
         Nécessaire pour calculer la ligne 10 de la CA3 (crédit de TVA antérieur, solde débiteur du 44567 depuis le
-        début de l'exercice) — tant qu'elle n'est pas renseignée, cette ligne reste indisponible dans l'onglet
+        début de l'exercice). Tant qu'elle n'est pas renseignée, cette ligne reste indisponible dans l'onglet
         Déclaration. Distinct de « Date début exercice » dans Identité du dossier.
       </p>
     </section>
@@ -848,7 +874,7 @@ function DossierSection({
         <h2>Paramètres dossier</h2>
       </div>
       <p className="reference">
-        Clé/valeur libres, pour préparer le terrain — aucun paramètre ici n'est encore exploité par un contrôle.
+        Clé/valeur libres, pour préparer le terrain. Aucun paramètre ici n'est encore exploité par un contrôle.
       </p>
       {(() => {
         const visibles = parametres.filter(
@@ -888,11 +914,12 @@ function DossierSection({
   );
 }
 
-// Deux sous-sections distinctes et clairement séparées visuellement : les
-// routes API sont déjà séparées (/parametres-cabinet vs
-// /dossiers/:id/parametres). Depuis le brief v25, /parametres-cabinet
-// répond 403 à un collaborateur côté backend — CabinetSection est donc
-// masquée ENTIÈREMENT pour ce rôle, pas juste désactivée ; le reste
+// Scindé en deux vrais sous-onglets depuis le brief v55 (auparavant une
+// simple succession de sections dans un seul onglet) : les routes API sont
+// déjà séparées (/parametres-cabinet vs /dossiers/:id/parametres). Depuis
+// le brief v25, /parametres-cabinet répond 403 à un collaborateur côté
+// backend, donc CabinetSection et DegradeSection (cabinet-wide depuis v55)
+// sont masquées ENTIÈREMENT pour ce rôle, pas juste désactivées ; le reste
 // (paramètres dossier) reste accessible aux deux rôles, cf. brief refonte
 // section 3 pour ce choix d'origine.
 export function ParametresPanel({
@@ -902,31 +929,59 @@ export function ParametresPanel({
   role,
   degradeActif,
   onDegradeChange,
+  sousOnglet,
+  onChangeSousOnglet,
   onDossiersSynchronises = () => {},
   dossiersRefreshKey = 0,
 }: ParametresPanelProps) {
+  const ongletActif = ONGLETS_PARAMETRES.find((o) => o.id === sousOnglet);
+
   return (
-    <>
-      {role === 'admin_cabinet' && (
-        <CabinetSection
-          cabinetId={cabinetId}
-          utilisateurId={utilisateurId}
-          onDossiersSynchronises={onDossiersSynchronises}
-        />
-      )}
-      <DossiersOnboardingSection cabinetId={cabinetId} refreshKey={dossiersRefreshKey} />
-      {role === 'admin_cabinet' && <DossiersActivationSection cabinetId={cabinetId} />}
-      <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      <DateDebutExerciceSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-      <DegradeSection
-        cabinetId={cabinetId}
-        dossierId={dossierId}
-        utilisateurId={utilisateurId}
-        degradeActif={degradeActif}
-        onDegradeChange={onDegradeChange}
-      />
-      <ParametresDecisionsPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
-    </>
+    <div>
+      <nav className="sous-onglets">
+        {ONGLETS_PARAMETRES.map((o) => (
+          <button
+            key={o.id}
+            className={`sous-onglet${sousOnglet === o.id ? ' actif' : ''}`}
+            onClick={() => onChangeSousOnglet(o.id)}
+          >
+            {o.libelle}
+          </button>
+        ))}
+      </nav>
+      {ongletActif && <p className="sous-onglet-description">{ongletActif.description}</p>}
+
+      <div key={sousOnglet} className="sous-onglet-contenu">
+        {sousOnglet === 'cabinet' && (
+          <>
+            {role === 'admin_cabinet' && (
+              <CabinetSection
+                cabinetId={cabinetId}
+                utilisateurId={utilisateurId}
+                onDossiersSynchronises={onDossiersSynchronises}
+              />
+            )}
+            <DossiersOnboardingSection cabinetId={cabinetId} refreshKey={dossiersRefreshKey} />
+            {role === 'admin_cabinet' && <DossiersActivationSection cabinetId={cabinetId} />}
+            {role === 'admin_cabinet' && (
+              <DegradeSection
+                cabinetId={cabinetId}
+                utilisateurId={utilisateurId}
+                degradeActif={degradeActif}
+                onDegradeChange={onDegradeChange}
+              />
+            )}
+          </>
+        )}
+        {sousOnglet === 'dossier' && (
+          <>
+            <DossierSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+            <RegimeTvaSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+            <DateDebutExerciceSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+            <ParametresDecisionsPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+          </>
+        )}
+      </div>
+    </div>
   );
 }

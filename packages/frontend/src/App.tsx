@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ATraiterPanel } from './components/ATraiterPanel';
 import { LoginScreen } from './components/LoginScreen';
-import { ParametresPanel } from './components/ParametresPanel';
+import { ParametresPanel, type SousOngletParametres } from './components/ParametresPanel';
 import { ProgressionPanel } from './components/ProgressionPanel';
 import { Sidebar, ZONES, type Zone } from './components/Sidebar';
 import { ConfigurationZone, type SousOngletConfiguration } from './components/zones/ConfigurationZone';
@@ -9,7 +9,7 @@ import { CycleZone } from './components/zones/CycleZone';
 import { DeclarationZone } from './components/zones/DeclarationZone';
 import { HistoriqueZone } from './components/zones/HistoriqueZone';
 import { UtilisateursZone } from './components/zones/UtilisateursZone';
-import { definirJeton, fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresDossier, surSessionExpiree } from './api';
+import { definirJeton, fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresCabinet, surSessionExpiree } from './api';
 import { toDateOnly } from './dateUtils';
 import {
   CLE_THEME_DEGRADE,
@@ -53,6 +53,7 @@ export function App() {
   const [dossier, setDossier] = useState<Dossier | null>(chargerDossier);
   const [zone, setZone] = useState<Zone>('cycle');
   const [sousOngletConfiguration, setSousOngletConfiguration] = useState<SousOngletConfiguration>('comptes');
+  const [sousOngletParametres, setSousOngletParametres] = useState<SousOngletParametres>('cabinet');
   const [periodeCycle, setPeriodeCycle] = useState<{ debut: string; fin: string } | null>(null);
   const [aTraiterRefreshKey, setATraiterRefreshKey] = useState(0);
   // Brief v27 : bumpé après "Synchroniser les dossiers" pour que la
@@ -110,12 +111,12 @@ export function App() {
   const cabinetId = session?.utilisateur.cabinetId ?? '';
 
   useEffect(() => {
-    if (!cabinetId || !dossier) {
+    if (!cabinetId) {
       setDegrade(DEGRADE_PAR_DEFAUT);
       return;
     }
     let annule = false;
-    fetchParametresDossier(cabinetId, dossier.id).then((parametres) => {
+    fetchParametresCabinet(cabinetId).then((parametres) => {
       if (annule) return;
       const param = parametres.find((p) => p.cle === CLE_THEME_DEGRADE);
       setDegrade(typeof param?.valeur === 'string' ? param.valeur : DEGRADE_PAR_DEFAUT);
@@ -123,7 +124,7 @@ export function App() {
     return () => {
       annule = true;
     };
-  }, [cabinetId, dossier]);
+  }, [cabinetId]);
 
   if (!session) {
     return <LoginScreen onConnecte={connexionReussie} />;
@@ -313,6 +314,8 @@ export function App() {
                   onDegradeChange={setDegrade}
                   onDossiersSynchronises={() => setDossiersRefreshKey((k) => k + 1)}
                   dossiersRefreshKey={dossiersRefreshKey}
+                  sousOnglet={sousOngletParametres}
+                  onChangeSousOnglet={setSousOngletParametres}
                 />
               )}
               {zone === 'utilisateurs' && role === 'admin_cabinet' && <UtilisateursZone cabinetId={cabinetId} />}

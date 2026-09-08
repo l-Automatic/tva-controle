@@ -61,7 +61,7 @@ function ChampSynchronise({ libelle, valeur }: { libelle: string; valeur: string
   return (
     <div className="identite-champ-lecture">
       <span className="identite-champ-lecture-libelle">{libelle}</span>
-      <span className="identite-champ-lecture-valeur">{valeur || '—'}</span>
+      <span className="identite-champ-lecture-valeur">{valeur || 'Non renseigné'}</span>
     </div>
   );
 }
@@ -150,7 +150,7 @@ export function IdentiteDossierPanel({ cabinetId, dossierId }: { cabinetId: stri
         <h2>Identité du dossier</h2>
       </div>
 
-      <p className="reference">Synchronisé automatiquement depuis Pennylane — non modifiable ici.</p>
+      <p className="reference">Synchronisé automatiquement depuis Pennylane, non modifiable ici.</p>
       <div className="identite-lecture-grille">
         <ChampSynchronise libelle="Nom" valeur={dossier.nom} />
         <ChampSynchronise libelle="Nom commercial" valeur={dossier.nomCommercial} />
@@ -181,7 +181,7 @@ export function IdentiteDossierPanel({ cabinetId, dossierId }: { cabinetId: stri
             onChange={(e) => majChamp('formeJuridique', e.target.value)}
             disabled={submitting}
           >
-            <option value="">—</option>
+            <option value="">Non renseigné</option>
             {formesDisponibles.map((f) => (
               <option key={f} value={f}>
                 {f}
@@ -196,7 +196,7 @@ export function IdentiteDossierPanel({ cabinetId, dossierId }: { cabinetId: stri
             onChange={(e) => majChamp('fiscalite', e.target.value as Fiscalite | '')}
             disabled={submitting}
           >
-            <option value="">—</option>
+            <option value="">Non renseigné</option>
             {(Object.keys(LIBELLE_FISCALITE) as Fiscalite[]).map((f) => (
               <option key={f} value={f}>
                 {LIBELLE_FISCALITE[f]}
@@ -211,7 +211,7 @@ export function IdentiteDossierPanel({ cabinetId, dossierId }: { cabinetId: stri
             onChange={(e) => majChamp('comptabilite', e.target.value as Comptabilite | '')}
             disabled={submitting}
           >
-            <option value="">—</option>
+            <option value="">Non renseigné</option>
             {(Object.keys(LIBELLE_COMPTABILITE) as Comptabilite[]).map((c) => (
               <option key={c} value={c}>
                 {LIBELLE_COMPTABILITE[c]}

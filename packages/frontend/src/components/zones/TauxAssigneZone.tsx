@@ -68,7 +68,7 @@ function SuggestionsProduitCharge({
   return (
     <div className="suggestions-taux">
       <p className="reference">
-        Comptes mouvementés au dernier cycle sans taux assigné — choisissez un taux pour chacun, ou ignorez-les (ils
+        Comptes mouvementés au dernier cycle sans taux assigné. Choisissez un taux pour chacun, ou ignorez-les (ils
         réapparaîtront au prochain cycle).
       </p>
       <ul className="card-list">
@@ -259,7 +259,7 @@ function SuggestionsClient({
   return (
     <div className="suggestions-taux">
       <p className="reference">
-        Comptes clients mouvementés au dernier cycle sans taux connu — choisissez un taux pour chacun, ou ignorez-les
+        Comptes clients mouvementés au dernier cycle sans taux connu. Choisissez un taux pour chacun, ou ignorez-les
         (ils réapparaîtront au prochain cycle).
       </p>
       <ul className="card-list">
@@ -267,7 +267,7 @@ function SuggestionsClient({
           <li key={s.numeroCompteTiers} className="card statut-carte-brouillon">
             <p className="label">
               Client {s.numeroCompteTiers}
-              {s.nomTiers && ` — ${s.nomTiers}`}
+              {s.nomTiers && `, ${s.nomTiers}`}
             </p>
             <div className="actions">
               <select
@@ -373,8 +373,8 @@ function TauxAssigneClientSection({
         <h3>Client</h3>
       </div>
       <p className="reference">
-        Assignation directe, distincte de la détection automatique sur historique lettré (onglet Taux historique) —
-        utile si le taux habituel d’un client est déjà connu, sans attendre qu’un historique se constitue.
+        Assignation directe, distincte de la détection automatique sur historique lettré (onglet Taux historique).
+        Utile si le taux habituel d’un client est déjà connu, sans attendre qu’un historique se constitue.
       </p>
       <SuggestionsClient
         cabinetId={cabinetId}

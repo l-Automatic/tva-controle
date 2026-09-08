@@ -16,13 +16,13 @@ import { InfoTooltip } from './InfoTooltip';
 // Source de confusion documentée (GLOSSAIRE_PARAMETRES.md) : ce nom laisse
 // penser à de l'autoliquidation, ce n'est pas le cas — cf. brief v3, section 2.
 const INFOBULLE_CHARGE_SERVICE =
-  "Tout achat de prestation de service, autoliquidé ou non — détermine si la TVA déductible attend le paiement de la facture. Pour configurer les comptes d'autoliquidation spécifiquement, voir l'onglet Conventions génériques.";
+  "Tout achat de prestation de service, autoliquidé ou non. Détermine si la TVA déductible attend le paiement de la facture. Pour configurer les comptes d'autoliquidation spécifiquement, voir l'onglet Conventions génériques.";
 
 // Distinction volontaire de "Comptes d'équipement" : ici les vrais comptes
 // d'immobilisation confirmés (218X, 215X...), pour un contrôle bloquant
 // distinct — cf. brief v9, coherenceCompteImmobilisation.ts côté backend.
 const INFOBULLE_IMMOBILISATION =
-  "Distinct des comptes d'équipement (petit équipement à surveiller) : ici les vrais comptes d'immobilisation (218X, 215X…). Sert à détecter une erreur de saisie fréquente — TVA déductible passée en 44566 au lieu de 44562.";
+  "Distinct des comptes d'équipement (petit équipement à surveiller) : ici les vrais comptes d'immobilisation (218X, 215X…). Sert à détecter une erreur de saisie fréquente : TVA déductible passée en 44566 au lieu de 44562.";
 
 interface ConventionsComptesPanelProps {
   cabinetId: string;

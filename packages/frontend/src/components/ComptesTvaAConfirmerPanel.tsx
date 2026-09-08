@@ -51,7 +51,7 @@ function CompteCard({
       const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, cle, compte.compte);
       await confirmerConvention(cabinetId, id, utilisateurId);
       const libelle = CHOIX.find((c) => c.cle === cle)?.libelle ?? cle;
-      notifier(`Compte ${compte.compte} confirmé — ${libelle}`);
+      notifier(`Compte ${compte.compte} confirmé : ${libelle}`);
       onTraite();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de la confirmation du compte ${compte.compte}`);
@@ -119,11 +119,11 @@ export function ComptesTvaAConfirmerPanel({ cabinetId, dossierId, utilisateurId 
       </div>
       <p className="reference">
         Comptes de la famille TVA (445xx) avec du mouvement sur la période mais jamais confirmés (dû/déductible,
-        BTP ou intracom) — bloque le lancement d'un cycle tant qu'ils ne sont pas tous confirmés.
+        BTP ou intracom). Bloque le lancement d'un cycle tant qu'ils ne sont pas tous confirmés.
       </p>
       <div className="cycle-form">
         <label>
-          Période — début
+          Période de début
           <input
             type="date"
             value={periodeDebut}
@@ -132,7 +132,7 @@ export function ComptesTvaAConfirmerPanel({ cabinetId, dossierId, utilisateurId 
           />
         </label>
         <label>
-          Période — fin
+          Période de fin
           <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={loading} />
         </label>
         <button onClick={() => void charger()} disabled={loading}>

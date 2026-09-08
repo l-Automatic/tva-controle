@@ -72,7 +72,7 @@ function CompteCard({
     try {
       const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, cle, [compte.compte]);
       await confirmerConvention(cabinetId, id, utilisateurId);
-      notifier(`Compte ${compte.compte} catégorisé — ${libelle}`);
+      notifier(`Compte ${compte.compte} catégorisé : ${libelle}`);
       onTraite();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de la catégorisation du compte ${compte.compte}`);
@@ -96,7 +96,7 @@ function CompteCard({
         compte.compte,
       ]);
       await confirmerConvention(cabinetId, id, utilisateurId);
-      notifier(`Compte ${compte.compte} — aucune catégorie, ne réapparaîtra plus`);
+      notifier(`Compte ${compte.compte}, aucune catégorie, ne réapparaîtra plus`);
       onTraite();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de l'enregistrement du compte ${compte.compte}`);
@@ -162,7 +162,7 @@ function CompteSousCategorieAutoliquidationCard({
     try {
       const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, cle, [compte.compte]);
       await confirmerConvention(cabinetId, id, utilisateurId);
-      notifier(`Compte ${compte.compte} — ${lie ? 'lié à l\'autoliquidation' : 'non lié à l\'autoliquidation'}`);
+      notifier(`Compte ${compte.compte} : ${lie ? 'lié à l\'autoliquidation' : 'non lié à l\'autoliquidation'}`);
       onTraite();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de l'enregistrement du compte ${compte.compte}`);

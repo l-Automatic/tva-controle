@@ -66,7 +66,7 @@ function SuggestionRow({
         [compte.compte]
       );
       await confirmerConvention(cabinetId, id, utilisateurId);
-      notifier(`Compte ${compte.compte} refusé — ne sera plus suggéré`);
+      notifier(`Compte ${compte.compte} refusé, ne sera plus suggéré`);
       onTraite();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec du refus du compte ${compte.compte}`);
@@ -115,7 +115,7 @@ export function SuggestionsAutoliquidationPanel({
         <h2>Comptes d'autoliquidation suggérés ({suggestions.length})</h2>
       </div>
       <p className="reference">
-        Détectés parmi les comptes de charge de service sans sous-catégorie d'autoliquidation — confirmez pour les
+        Détectés parmi les comptes de charge de service sans sous-catégorie d'autoliquidation. Confirmez pour les
         ajouter à la convention <code>comptes_charge_autoliquidation</code>, ou refusez si la suggestion ne
         convient pas (le compte ne sera plus proposé ici).
       </p>

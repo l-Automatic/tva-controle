@@ -86,8 +86,8 @@ function TauxRow({
   const estCandidate = proposition.statut === 'candidate';
   const libelle =
     origine === 'compte'
-      ? `Compte de TVA collectée ${proposition.compteProduitOuCharge ?? '—'} — taux habituel ${proposition.tauxHabituel ?? '—'}%`
-      : `Client ${proposition.numeroCompteTiers ?? '—'} — taux habituel ${proposition.tauxHabituel ?? '—'}%`;
+      ? `Compte de TVA collectée ${proposition.compteProduitOuCharge ?? 'inconnu'}, taux habituel ${proposition.tauxHabituel ?? 'inconnu'}%`
+      : `Client ${proposition.numeroCompteTiers ?? 'inconnu'}, taux habituel ${proposition.tauxHabituel ?? 'inconnu'}%`;
 
   return (
     <li className="card proposition">

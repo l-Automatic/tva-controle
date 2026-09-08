@@ -20,7 +20,7 @@ interface VehiculesPanelProps {
 }
 
 function formatMontant(montant: number | null): string {
-  if (montant === null) return '—';
+  if (montant === null) return 'montant inconnu';
   return `${montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`;
 }
 
@@ -114,7 +114,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
       </div>
       <p className="reference">
         Détermine la déductibilité du carburant (80 % tourisme / 100 % utilitaire) et signale les cas de flotte
-        mixte — renseigné une fois pour toutes, sans workflow de confirmation.
+        mixte. Renseigné une fois pour toutes, sans workflow de confirmation.
       </p>
       {/* Passait trop inaperçu en simple texte de référence (brief v54) —
           même classe que MessageCalculIncomplet (CalculsPanel.tsx), seul
@@ -132,12 +132,12 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
         {vehicules.map((v) => (
           <li key={v.id} className="card">
             <p className="label">
-              {v.designation ?? 'Véhicule sans désignation'} — <strong>{LIBELLE_TYPE_BIEN_VEHICULE[v.typeBien]}</strong>
+              {v.designation ?? 'Véhicule sans désignation'}, <strong>{LIBELLE_TYPE_BIEN_VEHICULE[v.typeBien]}</strong>
             </p>
             <p className="reference">
               {formatMontant(v.montantHt)}
-              {v.dateAcquisition ? ` — acquis le ${v.dateAcquisition.split('T')[0]}` : ''}
-              {v.typeCarburant ? ` — ${LIBELLE_TYPE_CARBURANT[v.typeCarburant]}` : ''}
+              {v.dateAcquisition ? `, acquis le ${v.dateAcquisition.split('T')[0]}` : ''}
+              {v.typeCarburant ? `, ${LIBELLE_TYPE_CARBURANT[v.typeCarburant]}` : ''}
             </p>
             <div className="actions">
               <button

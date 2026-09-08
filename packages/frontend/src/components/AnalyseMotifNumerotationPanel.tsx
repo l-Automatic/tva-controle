@@ -26,7 +26,7 @@ export const RECOMMANDATION_PERIODE = (
   <>
     Pour une première analyse, choisissez une période large (plusieurs mois) pour que le motif dominant se
     dégage clairement. Si le format a changé en cours d'exercice, limitez la période à la partie où le nouveau
-    format s'applique uniquement — mélanger l'ancien et le nouveau format dans la même analyse produira un
+    format s'applique uniquement : mélanger l'ancien et le nouveau format dans la même analyse produira un
     résultat confus.
   </>
 );
@@ -75,7 +75,7 @@ export function AnalyseMotifNumerotationPanel({
       });
       setMotifPropose(resultat);
       if (resultat) {
-        notifier('Motif de numérotation proposé — à confirmer dans Conventions génériques');
+        notifier('Motif de numérotation proposé, à confirmer dans Conventions génériques');
         onAnalyseTerminee();
       } else {
         notifier('Aucun motif cohérent détecté');
@@ -93,16 +93,16 @@ export function AnalyseMotifNumerotationPanel({
         <h2>Analyser le motif de numérotation des factures</h2>
       </div>
       <p className="reference">
-        Borné à l'exercice en cours par défaut (modifiable) — propose un motif candidate à confirmer ci-dessous,
+        Borné à l'exercice en cours par défaut (modifiable). Propose un motif candidate à confirmer ci-dessous,
         jamais appliqué automatiquement. Peut être relancée à tout moment si le format change.
       </p>
       <div className="cycle-form">
         <label>
-          Période — début
+          Période de début
           <input type="date" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} disabled={submitting} />
         </label>
         <label>
-          Période — fin
+          Période de fin
           <input type="date" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} disabled={submitting} />
         </label>
         <button onClick={() => void handleAnalyser()} disabled={submitting}>

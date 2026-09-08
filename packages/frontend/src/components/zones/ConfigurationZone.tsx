@@ -49,43 +49,43 @@ const ONGLETS: { id: SousOngletConfiguration; libelle: string; description: stri
     id: 'identite',
     libelle: 'Identité',
     description:
-      "Informations d'identité du dossier — celles synchronisées depuis Pennylane sont en lecture seule, le reste se complète manuellement.",
+      "Informations d'identité du dossier. Celles synchronisées depuis Pennylane sont en lecture seule, le reste se complète manuellement.",
   },
   {
     id: 'comptes',
     libelle: 'Conventions de comptes',
     description:
-      'Catégorise chaque compte de charge/produit en service, équipement, ou carburant — détermine si la TVA suit la règle du paiement (service) ou de la facturation (bien).',
+      'Catégorise chaque compte de charge/produit en service, équipement, ou carburant, et détermine si la TVA suit la règle du paiement (service) ou de la facturation (bien).',
   },
   {
     id: 'generiques',
     libelle: 'Conventions génériques',
     description:
-      "Réglages ponctuels sans catégorie dédiée — aujourd'hui, les comptes utilisés pour l'autoliquidation (prestations intracommunautaires).",
+      "Réglages ponctuels sans catégorie dédiée : aujourd'hui, les comptes utilisés pour l'autoliquidation (prestations intracommunautaires).",
   },
   {
     id: 'taux',
     libelle: 'Taux historique',
     description:
-      "Vérifie que le taux de TVA appliqué correspond à l'habitude du dossier — signale un écart, ne choisit rien à ta place.",
+      "Vérifie que le taux de TVA appliqué correspond à l'habitude du dossier. Signale un écart, ne choisit rien à ta place.",
   },
   {
     id: 'tauxAssigne',
     libelle: 'Taux assigné',
     description:
-      'Attribue directement un taux de TVA à un compte ou un client, une fois pour toutes — utile pour un contrôle de cohérence en fin d’exercice, ou pour éviter d’attendre qu’un historique se constitue.',
+      'Attribue directement un taux de TVA à un compte ou un client, une fois pour toutes. Utile pour un contrôle de cohérence en fin d’exercice, ou pour éviter d’attendre qu’un historique se constitue.',
   },
   {
     id: 'vehicules',
     libelle: 'Parc de véhicules',
     description:
-      'Renseigne les véhicules du dossier — détermine la déductibilité du carburant (tourisme/utilitaire) et signale les flottes mixtes.',
+      'Renseigne les véhicules du dossier. Détermine la déductibilité du carburant (tourisme/utilitaire) et signale les flottes mixtes.',
   },
   {
     id: 'comptesTva',
     libelle: 'Comptes TVA à confirmer',
     description:
-      "Confirme le rôle des comptes de la famille TVA (445xx) mouvementés (dû/déductible, BTP ou intracom) — bloque le lancement d'un cycle tant qu'ils ne sont pas tous confirmés.",
+      "Confirme le rôle des comptes de la famille TVA (445xx) mouvementés (dû/déductible, BTP ou intracom). Bloque le lancement d'un cycle tant qu'ils ne sont pas tous confirmés.",
   },
 ];
 
@@ -95,7 +95,7 @@ function libelleConvention(proposition: Proposition): string {
   if (proposition.cle === CLE_MOTIF_NUMEROTATION && proposition.valeur && typeof proposition.valeur === 'object') {
     return `Motif de numérotation facture : ${formatMotifNumerotation(proposition.valeur as MotifNumerotation)}`;
   }
-  return `${proposition.cle ?? '—'} : ${JSON.stringify(proposition.valeur)}`;
+  return `${proposition.cle ?? 'clé inconnue'} : ${JSON.stringify(proposition.valeur)}`;
 }
 
 // Les 5 conventions de comptes ont leur propre onglet (ConventionsComptesPanel)

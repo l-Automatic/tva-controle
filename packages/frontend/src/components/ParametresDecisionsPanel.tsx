@@ -87,7 +87,7 @@ function TiersConfianceSection({ cabinetId, dossierId, utilisateurId }: SectionP
             </div>
             <p className="label">
               {t.numeroCompteTiers}
-              {t.nomTiers && ` — ${t.nomTiers}`}
+              {t.nomTiers && ` (${t.nomTiers})`}
             </p>
             <div className="actions">
               <select
@@ -248,7 +248,7 @@ function TauxConfirmesSection({ cabinetId, dossierId, utilisateurId }: SectionPr
               <span className="badge badge-origine">{estTiers ? 'Compte client' : 'Compte de TVA collectée'}</span>
             </div>
             <p className="label">
-              {estTiers ? p.numeroCompteTiers : p.compteProduitOuCharge} — taux habituel {p.tauxHabituel}%
+              {estTiers ? p.numeroCompteTiers : p.compteProduitOuCharge}, taux habituel {p.tauxHabituel}%
             </p>
             <div className="actions">
               <button
@@ -273,7 +273,7 @@ export function ParametresDecisionsPanel({ cabinetId, dossierId, utilisateurId }
   return (
     <section className="panel panel-full">
       <div className="panel-header">
-        <h2>Décisions validées — vue et correction</h2>
+        <h2>Décisions validées, vue et correction</h2>
       </div>
       <TiersConfianceSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
       <ConventionsComptesRetraitSection cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
