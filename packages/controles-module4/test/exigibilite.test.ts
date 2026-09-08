@@ -296,13 +296,90 @@ describe('determinerExigibiliteTva — cas d’anomalie', () => {
     expect(statuts[0]?.prorataExigible).toBe(0);
   });
 
-  it('ignore les comptes autoliquidation (4454/445664), hors scope de ce contrôle', () => {
+  it('un compte d’autoliquidation non confirmé en convention reste hors scope de ce contrôle', () => {
     const ecriture = ecritureRousseau({
       ligneTva: { ...ecritureRousseau().ligneTva, compte: '4454' },
     });
     const { statuts, anomalies } = determinerExigibiliteTva([ecriture], configReelle);
     expect(statuts).toEqual([]);
     expect(anomalies).toEqual([]);
+  });
+});
+
+function ecritureAutoliquidation(overrides: {
+  compte: string;
+  lettree: boolean;
+  compteTiers?: string;
+  ledgerEntryId?: number;
+}): EcritureTvaComplete {
+  const ledgerEntryId = overrides.ledgerEntryId ?? 1;
+  return {
+    ledgerEntryId,
+    ligneTva: {
+      id: 1,
+      compte: overrides.compte,
+      compteId: 1,
+      libelle: 'Autoliquidation',
+      debit: 100,
+      credit: 0,
+      date: '2025-03-15',
+      ledgerEntryId,
+      lettrage: { estLettree: false, groupeIds: [] },
+    },
+    autresLignes: [{ id: 2, compte: '604000', compteId: 2, libelle: null, debit: 500, credit: 0 }],
+    lignesTiers: overrides.compteTiers
+      ? [
+          {
+            compte: overrides.compteTiers,
+            compteId: 3,
+            debit: 0,
+            credit: 600,
+            libelleCompte: 'Sous-traitant test',
+            lettrage: { estLettree: overrides.lettree, groupeIds: overrides.lettree ? [1, 2] : [] },
+          },
+        ]
+      : [],
+  };
+}
+
+describe('determinerExigibiliteTva — autoliquidation (10/08, bug réel corrigé, confirmé par Rami)', () => {
+  it('BTP (compteAutoliquidationDue) : fournisseur non payé -> pas exigible', () => {
+    const e = ecritureAutoliquidation({ compte: '4454', compteTiers: '401sous01', lettree: false });
+    const { statuts } = determinerExigibiliteTva([e], { ...configReelle, compteAutoliquidationDue: '4454' });
+    expect(statuts[0]?.exigible).toBe(false);
+  });
+
+  it('BTP (compteAutoliquidationDeductible) : fournisseur payé -> exigible', () => {
+    const e = ecritureAutoliquidation({ compte: '445664', compteTiers: '401sous01', lettree: true });
+    const { statuts } = determinerExigibiliteTva([e], { ...configReelle, compteAutoliquidationDeductible: '445664' });
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+
+  it('BTP sans ligne fournisseur (cas qui ne devrait jamais arriver) : jamais exigible par prudence', () => {
+    const e = ecritureAutoliquidation({ compte: '4454' });
+    const { statuts } = determinerExigibiliteTva([e], { ...configReelle, compteAutoliquidationDue: '4454' });
+    expect(statuts[0]?.exigible).toBe(false);
+  });
+
+  it('intracom (compteAutoliquidationDueIntracom) : exigible même NON payé — le fait générateur ne dépend pas du paiement', () => {
+    const e = ecritureAutoliquidation({ compte: '4452', compteTiers: '401intracom', lettree: false });
+    const { statuts } = determinerExigibiliteTva([e], { ...configReelle, compteAutoliquidationDueIntracom: '4452' });
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+
+  it('intracom (compteAutoliquidationDeductibleIntracom) : exigible même sans aucune ligne fournisseur', () => {
+    const e = ecritureAutoliquidation({ compte: '445662' });
+    const { statuts } = determinerExigibiliteTva([e], { ...configReelle, compteAutoliquidationDeductibleIntracom: '445662' });
+    expect(statuts[0]?.exigible).toBe(true);
+  });
+
+  it('immo intracom (compteAutoliquidationDeductibleImmoIntracom) : même règle que l’intracom courant, toujours exigible', () => {
+    const e = ecritureAutoliquidation({ compte: '445622', compteTiers: '401immo', lettree: false });
+    const { statuts } = determinerExigibiliteTva([e], {
+      ...configReelle,
+      compteAutoliquidationDeductibleImmoIntracom: '445622',
+    });
+    expect(statuts[0]?.exigible).toBe(true);
   });
 });
 
