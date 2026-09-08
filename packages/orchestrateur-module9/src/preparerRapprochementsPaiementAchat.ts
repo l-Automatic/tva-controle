@@ -10,7 +10,7 @@ import {
 import { identifierFacturesCandidatesAcompte, verifierCoherenceTvaHotel, identifierCandidatsJugementHotel } from '@tva-controle/controles-module4';
 import { MistralClient, jugerCandidatsPaiementAchat, jugerLibellesHotel } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
-import { chargerContexteDossier, chargerDossierComplet, conventionListe } from './db/dossierRepository.js';
+import { chargerContexteDossier, chargerDossierComplet, conventionListe, conventionValeur } from './db/dossierRepository.js';
 import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees, listerPaiementsDejaReclames } from './db/readRepository.js';
 import { autoResoudreFactureSansCandidat } from './db/writeRepository.js';
 
@@ -61,6 +61,16 @@ export async function preparerRapprochementsPaiementAchat(
     chargerDossierComplet(client, params.dossierId)
   );
   const comptesChargeService = conventionListe(contexteDossier, 'comptes_charge_service') ?? [];
+  // Sous-traitance BTP (10/08, bug réel corrigé, confirmé par Rami) —
+  // ces charges sont aussi des services dont l'exigibilité dépend du
+  // paiement, contrairement à l'intracom (cf. exigibilite.ts) : sans ces
+  // deux lignes, un sous-traitant payé partiellement n'apparaissait
+  // jamais dans ce popup.
+  const comptesChargeAutoliquidation = conventionListe(contexteDossier, 'comptes_charge_autoliquidation') ?? [];
+  const comptesTvaIntracomExclus = [
+    conventionValeur(contexteDossier, 'compte_tva_deductible_autoliquidee_intracom'),
+    conventionValeur(contexteDossier, 'compte_tva_deductible_autoliquidee_immo_intracom'),
+  ].filter((c): c is string => typeof c === 'string' && c.length > 0);
 
   // Même chaîne légère que verifierComptesNonReconnus / verifierComptesACategoriser
   const balance = await fetchTrialBalance(params.client, {
@@ -123,7 +133,13 @@ export async function preparerRapprochementsPaiementAchat(
     }
   }
 
-  const facturesCandidates = identifierFacturesCandidatesAcompte(ecritures, comptesChargeService, ledgerEntryIdsHotel);
+  const facturesCandidates = identifierFacturesCandidatesAcompte(
+    ecritures,
+    comptesChargeService,
+    ledgerEntryIdsHotel,
+    comptesChargeAutoliquidation,
+    comptesTvaIntracomExclus
+  );
 
   const dejaResolues = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     listerFacturesLedgerEntryIdsRapprochees(client, params.dossierId, params.periodeDebut)
