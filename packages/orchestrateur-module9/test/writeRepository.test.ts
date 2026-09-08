@@ -27,6 +27,7 @@ import {
   definirParametreDossier,
   synchroniserTiersReference,
   corrigerNiveauConfianceTiers,
+  definirOpteTvaDebitsTiers,
   assignerTauxCompte,
   CalculDejaValideError,
   CalculPasEnBrouillonError,
@@ -1405,6 +1406,58 @@ describe('corrigerNiveauConfianceTiers', () => {
       avecClient((client) =>
         corrigerNiveauConfianceTiers(client, dossierId, '401NexistePas999', 'confiance', utilisateurId)
       )
+    ).rejects.toThrow(/introuvable/);
+  });
+});
+
+describe('definirOpteTvaDebitsTiers', () => {
+  it('coche puis décoche opte_tva_debits pour un tiers déjà connu', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'OpteDebits', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `optedebits-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+    const compte = `401optedebits${Date.now()}`;
+
+    await avecClient((client) =>
+      synchroniserTiersReference(
+        client,
+        dossierId,
+        [{ numeroCompteTiers: compte, nomTiers: 'Fournisseur test débits', estNouveau: true }],
+        '2025-01-31'
+      )
+    );
+
+    await avecClient((client) => definirOpteTvaDebitsTiers(client, dossierId, compte, true, utilisateurId));
+    const resCoche = await avecClient((client) =>
+      client.query(`SELECT opte_tva_debits FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(resCoche.rows[0].opte_tva_debits).toBe(true);
+
+    await avecClient((client) => definirOpteTvaDebitsTiers(client, dossierId, compte, false, utilisateurId));
+    const resDecoche = await avecClient((client) =>
+      client.query(`SELECT opte_tva_debits FROM tiers_reference WHERE dossier_id = $1 AND numero_compte_tiers = $2`, [
+        dossierId,
+        compte,
+      ])
+    );
+    expect(resDecoche.rows[0].opte_tva_debits).toBe(false);
+  });
+
+  it('échoue proprement pour un tiers introuvable', async () => {
+    const utilisateurId = await avecClient((client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO utilisateurs (cabinet_id, nom, email, role) VALUES ($1, 'OpteDebits2', $2, 'collaborateur') RETURNING id`,
+        [cabinetId, `optedebits2-${Date.now()}@test.fr`]
+      )
+    ).then((r) => r.rows[0]!.id);
+
+    await expect(
+      avecClient((client) => definirOpteTvaDebitsTiers(client, dossierId, '401NexistePas998', true, utilisateurId))
     ).rejects.toThrow(/introuvable/);
   });
 });
