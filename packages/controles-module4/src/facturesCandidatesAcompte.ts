@@ -28,14 +28,28 @@ export interface FactureCandidateAcompte {
 // SERVICE (comptes_charge_service confirmé) — un bien n'a jamais de TVA
 // sur acompte à traiter (art. 269-2-a CGI, acompte sur bien = 0% de TVA
 // due, la question ne se pose même pas).
+//
+// Étendu (10/08, bug réel corrigé, confirmé par Rami) à
+// comptesChargeAutoliquidation (sous-traitance BTP) : ces charges sont
+// aussi des services, et leur exigibilité dépend bien du paiement
+// (contrairement à l'intracom, cf. exigibilite.ts) — sans cette
+// extension, un sous-traitant BTP payé partiellement n'apparaissait
+// jamais dans ce popup, la question restant silencieusement sans
+// réponse. compteTvaExclus (intracom) EXPLICITEMENT écarté : 445662
+// commence par le même préfixe "44566" que le déductible standard, mais
+// son exigibilité ne dépend jamais du paiement — ne doit donc jamais
+// apparaître ici, quel que soit son statut de lettrage.
 export function identifierFacturesCandidatesAcompte(
   ecritures: EcritureTvaComplete[],
   comptesChargeService: string[],
-  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set()
+  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set(),
+  comptesChargeAutoliquidation: string[] = [],
+  comptesTvaExclus: string[] = []
 ): FactureCandidateAcompte[] {
   const candidates: FactureCandidateAcompte[] = [];
 
   for (const ecriture of ecritures) {
+    if (comptesTvaExclus.includes(ecriture.ligneTva.compte)) continue;
     if (!ecriture.ligneTva.compte.startsWith('44566')) continue;
 
     const ligneTiers = ecriture.lignesTiers[0];
@@ -58,8 +72,9 @@ export function identifierFacturesCandidatesAcompte(
     // fait qu'un hôtel peut être payé en deux fois compte ici.
     const estExceptionForcee = ledgerEntryIdsExceptionPaiementComptant.has(ecriture.ligneTva.ledgerEntryId);
 
+    const comptesChargeApplicables = [...comptesChargeService, ...comptesChargeAutoliquidation];
     const toucheChargeService = ecriture.autresLignes.some((l) =>
-      comptesChargeService.some((prefixe) => l.compte.startsWith(prefixe))
+      comptesChargeApplicables.some((prefixe) => l.compte.startsWith(prefixe))
     );
     if (!toucheChargeService && !estExceptionForcee) continue; // jamais un bien, sauf exception forcée
 
