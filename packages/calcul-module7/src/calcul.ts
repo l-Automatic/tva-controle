@@ -86,6 +86,13 @@ export interface ConfigCalculTva {
   // seule la reconnaissance du compte change.
   compteAutoliquidationDueIntracom?: string;
   compteAutoliquidationDeductibleIntracom?: string;
+  // Immobilisation en acquisition intracom (10/08, demande de Rami) — le
+  // 4452 (dû) reste le même compte que pour un achat intracom courant
+  // (confirmé par Rami), mais la contrepartie déductible est un compte
+  // DIFFÉRENT (445622, pas 445662) — et surtout, elle route vers
+  // deductible_immo (ligne 9 de la déclaration), jamais vers
+  // autoliquidation_deductible/ligne 8, contrairement à l'ABS intracom.
+  compteAutoliquidationDeductibleImmoIntracom?: string;
   // Taux appliqué pour extraire la TVA du montant porté sur les comptes
   // d'autoliquidation (4454/445664...). Défaut 20% : quasi systématique en
   // pratique pour l'autoliquidation générale sur prestations de services
@@ -144,6 +151,7 @@ export function calculerTva(
   const compteDeductible = config.compteAutoliquidationDeductible ?? '445664';
   const compteDueIntracom = config.compteAutoliquidationDueIntracom;
   const compteDeductibleIntracom = config.compteAutoliquidationDeductibleIntracom;
+  const compteDeductibleImmoIntracom = config.compteAutoliquidationDeductibleImmoIntracom;
   const tauxAutoliquidation = config.tauxAutoliquidation ?? 20;
   const tauxNominalParCompte = config.tauxNominalParCompte ?? TAUX_NATIONAL_PAR_DEFAUT;
 
@@ -198,6 +206,18 @@ export function calculerTva(
     if (compte === compteDeductible || compte === compteDeductibleIntracom) {
       const tva = netSensDebit - netSensDebit / (1 + tauxAutoliquidation / 100);
       ajouter('autoliquidation_deductible', tva, ledgerEntryId);
+      continue;
+    }
+    // Immo intracom (10/08) : interception dédiée, AVANT le générique
+    // estDeductibleImmo ci-dessous — 445622 commence par le même préfixe
+    // "44562" que le compte immo classique, mais contient un montant
+    // TTC-équivalent (comme les autres comptes d'autoliquidation), pas la
+    // TVA elle-même. Sans cette interception explicite, il tomberait à
+    // tort dans le traitement générique, qui suppose le montant déjà net
+    // de TVA.
+    if (compte === compteDeductibleImmoIntracom) {
+      const tva = netSensDebit - netSensDebit / (1 + tauxAutoliquidation / 100);
+      ajouter('deductible_immo', tva, ledgerEntryId);
       continue;
     }
 
