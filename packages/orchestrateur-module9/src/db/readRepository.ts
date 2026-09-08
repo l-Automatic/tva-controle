@@ -227,11 +227,14 @@ export interface TiersReferenceDb {
   niveauConfiance: 'nouveau' | 'a_surveiller' | 'confiance';
   nbControlesSansAnomalie: number;
   derniereDateControle: string | null;
+  // TVA sur les débits côté fournisseur (10/08) — cf. exigibilite.ts. Coché
+  // manuellement par le collaborateur, jamais déduit automatiquement.
+  opteTvaDebits: boolean;
 }
 
 export async function listerTiersReference(client: PoolClient, dossierId: string): Promise<TiersReferenceDb[]> {
   const res = await client.query(
-    `SELECT numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie, derniere_date_controle
+    `SELECT numero_compte_tiers, nom_tiers, niveau_confiance, nb_controles_sans_anomalie, derniere_date_controle, opte_tva_debits
      FROM tiers_reference WHERE dossier_id = $1 ORDER BY nb_controles_sans_anomalie DESC`,
     [dossierId]
   );
@@ -241,6 +244,7 @@ export async function listerTiersReference(client: PoolClient, dossierId: string
     niveauConfiance: r.niveau_confiance,
     nbControlesSansAnomalie: r.nb_controles_sans_anomalie,
     derniereDateControle: r.derniere_date_controle,
+    opteTvaDebits: r.opte_tva_debits,
   }));
 }
 
