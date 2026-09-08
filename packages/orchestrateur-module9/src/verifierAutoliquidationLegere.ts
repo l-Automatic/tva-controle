@@ -39,6 +39,14 @@ export async function verifierAutoliquidationLegere(
   const compteDeductible = conventionValeur(contexteDossier, 'compte_tva_deductible_autoliquidee');
   const compteDueIntracom = conventionValeur(contexteDossier, 'compte_tva_due_autoliquidee_intracom');
   const compteDeductibleIntracom = conventionValeur(contexteDossier, 'compte_tva_deductible_autoliquidee_intracom');
+  // Immo intracom (10/08, demande de Rami) — même compte dû que l'achat
+  // intracom courant (confirmé), mais une contrepartie déductible
+  // DIFFÉRENTE selon la nature de l'acquisition. Optionnel : un dossier
+  // sans immo intracom n'a simplement rien à confirmer ici.
+  const compteDeductibleImmoIntracom = conventionValeur(
+    contexteDossier,
+    'compte_tva_deductible_autoliquidee_immo_intracom'
+  );
   const comptesChargeAutoliquidation = conventionListe(contexteDossier, 'comptes_charge_autoliquidation') ?? [];
   const comptesChargeAutoliquidationIntracom =
     conventionListe(contexteDossier, 'comptes_charge_autoliquidation_intracom') ?? [];
@@ -57,10 +65,14 @@ export async function verifierAutoliquidationLegere(
     periodeFin: params.periodeFin,
   });
 
+  const comptesDeductiblesIntracom = [compteDeductibleIntracom, compteDeductibleImmoIntracom].filter(
+    (c): c is string => typeof c === 'string' && c.length > 0
+  );
+
   const anomaliesEquilibre = [
     ...(compteDue && compteDeductible ? verifierAutoliquidationEquilibree(ecritures, compteDue, compteDeductible) : []),
-    ...(compteDueIntracom && compteDeductibleIntracom
-      ? verifierAutoliquidationEquilibree(ecritures, compteDueIntracom, compteDeductibleIntracom)
+    ...(compteDueIntracom && comptesDeductiblesIntracom.length > 0
+      ? verifierAutoliquidationEquilibree(ecritures, compteDueIntracom, comptesDeductiblesIntracom)
       : []),
   ];
 
