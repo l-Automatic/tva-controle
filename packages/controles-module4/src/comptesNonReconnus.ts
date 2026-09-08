@@ -8,9 +8,26 @@ export interface ConfigComptesTva {
   // dédiés propres au dossier, jamais les mêmes que le BTP).
   compteAutoliquidationDueIntracom?: string;
   compteAutoliquidationDeductibleIntracom?: string;
+  // Immo intracom (10/08, demande de Rami, option 1 retenue explicitement)
+  // — 445622 est volontairement RETIRÉ de la reconnaissance générique par
+  // préfixe "44562" (cf. PREFIXE_IMMO_INTRACOM ci-dessous) : sans ce
+  // carve-out, un dossier ayant ce cas de figure ne serait jamais invité à
+  // confirmer cette convention, et retomberait silencieusement dans le
+  // traitement générique du 44562 (montant pris tel quel, sans extraction
+  // TVA/TTC-équivalent) — exactement le bug déjà corrigé dans calcul.ts,
+  // mais ici jamais détecté ni bloqué. Reconnu UNIQUEMENT par
+  // correspondance exacte avec ce compte confirmé, jamais par préfixe.
+  compteAutoliquidationDeductibleImmoIntracom?: string;
 }
 
-const PREFIXES_RECONNUS = ['44571', '44566', '44562'];
+const PREFIXES_RECONNUS = ['44571', '44566'];
+// Retiré de PREFIXES_RECONNUS (10/08) : la sous-famille 445622 (immo
+// intracom) a besoin d'une confirmation explicite, cf. ConfigComptesTva
+// ci-dessus — un compte 44562 "normal" (immo classique, pas
+// d'autoliquidation) reste reconnu par ce préfixe précisément, seule la
+// sous-famille 445622 en est exclue.
+const PREFIXE_IMMO_STANDARD = '44562';
+const PREFIXE_IMMO_INTRACOM = '445622';
 
 // Comptes de résultat/report légitimes (TVA à décaisser, crédit de TVA
 // reporté) — un mouvement dessus reflète le paiement ou le report d'une
@@ -43,8 +60,13 @@ export function detecterComptesTvaNonReconnus(
   for (const ecriture of ecritures) {
     const { compte, ledgerEntryId, libelle } = ecriture.ligneTva;
 
+    const estImmoIntracom = compte.startsWith(PREFIXE_IMMO_INTRACOM);
+    const estImmoStandard = !estImmoIntracom && compte.startsWith(PREFIXE_IMMO_STANDARD);
+
     const estReconnu =
       PREFIXES_RECONNUS.some((p) => compte.startsWith(p)) ||
+      estImmoStandard ||
+      (estImmoIntracom && compte === config.compteAutoliquidationDeductibleImmoIntracom) ||
       compte === config.compteAutoliquidationDue ||
       compte === config.compteAutoliquidationDeductible ||
       compte === config.compteAutoliquidationDueIntracom ||
