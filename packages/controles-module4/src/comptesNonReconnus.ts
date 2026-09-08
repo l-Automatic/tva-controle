@@ -20,12 +20,19 @@ export interface ConfigComptesTva {
   compteAutoliquidationDeductibleImmoIntracom?: string;
 }
 
-const PREFIXES_RECONNUS = ['44571', '44566'];
-// Retiré de PREFIXES_RECONNUS (10/08) : la sous-famille 445622 (immo
-// intracom) a besoin d'une confirmation explicite, cf. ConfigComptesTva
-// ci-dessus — un compte 44562 "normal" (immo classique, pas
-// d'autoliquidation) reste reconnu par ce préfixe précisément, seule la
-// sous-famille 445622 en est exclue.
+const PREFIXES_RECONNUS = ['44571'];
+// Retirés de PREFIXES_RECONNUS (10/08, bug réel trouvé par Rami en
+// conditions réelles — seul 4454 était demandé à confirmer, jamais
+// 445664 alors que présent et actif sur le dossier) : les sous-familles
+// 445664 (BTP déductible) et 445662 (intracom déductible) ont besoin
+// d'une confirmation explicite, cf. ConfigComptesTva ci-dessus — un
+// compte 44566 "normal" (achat courant, pas d'autoliquidation) reste
+// reconnu par ce préfixe précisément, seules ces deux sous-familles en
+// sont exclues. Même bug, même correctif, que celui déjà fait pour
+// 445622 (immo intracom) — aurait dû être fait en même temps, ne l'a
+// pas été.
+const PREFIXE_ABS_STANDARD = '44566';
+const PREFIXES_ABS_AUTOLIQUIDATION = ['445664', '445662'];
 const PREFIXE_IMMO_STANDARD = '44562';
 const PREFIXE_IMMO_INTRACOM = '445622';
 
@@ -60,12 +67,17 @@ export function detecterComptesTvaNonReconnus(
   for (const ecriture of ecritures) {
     const { compte, ledgerEntryId, libelle } = ecriture.ligneTva;
 
+    const estAbsAutoliquidation = PREFIXES_ABS_AUTOLIQUIDATION.some((p) => compte.startsWith(p));
+    const estAbsStandard = !estAbsAutoliquidation && compte.startsWith(PREFIXE_ABS_STANDARD);
     const estImmoIntracom = compte.startsWith(PREFIXE_IMMO_INTRACOM);
     const estImmoStandard = !estImmoIntracom && compte.startsWith(PREFIXE_IMMO_STANDARD);
 
     const estReconnu =
       PREFIXES_RECONNUS.some((p) => compte.startsWith(p)) ||
+      estAbsStandard ||
       estImmoStandard ||
+      (estAbsAutoliquidation &&
+        (compte === config.compteAutoliquidationDeductible || compte === config.compteAutoliquidationDeductibleIntracom)) ||
       (estImmoIntracom && compte === config.compteAutoliquidationDeductibleImmoIntracom) ||
       compte === config.compteAutoliquidationDue ||
       compte === config.compteAutoliquidationDeductible ||
