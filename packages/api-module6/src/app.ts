@@ -13,6 +13,7 @@ import {
   ClefMistralAbsenteError,
   verifierComptesNonReconnus,
   verifierComptesACategoriser,
+  chargerPortesObligatoires,
   preparerRapprochementsPaiementAchat,
   verifierParcVehicules,
   verifierComptesTvaAConfirmer,
@@ -1484,6 +1485,40 @@ export function buildApp(pool: Pool): FastifyInstance {
       .header('Content-Disposition', `attachment; filename="audit-${request.params.dossierId}.csv"`)
       .send(versCsv(evenements));
   });
+
+  // --- Portes obligatoires, vue agrégée (10/08, chantier UX popup unique) ---
+  // Un seul appel pour peupler les 4 onglets du popup à la place des 4
+  // appels séparés qu'il fallait faire jusqu'ici — réutilise les 4
+  // fonctions existantes telles quelles.
+  app.get<{ Params: { dossierId: string }; Querystring: { periodeDebut: string; periodeFin: string } }>(
+    '/dossiers/:dossierId/portes-obligatoires',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      const { periodeDebut, periodeFin } = request.query;
+      if (!periodeDebut || !periodeFin) {
+        return reply.code(400).send({ erreur: 'periodeDebut et periodeFin sont requis' });
+      }
+
+      let client;
+      try {
+        client = await resoudreClientPennylane(cabinetId, request.params.dossierId);
+      } catch (err) {
+        if (err instanceof DossierIntrouvableError) return reply.code(404).send({ erreur: err.message });
+        if (err instanceof LogicielSourceNonPrisEnChargeError || err instanceof JetonCabinetManquantError) {
+          return reply.code(400).send({ erreur: err.message });
+        }
+        throw err;
+      }
+
+      return chargerPortesObligatoires(pool, {
+        cabinetId,
+        dossierId: request.params.dossierId,
+        client,
+        periodeDebut,
+        periodeFin,
+      });
+    }
+  );
 
   // --- Comptes à catégoriser, sans passer par un cycle complet (10/08) ---
   // Pour l'onglet dédié — vérification légère, appelable à tout moment,
