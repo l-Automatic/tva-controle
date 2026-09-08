@@ -32,6 +32,11 @@ export {
 export { verifierAvoirsLegere, type ParametresVerificationAvoirs } from './verifierAvoirsLegere.js';
 export { verifierParcVehicules, type ParametresVerificationParc } from './verifierParcVehicules.js';
 export {
+  chargerPortesObligatoires,
+  type ParametresPortesObligatoires,
+  type EtatPortesObligatoires,
+} from './portesObligatoires.js';
+export {
   verifierVehiculeTourismeLegere,
   type ParametresVerificationVehiculeTourisme,
 } from './verifierVehiculeTourismeLegere.js';
