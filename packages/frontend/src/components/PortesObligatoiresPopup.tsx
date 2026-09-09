@@ -158,6 +158,19 @@ export function PortesObligatoiresPopup({
         {phase && (
           <div className="popup-cycle-loading">
             <JaugeChargement phase={phase} messageSucces={messageSucces} />
+            {/* Mystère résolu aux briefs v65/v66 : l'onglet rapprochements ne
+                manquait rien, la catégorisation des comptes de charge n'était
+                simplement pas encore terminée au moment où Rami regardait —
+                pas un bug. Même mise en évidence que la sous-catégorisation
+                autoliquidation (brief v63) : reste visible tant que le
+                chargement n'est pas réellement terminé, jamais un état
+                "terminé" prématuré. */}
+            <p className="avertissement">
+              <strong>
+                Chargement des rapprochements en cours… Le nombre de candidats affichés dépend de l'état actuel de
+                la catégorisation des comptes de charge.
+              </strong>
+            </p>
           </div>
         )}
         {error && <p className="error">{error}</p>}
