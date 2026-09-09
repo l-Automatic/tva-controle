@@ -58,15 +58,57 @@ afterAll(async () => {
 // limitée (4, cf. correctif du 10/08) ne perd, ne duplique et
 // n'échange aucun candidat entre eux malgré le traitement en parallèle.
 const NB_FOURNISSEURS = 5;
+const ID_COMPTE_TVA = 1;
+
+function ligne(id: number, compteId: number, numeroCompte: string, debit: string, credit: string, ledgerEntryId: number) {
+  return {
+    id,
+    debit,
+    credit,
+    label: `Ecriture ${id}`,
+    date: '2025-04-05',
+    created_at: '2025-04-05',
+    updated_at: '2025-04-05',
+    journal: { id: 1, url: 'x' },
+    ledger_account: { id: compteId, number: numeroCompte, url: 'x' },
+    ledger_entry: { id: ledgerEntryId },
+    lettered_ledger_entry_lines: { ids: [], url: 'x' },
+  };
+}
+
+// Toutes les lignes possibles, indexées par le compte réellement demandé —
+// le fake fetch ne renvoie QUE celles dont ledger_account.id correspond
+// au filtre reçu, comme le ferait vraiment Pennylane. Sans ce filtrage
+// réel, les deux appels différents de cette fonction (l'un ancré sur le
+// compte TVA, l'autre par compte tiers pour chaque candidat) reçoivent le
+// même mélange et se corrompent mutuellement.
+function toutesLesLignes() {
+  const lignes: ReturnType<typeof ligne>[] = [];
+  for (let i = 1; i <= NB_FOURNISSEURS; i++) {
+    const compteChargeId = 100 + i;
+    const compteTiersId = 200 + i;
+    const ledgerEntryId = i * 10;
+    lignes.push(
+      ligne(ledgerEntryId, ID_COMPTE_TVA, '44566', '10', '0', ledgerEntryId),
+      ligne(ledgerEntryId + 1, compteChargeId, '604000', '50', '0', ledgerEntryId),
+      ligne(ledgerEntryId + 2, compteTiersId, `401FRS${i}`, '0', '60', ledgerEntryId)
+    );
+    // Paiement partiel candidat pour ce fournisseur, sur son propre compte
+    // tiers, jamais lettré, jamais déjà réclamé.
+    lignes.push(ligne(ledgerEntryId + 3, compteTiersId, `401FRS${i}`, '30', '0', ledgerEntryId + 3));
+  }
+  return lignes;
+}
 
 function fakeFetch(): typeof fetch {
+  const toutes = toutesLesLignes();
   return (async (rawUrl: string) => {
     const url = new URL(rawUrl);
 
     if (url.pathname.includes('trial_balance')) {
       return new Response(
         JSON.stringify({
-          items: [{ number: '44566', formatted_number: '44566', label: 'TVA déductible', debits: '500', credits: '0' }],
+          items: [{ number: '44566', formatted_number: '44566', label: 'TVA déductible', debits: '50', credits: '0' }],
           has_more: false,
           next_cursor: null,
         }),
@@ -75,64 +117,20 @@ function fakeFetch(): typeof fetch {
     }
 
     if (url.pathname.includes('ledger_entry_lines')) {
-      const items = [];
-      for (let i = 1; i <= NB_FOURNISSEURS; i++) {
-        items.push(
-          {
-            id: i * 10,
-            debit: '0',
-            credit: '100',
-            label: `Facture fournisseur ${i}`,
-            date: '2025-04-05',
-            created_at: '2025-04-05',
-            updated_at: '2025-04-05',
-            journal: { id: 1, url: 'x' },
-            ledger_account: { id: 1, number: '44566', url: 'x' },
-            ledger_entry: { id: i * 10 },
-            lettered_ledger_entry_lines: { ids: [], url: 'x' },
-          },
-          {
-            id: i * 10 + 1,
-            debit: '0',
-            credit: '500',
-            label: `Facture fournisseur ${i}`,
-            date: '2025-04-05',
-            created_at: '2025-04-05',
-            updated_at: '2025-04-05',
-            journal: { id: 1, url: 'x' },
-            ledger_account: { id: 2, number: '604000', url: 'x' },
-            ledger_entry: { id: i * 10 },
-            lettered_ledger_entry_lines: { ids: [], url: 'x' },
-          },
-          {
-            id: i * 10 + 2,
-            debit: '0',
-            credit: '600',
-            label: `Fournisseur ${i}`,
-            date: '2025-04-05',
-            created_at: '2025-04-05',
-            updated_at: '2025-04-05',
-            journal: { id: 1, url: 'x' },
-            ledger_account: { id: 100 + i, number: `401FRS${i}`, url: 'x' },
-            ledger_entry: { id: i * 10 },
-            lettered_ledger_entry_lines: { ids: [], url: 'x' },
+      const filtreBrut = url.searchParams.get('filter');
+      let comptesIds: number[] = [];
+      if (filtreBrut) {
+        try {
+          const filtre = JSON.parse(filtreBrut) as { field: string; value: unknown }[];
+          const champCompte = filtre.find((f) => f.field === 'ledger_account_id');
+          if (champCompte && Array.isArray(champCompte.value)) {
+            comptesIds = champCompte.value as number[];
           }
-        );
+        } catch {
+          // filtre non parseable : aucun compte, réponse vide ci-dessous
+        }
       }
-      // Second appel (mouvements par compte tiers, un candidat de paiement partiel générique).
-      items.push({
-        id: 999,
-        debit: '50',
-        credit: '0',
-        label: 'Paiement partiel',
-        date: '2025-04-10',
-        created_at: '2025-04-10',
-        updated_at: '2025-04-10',
-        journal: { id: 1, url: 'x' },
-        ledger_account: { id: 200, number: '401GENERIQUE', url: 'x' },
-        ledger_entry: { id: 999 },
-        lettered_ledger_entry_lines: { ids: [], url: 'x' },
-      });
+      const items = toutes.filter((l) => comptesIds.includes(l.ledger_account.id));
       return new Response(JSON.stringify({ items, has_more: false, next_cursor: null }), { status: 200 });
     }
 
