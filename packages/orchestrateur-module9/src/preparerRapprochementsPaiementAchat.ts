@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { IPennylaneApiClient } from '@tva-controle/connector-pennylane';
+import type { EcritureTvaComplete } from '@tva-controle/core';
 import {
   fetchTrialBalance,
   filterComptesParPrefixe,
@@ -48,6 +49,9 @@ export interface ParametresPreparationRapprochements {
   client: IPennylaneApiClient;
   periodeDebut: string;
   periodeFin: string;
+  // Performance (10/08) — cf. verifierComptesACategoriser.ts, même
+  // principe.
+  ecrituresPreChargees?: EcritureTvaComplete[];
 }
 
 export async function preparerRapprochementsPaiementAchat(
@@ -73,19 +77,23 @@ export async function preparerRapprochementsPaiementAchat(
   ].filter((c): c is string => typeof c === 'string' && c.length > 0);
 
   // Même chaîne légère que verifierComptesNonReconnus / verifierComptesACategoriser
-  const balance = await fetchTrialBalance(params.client, {
-    dossierId: params.dossierId,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
-  const comptesTva = filterComptesParPrefixe(balance, ['445'])
-    .filter((c) => c.debit !== 0 || c.credit !== 0)
-    .map((c) => c.numeroCompte);
-  const ecritures = await fetchEcrituresTvaCompletes(params.client, {
-    comptesTva,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
+  const ecritures =
+    params.ecrituresPreChargees ??
+    (await (async () => {
+      const balance = await fetchTrialBalance(params.client, {
+        dossierId: params.dossierId,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+      const comptesTva = filterComptesParPrefixe(balance, ['445'])
+        .filter((c) => c.debit !== 0 || c.credit !== 0)
+        .map((c) => c.numeroCompte);
+      return fetchEcrituresTvaCompletes(params.client, {
+        comptesTva,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+    })());
 
   const mistralApiKey = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     parametreCabinetValeur(client, params.cabinetId, 'mistral_api_key')
