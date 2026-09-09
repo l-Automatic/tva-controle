@@ -358,6 +358,7 @@ export async function executerCycleTva(
     comptesEntretienVehicule,
     comptesLocationVehicule,
     comptesVenteExport,
+    comptesVenteIntracomExoneree,
     comptesSansCategorie,
   });
 
