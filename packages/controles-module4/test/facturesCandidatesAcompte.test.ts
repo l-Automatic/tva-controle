@@ -73,17 +73,12 @@ describe('identifierFacturesCandidatesAcompte', () => {
     expect(identifierFacturesCandidatesAcompte([e], comptesChargeService)).toEqual([]);
   });
 
-  it('inclut un compte hors comptes_charge_service (625) si marqué en exception forcée (hôtel)', () => {
+  it('un compte hors comptes_charge_service (625, ex-hôtel) n’est jamais candidat sans être confirmé — plus d’exception spéciale (10/08, demande de Rami)', () => {
     const e = ecriture({ compteCharge: '6251', estLettree: false });
-    const sansException = identifierFacturesCandidatesAcompte([e], comptesChargeService);
-    expect(sansException).toEqual([]); // 625 n'est pas dans comptes_charge_service, exclu normalement
-
-    const avecException = identifierFacturesCandidatesAcompte(
-      [e],
-      comptesChargeService,
-      new Set([1]) // ledgerEntryId 1, forcé en exception
-    );
-    expect(avecException).toHaveLength(1);
+    expect(identifierFacturesCandidatesAcompte([e], comptesChargeService)).toEqual([]);
+    // Redevient candidat une fois catégorisé normalement, comme n'importe
+    // quel autre fournisseur — plus de mécanisme spécial.
+    expect(identifierFacturesCandidatesAcompte([e], ['6251'])).toHaveLength(1);
   });
 });
 
@@ -121,7 +116,6 @@ describe('identifierFacturesCandidatesAcompte — autoliquidation (10/08, bug r�
     const resultat = identifierFacturesCandidatesAcompte(
       [e],
       [], // comptesChargeService vide — c'est comptesChargeAutoliquidation qui doit matcher
-      new Set(),
       ['604000']
     );
     expect(resultat).toHaveLength(1);
@@ -129,7 +123,7 @@ describe('identifierFacturesCandidatesAcompte — autoliquidation (10/08, bug r�
 
   it('BTP (445664) non payé, sans comptesChargeAutoliquidation confirmé : jamais candidat', () => {
     const e = ecritureAutoliquidation({ compteTva: '445664', compteCharge: '604000', estLettree: false });
-    const resultat = identifierFacturesCandidatesAcompte([e], [], new Set(), []);
+    const resultat = identifierFacturesCandidatesAcompte([e], [], []);
     expect(resultat).toEqual([]);
   });
 
@@ -138,7 +132,6 @@ describe('identifierFacturesCandidatesAcompte — autoliquidation (10/08, bug r�
     const resultat = identifierFacturesCandidatesAcompte(
       [e],
       [],
-      new Set(),
       ['604000'], // même si le compte de charge est confirmé
       ['445662'] // explicitement exclu
     );
