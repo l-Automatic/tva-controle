@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { ApiError, fetchPortesObligatoires } from '../api';
 import type { EtatPortesObligatoires } from '../types';
@@ -85,6 +85,31 @@ export function PortesObligatoiresPopup({
     return source.parcVehiculesNonRenseigne ? 1 : 0;
   }
 
+  // Rechargement complet de l'agrégateur, réutilisé au montage initial ET
+  // à la demande (brief v69, cf. useEffect et rechargerApresCategorisation
+  // ci-dessous) — un seul minuteur de coche à annuler proprement dans les
+  // deux cas, gardé dans un ref plutôt que dans la fermeture locale d'un
+  // seul appelant.
+  const idTimeoutCocheRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  async function chargerEtat(signal?: AbortSignal) {
+    setPhase('chargement');
+    setError(null);
+    if (idTimeoutCocheRef.current) clearTimeout(idTimeoutCocheRef.current);
+    try {
+      const data = await fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin, signal);
+      setEtat(data);
+      setPhase('succes');
+      idTimeoutCocheRef.current = setTimeout(() => {
+        setPhase(null);
+      }, 1100);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
+      setPhase(null);
+    }
+  }
+
   useEffect(() => {
     // Bug réel investigué en profondeur (brief v63, point 3, même rigueur
     // que le v60) : l'AbortController du v61 empêchait déjà le CLIENT de
@@ -107,33 +132,37 @@ export function PortesObligatoiresPopup({
     // le serveur, vérifié par comptage réel des requêtes réseau.
     let annule = false;
     const controller = new AbortController();
-    let idTimeout: ReturnType<typeof setTimeout> | undefined;
-    setPhase('chargement');
-    setError(null);
     const idDelai = setTimeout(() => {
       if (annule) return;
-      fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin, controller.signal)
-        .then((data) => {
-          setEtat(data);
-          setPhase('succes');
-          idTimeout = setTimeout(() => {
-            setPhase(null);
-          }, 1100);
-        })
-        .catch((err) => {
-          if (err instanceof DOMException && err.name === 'AbortError') return;
-          setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
-          setPhase(null);
-        });
+      void chargerEtat(controller.signal);
     }, 0);
     return () => {
       annule = true;
       clearTimeout(idDelai);
       controller.abort();
-      if (idTimeout) clearTimeout(idTimeout);
+      if (idTimeoutCocheRef.current) clearTimeout(idTimeoutCocheRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId, dossierId, periodeDebut, periodeFin]);
+
+  // Cause racine identifiée au brief v69, par élimination et sur
+  // observation directe de Rami : l'agrégateur ne calculait les 4 portes
+  // QU'À L'OUVERTURE du popup — caté à catégoriser, confirmer les comptes
+  // TVA, puis regarder les rapprochements DANS LE MÊME POPUP laissait les
+  // 3 autres onglets et les badges bloqués sur leur tout premier
+  // instantané, jamais recalculés. Les 3 investigations précédentes
+  // (v65/v66/v68) ne l'avaient jamais trouvé car elles testaient toujours
+  // sur un état déjà stable AVANT l'ouverture, jamais une catégorisation
+  // faite pendant que le popup est ouvert. Signal de fin de lot déjà
+  // utilisé au v64 (comptesACategoriser devient vide) — mais cette fois,
+  // au lieu de ne rafraîchir QUE la sous-catégorisation (rafraichirSousCategorie
+  // dans CategorisationContenu, insuffisant : ne touche jamais les 3
+  // autres onglets ni les badges), on relance l'agrégateur complet et on
+  // remplace tout l'état d'un coup — même jauge de chargement que le
+  // montage initial (~35s sur un vrai dossier), pas un nouveau mécanisme.
+  function rechargerApresCategorisation() {
+    void chargerEtat();
+  }
 
   const totalAregler = etat
     ? (['categorisation', 'comptesTva', 'rapprochement', 'vehicules'] as SousOngletPorte[]).reduce(
@@ -221,6 +250,7 @@ export function PortesObligatoiresPopup({
                 suggestions={etat.categorisation.suggestions}
                 periodeDebut={periodeDebut}
                 periodeFin={periodeFin}
+                onLotTermine={rechargerApresCategorisation}
               />
             </div>
             <div className="sous-onglet-contenu" hidden={sousOnglet !== 'comptesTva'}>

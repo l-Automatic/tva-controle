@@ -37,6 +37,17 @@ interface CategorisationContenuProps {
   // futur popup à onglets) puisse l'afficher dans son propre titre sans
   // dupliquer la logique de retrait locale.
   onCountChange?: (n: number) => void;
+  // Cause racine du brief v69 : le rafraîchissement ciblé introduit au
+  // v61/v64 (rafraichirSousCategorie ci-dessous) ne touchait jamais les 3
+  // autres onglets du popup portes obligatoires ni leurs badges, restés
+  // bloqués sur l'instantané initial même après une catégorisation faite
+  // pendant que le popup est ouvert. Fourni uniquement par
+  // PortesObligatoiresPopup (qui a un agrégateur complet à recharger) :
+  // quand présent, remplace entièrement le rafraîchissement ciblé du
+  // dessous dès que la liste principale se vide, quelle que soit la
+  // catégorie choisie. Absent pour l'usage autonome (CycleZone.tsx, pas
+  // d'agrégateur), qui garde alors l'ancien comportement ciblé.
+  onLotTermine?: () => void;
 }
 
 // Associe chaque compte à sa suggestion IA par numéro de compte (brief
@@ -251,6 +262,7 @@ export function CategorisationContenu({
   periodeDebut,
   periodeFin,
   onCountChange,
+  onLotTermine,
 }: CategorisationContenuProps) {
   const [comptes, setComptes] = useState(() => avecSuggestions(comptesInitiaux, suggestions));
   const [comptesSousCategorie, setComptesSousCategorie] = useState(comptesSousCategorieInitiaux);
@@ -303,16 +315,32 @@ export function CategorisationContenu({
     if (cle === 'comptes_charge_service') aConfirmeChargeServiceRef.current = true;
     // Filtrage direct sur l'état courant plutôt que la forme fonctionnelle
     // de setComptes : cette fonction n'est appelée que depuis un
-    // gestionnaire d'événement (clic), jamais en rafale synchrone, et le
-    // déclenchement de rafraichirSousCategorie() est un effet de bord —
+    // gestionnaire d'événement (clic), jamais en rafale synchrone, et les
+    // effets de bord ci-dessous n'en sont pas plus sûrs dans un updater —
     // le garder hors d'un updater évite un double appel si React
     // l'invoque deux fois pour détecter les impuretés (StrictMode, dev).
     const suivant = comptes.filter((c) => c.compte !== compte);
     setComptes(suivant);
-    if (suivant.length === 0 && aConfirmeChargeServiceRef.current) {
-      aConfirmeChargeServiceRef.current = false;
-      setVerificationSousCategorie(true);
-      void rafraichirSousCategorie();
+    if (suivant.length === 0) {
+      if (onLotTermine) {
+        // Popup portes obligatoires (brief v69) : un rechargement complet
+        // de l'agrégateur, géré par le parent, remplace entièrement le
+        // contrôle ciblé ci-dessous — celui-ci ne rafraîchissait jamais
+        // les 3 autres onglets ni les badges, la cause racine identifiée
+        // par Rami. Déclenché dès que la liste principale est vide, quelle
+        // que soit la catégorie choisie pour le dernier compte (pas
+        // seulement comptes_charge_service : les autres onglets peuvent
+        // tout autant dépendre du reste de la catégorisation).
+        onLotTermine();
+      } else if (aConfirmeChargeServiceRef.current) {
+        // Usage autonome (CycleZone.tsx, post-cycle) : pas d'agrégateur à
+        // recharger ici, seul le contrôle ciblé sur la sous-catégorisation
+        // reste pertinent, et seulement si comptes_charge_service a
+        // effectivement été touché dans ce lot.
+        aConfirmeChargeServiceRef.current = false;
+        setVerificationSousCategorie(true);
+        void rafraichirSousCategorie();
+      }
     }
   }
 
