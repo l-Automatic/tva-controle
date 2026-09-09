@@ -6,8 +6,10 @@ import {
   identifierComptesServiceSansSousCategorieAutoliquidation,
   type CompteACategoriser,
 } from '@tva-controle/controles-module4';
+import { MistralClient, suggererCategorisationComptes, type SuggestionCategorisation } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionListe } from './db/dossierRepository.js';
+import { parametreCabinetValeur } from './db/readRepository.js';
 
 // Vérification légère de la catégorisation bien/service (10/08) — demande
 // de Rami : la catégorisation doit être garantie complète AVANT qu'un
@@ -39,6 +41,12 @@ export interface ParametresVerificationCategorisation {
 export interface ResultatVerificationCategorisation {
   comptesACategoriser: CompteACategoriser[];
   comptesServiceSansSousCategorieAutoliquidation: CompteACategoriser[];
+  // Suggestion IA (10/08, demandée à plusieurs reprises par Rami, jamais
+  // construite jusqu'ici) — jamais appliquée automatiquement, juste une
+  // aide à la décision. Tableau vide si aucune clé Mistral configurée
+  // pour ce cabinet, ou si l'appel échoue — jamais bloquant pour le
+  // popup lui-même.
+  suggestions: SuggestionCategorisation[];
 }
 
 export async function verifierComptesACategoriser(
@@ -91,5 +99,26 @@ export async function verifierComptesACategoriser(
     conventionListe(contexteDossier, 'comptes_charge_autoliquidation_rejetee') ?? []
   );
 
-  return { comptesACategoriser, comptesServiceSansSousCategorieAutoliquidation };
+  let suggestions: SuggestionCategorisation[] = [];
+  if (comptesACategoriser.length > 0) {
+    const mistralApiKey = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+      parametreCabinetValeur(client, params.cabinetId, 'mistral_api_key')
+    );
+    if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
+      try {
+        const mistralClient = new MistralClient({ apiKey: mistralApiKey });
+        suggestions = await suggererCategorisationComptes(
+          mistralClient,
+          comptesACategoriser.map((c) => ({ compte: c.compte, exemplesLibelle: c.exemplesLibelle }))
+        );
+      } catch (err) {
+        if (process.env.DEBUG_CYCLE) {
+          console.error(`[DEBUG_CYCLE] échec suggestion IA catégorisation : ${String(err)}`);
+        }
+        // Aucune suggestion : jamais une erreur qui empêche d'afficher le popup lui-même.
+      }
+    }
+  }
+
+  return { comptesACategoriser, comptesServiceSansSousCategorieAutoliquidation, suggestions };
 }
