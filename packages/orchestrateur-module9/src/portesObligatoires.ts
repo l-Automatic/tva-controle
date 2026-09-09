@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { IPennylaneApiClient } from '@tva-controle/connector-pennylane';
+import { fetchTrialBalance, filterComptesParPrefixe, fetchEcrituresTvaCompletes } from '@tva-controle/connector-pennylane';
 import { verifierComptesACategoriser, type ResultatVerificationCategorisation } from './verifierComptesACategoriser.js';
 import { verifierComptesTvaAConfirmer } from './verifierComptesTvaAConfirmer.js';
 import { preparerRapprochementsPaiementAchat, type FactureARapprocher } from './preparerRapprochementsPaiementAchat.js';
@@ -10,24 +11,26 @@ import type { Anomalie } from '@tva-controle/core';
 // demande de Rami — chantier UX popup unique). Jusqu'ici chacune avait sa
 // propre route, ses propres appels réseau côté frontend, ses propres
 // redirections — objectif : un seul popup à onglets, un seul appel pour
-// peupler les 4 onglets d'un coup. Réutilise les 4 fonctions existantes
-// telles quelles (jamais dupliqué de logique).
+// peupler les 4 onglets d'un coup.
 //
-// Bug réel corrigé (10/08, trouvé par Rami en conditions réelles — "too
-// many requests" au clic du bouton, persistant même après le passage en
-// séquentiel ci-dessous) : chaque fonction déclenche plusieurs appels
-// Pennylane en interne (potentiellement 15-20+ au total), et une exécution
-// séquentielle SANS pause entre les fonctions reste une vraie rafale si
-// chaque appel individuel est rapide — la limite documentée de 25
-// requêtes/5 secondes (cf. client.ts, firmClient.ts) peut toujours être
-// dépassée. Deux corrections combinées : maxRetries429 relevé de 3 à 8
-// côté client (cf. app.ts, resoudreClientPennylane), ET une vraie pause
-// explicite ici entre chaque fonction, pour réduire la sévérité de la
-// rafale plutôt que de compter uniquement sur les nouvelles tentatives.
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
+// Bug réel majeur corrigé (10/08, confirmé par Claude Code — ~100
+// secondes constatées sur un vrai dossier en conditions réelles) : les 4
+// fonctions faisaient CHACUNE leur propre aller-retour Pennylane (balance
+// -> écritures) pour la MÊME période, entièrement redondant. Corrigé en
+// récupérant une seule fois ici, partagé aux 4 fonctions via leur nouveau
+// paramètre optionnel ecrituresPreChargees (cf. chacun de leurs fichiers).
+// Seules verifierComptesACategoriser (suggestion IA) et
+// preparerRapprochementsPaiementAchat (mouvements de paiement, précochage
+// IA) gardent un vrai travail réseau propre après ce partage —
+// verifierComptesTvaAConfirmer et verifierParcVehicules deviennent du pur
+// calcul sur les écritures déjà en mémoire, plus aucun appel du tout.
+//
+// Les pauses explicites ajoutées plus tôt (contre un risque de rafale
+// "too many requests") sont retirées : avec un seul aller-retour Pennylane
+// partagé au lieu de quatre redondants, le nombre total d'appels chute
+// largement sous la limite documentée (25 requêtes/5 secondes), sans
+// compter le filet de sécurité déjà en place (maxRetries429 relevé à 8,
+// cf. app.ts).
 export interface ParametresPortesObligatoires {
   cabinetId: string;
   dossierId: string;
@@ -47,13 +50,26 @@ export async function chargerPortesObligatoires(
   pool: Pool,
   params: ParametresPortesObligatoires
 ): Promise<EtatPortesObligatoires> {
-  const categorisation = await verifierComptesACategoriser(pool, params);
-  await sleep(1200);
-  const comptesTvaAConfirmer = await verifierComptesTvaAConfirmer(pool, params);
-  await sleep(1200);
-  const rapprochementsPaiementAchat = await preparerRapprochementsPaiementAchat(pool, params);
-  await sleep(1200);
-  const parcVehiculesNonRenseigne = await verifierParcVehicules(pool, params);
+  const balance = await fetchTrialBalance(params.client, {
+    dossierId: params.dossierId,
+    periodeDebut: params.periodeDebut,
+    periodeFin: params.periodeFin,
+  });
+  const comptesTva = filterComptesParPrefixe(balance, ['445'])
+    .filter((c) => c.debit !== 0 || c.credit !== 0)
+    .map((c) => c.numeroCompte);
+  const ecritures = await fetchEcrituresTvaCompletes(params.client, {
+    comptesTva,
+    periodeDebut: params.periodeDebut,
+    periodeFin: params.periodeFin,
+  });
+
+  const paramsAvecEcritures = { ...params, ecrituresPreChargees: ecritures };
+
+  const categorisation = await verifierComptesACategoriser(pool, paramsAvecEcritures);
+  const comptesTvaAConfirmer = await verifierComptesTvaAConfirmer(pool, paramsAvecEcritures);
+  const rapprochementsPaiementAchat = await preparerRapprochementsPaiementAchat(pool, paramsAvecEcritures);
+  const parcVehiculesNonRenseigne = await verifierParcVehicules(pool, paramsAvecEcritures);
 
   return { categorisation, comptesTvaAConfirmer, rapprochementsPaiementAchat, parcVehiculesNonRenseigne };
 }
