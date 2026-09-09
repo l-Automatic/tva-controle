@@ -177,7 +177,7 @@ export async function preparerRapprochementsPaiementAchat(
   // maxRetries429 déjà relevé à 8 par ailleurs) — l'ordre final ne
   // dépend pas de l'ordre de traitement, resultat.sort() ci-dessous
   // s'en charge de toute façon.
-  const CONCURRENCE_MAX = 4;
+  const CONCURRENCE_MAX = 8;
   let curseur = 0;
   async function traiterUneFacture(): Promise<void> {
     while (curseur < facturesARapprocher.length) {
