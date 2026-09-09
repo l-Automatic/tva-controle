@@ -49,3 +49,15 @@ Reproduire sur "Electricien Sandbox Reel" avec de vraies données,
 confirmer si le symptôme est présent ou non, et si présent, identifier
 la cause précise avant de proposer un correctif — pas une nouvelle
 tentative sans preuve.
+
+## Périmètre élargi — backend inclus si nécessaire
+
+Ne te limite pas au frontend pour cette investigation précise. Si
+l'instrumentation te mène vers une cause backend (le nouveau
+mécanisme de partage des écritures, `portesObligatoires.ts`,
+`preparerRapprochementsPaiementAchat.ts`, ou autre chose côté
+serveur), lis ce code, comprends-le, et corrige-le directement si
+c'est bien là que se trouve la cause — pas seulement le signaler pour
+qu'on te redonne un brief séparé. Applique la même rigueur qu'au v65 :
+identifie la cause avec preuve avant de corriger, peu importe de quel
+côté (backend ou frontend) elle se trouve.
