@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { IPennylaneApiClient } from '@tva-controle/connector-pennylane';
 import { fetchTrialBalance, filterComptesParPrefixe, fetchEcrituresTvaCompletes } from '@tva-controle/connector-pennylane';
-import type { Anomalie } from '@tva-controle/core';
+import type { Anomalie, EcritureTvaComplete } from '@tva-controle/core';
 import { detecterComptesTvaNonReconnus } from '@tva-controle/controles-module4';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur } from './db/dossierRepository.js';
@@ -21,6 +21,10 @@ export interface ParametresVerificationComptesTva {
   client: IPennylaneApiClient;
   periodeDebut: string;
   periodeFin: string;
+  // Performance (10/08) — cf. verifierComptesACategoriser.ts, même
+  // principe : réutilise les écritures déjà chargées par l'agrégateur
+  // plutôt que de refaire le même aller-retour Pennylane.
+  ecrituresPreChargees?: EcritureTvaComplete[];
 }
 
 export async function verifierComptesTvaAConfirmer(
@@ -31,20 +35,23 @@ export async function verifierComptesTvaAConfirmer(
     chargerContexteDossier(client, params.dossierId)
   );
 
-  const balance = await fetchTrialBalance(params.client, {
-    dossierId: params.dossierId,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
-  const comptesTva = filterComptesParPrefixe(balance, ['445'])
-    .filter((c) => c.debit !== 0 || c.credit !== 0)
-    .map((c) => c.numeroCompte);
-
-  const ecritures = await fetchEcrituresTvaCompletes(params.client, {
-    comptesTva,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
+  const ecritures =
+    params.ecrituresPreChargees ??
+    (await (async () => {
+      const balance = await fetchTrialBalance(params.client, {
+        dossierId: params.dossierId,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+      const comptesTva = filterComptesParPrefixe(balance, ['445'])
+        .filter((c) => c.debit !== 0 || c.credit !== 0)
+        .map((c) => c.numeroCompte);
+      return fetchEcrituresTvaCompletes(params.client, {
+        comptesTva,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+    })());
 
   return detecterComptesTvaNonReconnus(ecritures, {
     compteAutoliquidationDue: conventionValeur(contexteDossier, 'compte_tva_due_autoliquidee'),
