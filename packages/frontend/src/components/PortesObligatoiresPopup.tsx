@@ -161,14 +161,23 @@ export function PortesObligatoiresPopup({
             {/* Mystère résolu aux briefs v65/v66 : l'onglet rapprochements ne
                 manquait rien, la catégorisation des comptes de charge n'était
                 simplement pas encore terminée au moment où Rami regardait —
-                pas un bug. Même mise en évidence que la sous-catégorisation
-                autoliquidation (brief v63) : reste visible tant que le
-                chargement n'est pas réellement terminé, jamais un état
-                "terminé" prématuré. */}
+                pas un bug. Message reformulé au v68 : le brief v67 le
+                présentait à tort comme propre à l'onglet rapprochements,
+                alors que depuis le correctif de performance backend
+                (portesObligatoires.ts), les 4 portes se chargent en un seul
+                appel groupé à l'ouverture du popup — il n'y a plus de
+                chargement séparé par onglet. Reformulé pour rester honnête
+                sur ce qui se passe réellement : un seul chargement pour les
+                4 portes, dont le contenu (tous onglets confondus) dépend de
+                l'état actuel de la catégorisation. Même mise en évidence que
+                la sous-catégorisation autoliquidation (brief v63) : reste
+                visible tant que le chargement n'est pas réellement terminé,
+                jamais un état "terminé" prématuré. */}
             <p className="avertissement">
               <strong>
-                Chargement des rapprochements en cours… Le nombre de candidats affichés dépend de l'état actuel de
-                la catégorisation des comptes de charge.
+                Chargement des 4 portes obligatoires en cours… Le contenu de chaque onglet (comptes à catégoriser,
+                TVA à confirmer, rapprochements, parc de véhicules) dépend de l'état actuel de la catégorisation et
+                des conventions déjà confirmées pour ce dossier.
               </strong>
             </p>
           </div>
