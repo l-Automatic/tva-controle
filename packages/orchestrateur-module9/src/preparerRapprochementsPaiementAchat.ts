@@ -167,26 +167,43 @@ export async function preparerRapprochementsPaiementAchat(
   const resultat: FactureARapprocher[] = [];
 
   // Bug réel corrigé (10/08, trouvé par Rami en conditions réelles — un
-  // dossier vidé pour retester la détection a fait dépasser un timeout de
-  // passerelle) : cette boucle était entièrement séquentielle, un aller-
-  // retour Pennylane PLUS un appel Mistral par facture candidate — sur
-  // des dizaines de factures, largement de quoi dépasser n'importe quel
-  // délai raisonnable. Corrigé avec une concurrence limitée (4 en même
-  // temps) plutôt qu'un parallélisme total, pour rester dans une marge
-  // sûre vis-à-vis de la limite Pennylane (25 requêtes/5 secondes,
-  // maxRetries429 déjà relevé à 8 par ailleurs) — l'ordre final ne
-  // dépend pas de l'ordre de traitement, resultat.sort() ci-dessous
-  // s'en charge de toute façon.
+  // dossier vidé pour retester la détection dépassait un timeout de
+  // passerelle, même après un premier correctif de concurrence limitée).
+  // Le vrai problème n'était pas l'ordre de traitement mais le nombre
+  // d'allers-retours Pennylane lui-même : un appel par facture candidate,
+  // même en parallèle limité, reste N appels réseau. Corrigé en
+  // regroupant TOUS les comptes tiers concernés en un seul appel
+  // (fetchLignesParCompte accepte déjà un tableau de comptes) — N appels
+  // Pennylane deviennent 1 seul, peu importe le nombre de fournisseurs.
+  // Sur un vrai dossier avec beaucoup de comptes de charge, ce gain
+  // grandit avec la taille du dossier, contrairement à une simple
+  // parallélisation qui reste plafonnée par la limite de débit Pennylane.
+  const comptesTiersIdsUniques = [...new Set(facturesARapprocher.map((f) => f.compteTiersId))];
+  const tousLesMouvements =
+    comptesTiersIdsUniques.length > 0
+      ? await fetchLignesParCompte(params.client, {
+          compteIds: comptesTiersIdsUniques,
+          periodeDebut: exerciceDebut,
+          periodeFin: exerciceFin,
+        })
+      : [];
+  const mouvementsParCompteTiersId = new Map<number, typeof tousLesMouvements>();
+  for (const mvt of tousLesMouvements) {
+    const liste = mouvementsParCompteTiersId.get(mvt.compteId) ?? [];
+    liste.push(mvt);
+    mouvementsParCompteTiersId.set(mvt.compteId, liste);
+  }
+
+  // Concurrence limitée conservée UNIQUEMENT pour le précochage IA
+  // (Mistral, un appel par facture — ça reste nécessaire, contrairement
+  // au fetch Pennylane maintenant groupé ci-dessus) et pour l'auto-
+  // résolution en base des factures sans aucun candidat.
   const CONCURRENCE_MAX = 8;
   let curseur = 0;
   async function traiterUneFacture(): Promise<void> {
     while (curseur < facturesARapprocher.length) {
       const facture = facturesARapprocher[curseur++]!;
-      const mouvementsCompte = await fetchLignesParCompte(params.client, {
-        compteIds: [facture.compteTiersId],
-        periodeDebut: exerciceDebut,
-        periodeFin: exerciceFin,
-      });
+      const mouvementsCompte = mouvementsParCompteTiersId.get(facture.compteTiersId) ?? [];
       // Un vrai paiement RÉDUIT ce qui est dû au fournisseur -> toujours au
       // DÉBIT sur un compte 401 (10/08, bug réel corrigé — sans ce filtre,
       // d'autres FACTURES du même fournisseur, au crédit, apparaissaient à
