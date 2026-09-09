@@ -240,12 +240,14 @@ export function CycleZone({
           <DetailsProrataCollecte details={detailsProrataCollecte} />
         </aside>
       )}
-      {comptesACategoriser.length > 0 && (
+      {comptesACategoriser.length > 0 && periode && (
         <CategorisationPopup
           cabinetId={cabinetId}
           dossierId={dossierId}
           utilisateurId={utilisateurId}
           comptes={comptesACategoriser}
+          periodeDebut={periode.debut}
+          periodeFin={periode.fin}
           onClose={() => setComptesACategoriser([])}
         />
       )}

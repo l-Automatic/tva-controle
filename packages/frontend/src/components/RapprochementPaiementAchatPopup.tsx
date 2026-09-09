@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError, enregistrerRapprochementPaiementAchat, fetchRapprochementsPaiementAchat } from '../api';
+import { ApiError, enregistrerRapprochementPaiementAchat } from '../api';
 import { formatDate } from '../dateUtils';
 import { useToast } from '../toast';
 import { formatMontant } from './CalculsPanel';
@@ -9,13 +9,9 @@ interface RapprochementPaiementAchatContenuProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
-  // periodeDebut du cycle en cours de préparation — clé de résolution
-  // côté backend (cf. listerFacturesLedgerEntryIdsRapprochees) et borne
-  // basse de la requête de rechargement (brief v35) ; periodeFin sert
-  // uniquement à ce rechargement, distinctes de la fenêtre de recherche
-  // des candidats (tout l'exercice comptable).
+  // periodeDebut du cycle en cours de préparation — clé de résolution côté
+  // backend (cf. listerFacturesLedgerEntryIdsRapprochees).
   periodeDebut: string;
-  periodeFin: string;
   factures: FactureARapprocher[];
 }
 
@@ -38,7 +34,7 @@ function FactureCard({
   dossierId: string;
   utilisateurId: string;
   periodeDebut: string;
-  onTraite: () => void;
+  onTraite: (ledgerEntryIdsClaims: number[]) => void;
 }) {
   // Précochage IA (brief v34) : point de départ modifiable, jamais une
   // validation implicite — le collaborateur coche/décoche librement avant
@@ -78,7 +74,7 @@ function FactureCard({
           ? 'Facture rapprochée, aucun paiement correspondant'
           : `Facture rapprochée, ${paiementsValides.length} paiement(s) validé(s)`
       );
-      onTraite();
+      onTraite(paiementsValides.map((p) => p.ledgerEntryId));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Échec de l'enregistrement du rapprochement");
     } finally {
@@ -148,29 +144,30 @@ export function RapprochementPaiementAchatContenu({
   dossierId,
   utilisateurId,
   periodeDebut,
-  periodeFin,
   factures: facturesInitiales,
 }: RapprochementPaiementAchatContenuProps) {
   const [factures, setFactures] = useState(facturesInitiales);
-  const [rechargement, setRechargement] = useState(false);
 
-  // Un paiement validé pour une facture doit disparaître des candidats
-  // des autres (brief v35, le backend exclut désormais automatiquement
-  // les paiements déjà validés ailleurs) — un simple retrait local de la
-  // facture traitée ne suffit plus, il faut recharger depuis le serveur
-  // avant d'afficher la suite de la liste.
-  async function recharger() {
-    setRechargement(true);
-    try {
-      setFactures(await fetchRapprochementsPaiementAchat(cabinetId, dossierId, periodeDebut, periodeFin));
-    } catch {
-      // Silencieux : la facture qui vient d'être validée a déjà disparu
-      // de son propre point de vue (toast de confirmation affiché) — un
-      // échec de rechargement n'empêche pas de continuer, "Rafraîchir"
-      // au prochain essai de lancement de cycle reste possible.
-    } finally {
-      setRechargement(false);
-    }
+  // Bug réel corrigé (brief v61) : un re-fetch complet de cet onglet après
+  // chaque validation (fetchRapprochementsPaiementAchat) vidait toute la
+  // liste le temps de l'appel ("Actualisation…"), donnant l'impression que
+  // tout se rechargeait à chaque validation — alors qu'un seul élément
+  // venait d'être traité. Un paiement validé doit disparaître des
+  // candidats des autres factures (brief v35, un même paiement ne peut pas
+  // être réclamé deux fois) : comme on connaît déjà exactement les
+  // ledgerEntryId venant d'être réclamés (paiementsValides, calculé au
+  // moment de la validation), un simple filtrage local suffit — jamais
+  // besoin de retourner au serveur pour ça.
+  function retirer(factureLedgerEntryId: number, ledgerEntryIdsClaims: number[]) {
+    setFactures((prev) =>
+      prev
+        .filter((f) => f.ledgerEntryId !== factureLedgerEntryId)
+        .map((f) =>
+          ledgerEntryIdsClaims.length === 0
+            ? f
+            : { ...f, candidats: f.candidats.filter((c) => !ledgerEntryIdsClaims.includes(c.ledgerEntryId)) }
+        )
+    );
   }
 
   return (
@@ -179,25 +176,22 @@ export function RapprochementPaiementAchatContenu({
         Factures de service non payées, avec leurs paiements candidats trouvés sur toute la fenêtre de l'exercice.
         Les cases précochées reflètent une suggestion IA quand disponible, à valider ou corriger avant d'envoyer.
       </p>
-      {rechargement && <p className="empty">Actualisation…</p>}
-      {!rechargement && factures.length === 0 ? (
+      {factures.length === 0 ? (
         <p className="empty">Toutes les factures ont été rapprochées.</p>
       ) : (
-        !rechargement && (
-          <ul className="card-list">
-            {factures.map((f) => (
-              <FactureCard
-                key={f.ledgerEntryId}
-                facture={f}
-                cabinetId={cabinetId}
-                dossierId={dossierId}
-                utilisateurId={utilisateurId}
-                periodeDebut={periodeDebut}
-                onTraite={() => void recharger()}
-              />
-            ))}
-          </ul>
-        )
+        <ul className="card-list">
+          {factures.map((f) => (
+            <FactureCard
+              key={f.ledgerEntryId}
+              facture={f}
+              cabinetId={cabinetId}
+              dossierId={dossierId}
+              utilisateurId={utilisateurId}
+              periodeDebut={periodeDebut}
+              onTraite={(ledgerEntryIdsClaims) => retirer(f.ledgerEntryId, ledgerEntryIdsClaims)}
+            />
+          ))}
+        </ul>
       )}
     </>
   );

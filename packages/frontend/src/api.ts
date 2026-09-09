@@ -760,14 +760,22 @@ export function fetchRapprochementsPaiementAchat(
 // seul appel au lieu des 3 routes séparées ci-dessus + une détection
 // indirecte pour le parc de véhicules (auparavant seulement visible via un
 // message d'erreur au lancement du cycle).
+// signal optionnel (brief v61) : appel potentiellement lent (cf. chantier
+// de performance backend en cours) — permet à l'appelant d'annuler
+// réellement une requête devenue obsolète (React StrictMode double-invoque
+// les effets en dev, sans signal les deux appels partaient réellement en
+// parallèle vers le serveur) plutôt que de seulement ignorer son résultat.
 export function fetchPortesObligatoires(
   cabinetId: string,
   dossierId: string,
   periodeDebut: string,
-  periodeFin: string
+  periodeFin: string,
+  signal?: AbortSignal
 ): Promise<EtatPortesObligatoires> {
   const params = new URLSearchParams({ periodeDebut, periodeFin });
-  return request<EtatPortesObligatoires>(`/dossiers/${dossierId}/portes-obligatoires?${params}`, cabinetId);
+  return request<EtatPortesObligatoires>(`/dossiers/${dossierId}/portes-obligatoires?${params}`, cabinetId, {
+    ...(signal ? { signal } : {}),
+  });
 }
 
 // paiementsValides peut être vide — le collaborateur estime qu'aucun

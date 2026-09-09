@@ -86,26 +86,33 @@ export function PortesObligatoiresPopup({
   }
 
   useEffect(() => {
-    let annule = false;
+    // AbortController plutôt qu'un simple booléen "annule" (brief v61) :
+    // React StrictMode double-invoque cet effet en dev (montage ->
+    // nettoyage -> remontage immédiat), et un simple booléen ignoré au
+    // retour laissait quand même les DEUX appels réseau partir en
+    // parallèle vers un agrégateur potentiellement lent (cf. chantier de
+    // performance backend en cours) — signalé comme cause plausible du
+    // chargement initial parfois incomplet. Le signal annule réellement la
+    // requête abandonnée au lieu de seulement ignorer sa réponse.
+    const controller = new AbortController();
     let idTimeout: ReturnType<typeof setTimeout> | undefined;
     setPhase('chargement');
     setError(null);
-    fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin)
+    fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin, controller.signal)
       .then((data) => {
-        if (annule) return;
         setEtat(data);
         setPhase('succes');
         idTimeout = setTimeout(() => {
-          if (!annule) setPhase(null);
+          setPhase(null);
         }, 1100);
       })
       .catch((err) => {
-        if (annule) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
         setPhase(null);
       });
     return () => {
-      annule = true;
+      controller.abort();
       if (idTimeout) clearTimeout(idTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,6 +179,8 @@ export function PortesObligatoiresPopup({
                 utilisateurId={utilisateurId}
                 comptes={etat.categorisation.comptesACategoriser}
                 comptesSousCategorieAutoliquidation={etat.categorisation.comptesServiceSansSousCategorieAutoliquidation}
+                periodeDebut={periodeDebut}
+                periodeFin={periodeFin}
               />
             </div>
             <div className="sous-onglet-contenu" hidden={sousOnglet !== 'comptesTva'}>
@@ -188,7 +197,6 @@ export function PortesObligatoiresPopup({
                 dossierId={dossierId}
                 utilisateurId={utilisateurId}
                 periodeDebut={periodeDebut}
-                periodeFin={periodeFin}
                 factures={etat.rapprochementsPaiementAchat}
               />
             </div>

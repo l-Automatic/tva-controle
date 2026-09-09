@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { ApiError, ajouterConvention, confirmerConvention } from '../api';
+import { ApiError, ajouterConvention, confirmerConvention, fetchComptesACategoriser } from '../api';
 import { useToast } from '../toast';
 import { SuggestionIABlock } from './SuggestionIABlock';
 import type { CompteACategoriser } from '../types';
@@ -15,6 +15,15 @@ interface CategorisationContenuProps {
   // n'a jamais été tranché. Optionnel : les appelants pré-v46 (aucun ici en
   // pratique, mais gardé simple) n'ont qu'à ne pas le passer.
   comptesSousCategorieAutoliquidation?: CompteACategoriser[];
+  // Période du cycle en préparation (brief v61, point 3) — nécessaire pour
+  // rejouer un contrôle ciblé (fetchComptesACategoriser) juste après la
+  // confirmation d'un compte en comptes_charge_service : la sous-
+  // catégorisation autoliquidation ne peut légitimement rien proposer tant
+  // que cette liste est vide, ce n'est pas un bug backend, mais il ne faut
+  // pas obliger à fermer et rouvrir tout le popup pour voir un nouveau
+  // candidat apparaître.
+  periodeDebut: string;
+  periodeFin: string;
   // Popup unique à onglets (brief v58) — remonte le nombre de comptes
   // restants pour que l'enveloppe (CategorisationPopup ci-dessous, ou le
   // futur popup à onglets) puisse l'afficher dans son propre titre sans
@@ -61,7 +70,7 @@ function CompteCard({
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
-  onTraite: () => void;
+  onTraite: (cle: string) => void;
 }) {
   // Présélection IA (brief v10) : le select part pré-rempli sur la suggestion
   // si elle existe et n'est pas null, mais rien n'est envoyé au serveur tant
@@ -81,7 +90,7 @@ function CompteCard({
       const { id } = await ajouterConvention(cabinetId, dossierId, utilisateurId, cle, [compte.compte]);
       await confirmerConvention(cabinetId, id, utilisateurId);
       notifier(`Compte ${compte.compte} catégorisé : ${libelle}`);
-      onTraite();
+      onTraite(cle);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de la catégorisation du compte ${compte.compte}`);
     } finally {
@@ -105,7 +114,7 @@ function CompteCard({
       ]);
       await confirmerConvention(cabinetId, id, utilisateurId);
       notifier(`Compte ${compte.compte}, aucune catégorie, ne réapparaîtra plus`);
-      onTraite();
+      onTraite('comptes_sans_categorie');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Échec de l'enregistrement du compte ${compte.compte}`);
     } finally {
@@ -213,6 +222,8 @@ export function CategorisationContenu({
   utilisateurId,
   comptes: comptesInitiaux,
   comptesSousCategorieAutoliquidation: comptesSousCategorieInitiaux = [],
+  periodeDebut,
+  periodeFin,
   onCountChange,
 }: CategorisationContenuProps) {
   const [comptes, setComptes] = useState(comptesInitiaux);
@@ -223,8 +234,29 @@ export function CategorisationContenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comptes.length]);
 
-  function retirer(compte: string) {
+  // Point 3 ajouté au brief v61 : identifierComptesServiceSansSousCategorieAutoliquidation
+  // ne peut légitimement rien proposer tant que comptes_charge_service est
+  // vide — dès qu'un compte vient d'y être confirmé, un nouveau candidat à
+  // la sous-catégorisation autoliquidation peut donc apparaître. Rejoue un
+  // contrôle ciblé (même route que le chargement initial, pas l'agrégateur
+  // des 4 portes) pour le détecter tout de suite, sans avoir à fermer et
+  // rouvrir tout le popup — cohérent avec le reste de ce brief (une action
+  // dans un onglet ne doit affecter que cet onglet).
+  async function rafraichirSousCategorie() {
+    try {
+      const resultat = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
+      setComptesSousCategorie(resultat.comptesServiceSansSousCategorieAutoliquidation);
+    } catch {
+      // Silencieux : la confirmation elle-même a déjà réussi (toast
+      // affiché) — un échec de ce contrôle ciblé n'empêche pas de
+      // continuer, la porte obligatoire referait ce même contrôle de toute
+      // façon au prochain essai de lancement de cycle.
+    }
+  }
+
+  function retirer(compte: string, cle: string) {
     setComptes((prev) => prev.filter((c) => c.compte !== compte));
+    if (cle === 'comptes_charge_service') void rafraichirSousCategorie();
   }
 
   function retirerSousCategorie(compte: string) {
@@ -248,7 +280,7 @@ export function CategorisationContenu({
               cabinetId={cabinetId}
               dossierId={dossierId}
               utilisateurId={utilisateurId}
-              onTraite={() => retirer(c.compte)}
+              onTraite={(cle) => retirer(c.compte, cle)}
             />
           ))}
         </ul>
