@@ -103,6 +103,7 @@ export async function verifierComptesACategoriser(
     comptesEntretienVehicule: conventionListe(contexteDossier, 'comptes_entretien_vehicule') ?? [],
     comptesLocationVehicule: conventionListe(contexteDossier, 'comptes_location_vehicule') ?? [],
     comptesVenteExport: conventionListe(contexteDossier, 'comptes_vente_export') ?? [],
+    comptesVenteIntracomExoneree: conventionListe(contexteDossier, 'comptes_vente_intracom_exoneree') ?? [],
     comptesSansCategorie: conventionListe(contexteDossier, 'comptes_sans_categorie') ?? [],
   });
 
