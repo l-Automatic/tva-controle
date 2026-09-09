@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type { IPennylaneApiClient } from '@tva-controle/connector-pennylane';
 import { fetchTrialBalance, filterComptesParPrefixe, fetchEcrituresTvaCompletes } from '@tva-controle/connector-pennylane';
+import type { EcritureTvaComplete } from '@tva-controle/core';
 import {
   identifierComptesACategoriser,
   identifierComptesServiceSansSousCategorieAutoliquidation,
@@ -36,6 +37,16 @@ export interface ParametresVerificationCategorisation {
   client: IPennylaneApiClient;
   periodeDebut: string;
   periodeFin: string;
+  // Performance (10/08, ~100s constatées sur un vrai dossier — bug réel
+  // confirmé par Claude Code, instrumentation réelle) : les 4 portes
+  // obligatoires refaisaient chacune le même aller-retour Pennylane
+  // (balance -> écritures) pour la même période, de façon totalement
+  // redondante. Quand chargerPortesObligatoires (l'agrégateur) fournit
+  // ces écritures déjà chargées, on les réutilise directement au lieu
+  // de les récupérer une seconde fois — l'appelant standalone (route
+  // /comptes-a-categoriser, pipeline.ts) continue de fonctionner sans
+  // rien changer, ce paramètre reste optionnel.
+  ecrituresPreChargees?: EcritureTvaComplete[];
 }
 
 export interface ResultatVerificationCategorisation {
@@ -57,20 +68,23 @@ export async function verifierComptesACategoriser(
     chargerContexteDossier(client, params.dossierId)
   );
 
-  const balance = await fetchTrialBalance(params.client, {
-    dossierId: params.dossierId,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
-  const comptesTva = filterComptesParPrefixe(balance, ['445'])
-    .filter((c) => c.debit !== 0 || c.credit !== 0)
-    .map((c) => c.numeroCompte);
-
-  const ecritures = await fetchEcrituresTvaCompletes(params.client, {
-    comptesTva,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
+  const ecritures =
+    params.ecrituresPreChargees ??
+    (await (async () => {
+      const balance = await fetchTrialBalance(params.client, {
+        dossierId: params.dossierId,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+      const comptesTva = filterComptesParPrefixe(balance, ['445'])
+        .filter((c) => c.debit !== 0 || c.credit !== 0)
+        .map((c) => c.numeroCompte);
+      return fetchEcrituresTvaCompletes(params.client, {
+        comptesTva,
+        periodeDebut: params.periodeDebut,
+        periodeFin: params.periodeFin,
+      });
+    })());
 
   const comptesChargeService = conventionListe(contexteDossier, 'comptes_charge_service') ?? [];
 
