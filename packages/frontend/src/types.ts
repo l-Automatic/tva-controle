@@ -57,6 +57,9 @@ export const CLES_CONVENTIONS_COMPTES = [
   'comptes_carburant',
   'comptes_cadeaux',
   'comptes_immobilisation',
+  'comptes_entretien_vehicule',
+  'comptes_location_vehicule',
+  'comptes_vente_export',
 ] as const;
 export type CleConventionCompte = (typeof CLES_CONVENTIONS_COMPTES)[number];
 
@@ -67,6 +70,9 @@ export const LIBELLE_CLE_CONVENTION: Record<CleConventionCompte, string> = {
   comptes_carburant: 'Comptes de carburant',
   comptes_cadeaux: 'Cadeaux clients',
   comptes_immobilisation: 'Comptes d’immobilisation',
+  comptes_entretien_vehicule: 'Comptes d’entretien véhicule',
+  comptes_location_vehicule: 'Comptes de location véhicule',
+  comptes_vente_export: 'Comptes de vente export',
 };
 
 // --- Cycle TVA (Module 9) ---

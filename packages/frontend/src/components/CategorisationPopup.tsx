@@ -228,6 +228,13 @@ export function CategorisationContenu({
 }: CategorisationContenuProps) {
   const [comptes, setComptes] = useState(comptesInitiaux);
   const [comptesSousCategorie, setComptesSousCategorie] = useState(comptesSousCategorieInitiaux);
+  // État de chargement explicite (brief v62) — sans lui, confirmer le
+  // dernier compte affichait d'abord "Tous les comptes ont été traités."
+  // (comptes.length tombe à 0 immédiatement) pendant que ce contrôle ciblé
+  // tournait encore en arrière-plan, avant que la nouvelle suggestion ne
+  // s'affiche silencieusement. Rien n'incitait alors l'utilisateur à
+  // attendre : il pouvait fermer l'onglet en pensant avoir terminé.
+  const [verificationSousCategorie, setVerificationSousCategorie] = useState(false);
 
   useEffect(() => {
     onCountChange?.(comptes.length);
@@ -243,6 +250,7 @@ export function CategorisationContenu({
   // rouvrir tout le popup — cohérent avec le reste de ce brief (une action
   // dans un onglet ne doit affecter que cet onglet).
   async function rafraichirSousCategorie() {
+    setVerificationSousCategorie(true);
     try {
       const resultat = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
       setComptesSousCategorie(resultat.comptesServiceSansSousCategorieAutoliquidation);
@@ -251,6 +259,8 @@ export function CategorisationContenu({
       // affiché) — un échec de ce contrôle ciblé n'empêche pas de
       // continuer, la porte obligatoire referait ce même contrôle de toute
       // façon au prochain essai de lancement de cycle.
+    } finally {
+      setVerificationSousCategorie(false);
     }
   }
 
@@ -270,7 +280,11 @@ export function CategorisationContenu({
         comptes non traités réapparaîtront au prochain cycle.
       </p>
       {comptes.length === 0 ? (
-        <p className="empty">Tous les comptes ont été traités.</p>
+        verificationSousCategorie ? (
+          <p className="empty">Vérification des sous-catégories…</p>
+        ) : (
+          <p className="empty">Tous les comptes ont été traités.</p>
+        )
       ) : (
         <ul className="card-list">
           {comptes.map((c) => (
@@ -284,6 +298,9 @@ export function CategorisationContenu({
             />
           ))}
         </ul>
+      )}
+      {verificationSousCategorie && comptes.length > 0 && (
+        <p className="reference">Vérification des sous-catégories…</p>
       )}
 
       {comptesSousCategorie.length > 0 && (
