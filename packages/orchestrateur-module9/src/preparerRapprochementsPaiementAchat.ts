@@ -8,8 +8,8 @@ import {
   fetchLignesParCompte,
   resolveLedgerAccounts,
 } from '@tva-controle/connector-pennylane';
-import { identifierFacturesCandidatesAcompte, verifierCoherenceTvaHotel, identifierCandidatsJugementHotel } from '@tva-controle/controles-module4';
-import { MistralClient, jugerCandidatsPaiementAchat, jugerLibellesHotel } from '@tva-controle/connector-mistral';
+import { identifierFacturesCandidatesAcompte } from '@tva-controle/controles-module4';
+import { MistralClient, jugerCandidatsPaiementAchat } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, chargerDossierComplet, conventionListe, conventionValeur } from './db/dossierRepository.js';
 import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees, listerPaiementsDejaReclames } from './db/readRepository.js';
@@ -99,12 +99,12 @@ export async function preparerRapprochementsPaiementAchat(
     parametreCabinetValeur(client, params.cabinetId, 'mistral_api_key')
   );
 
-  // Exception hôtel (10/08) : un compte 625 (paiement comptant par défaut)
-  // peut en pratique être réglé en plusieurs fois — sans cette détection,
-  // une facture d'hôtel payée en deux fois serait silencieusement traitée
-  // comme "déjà réglée comptant, rien à vérifier". Même logique que dans
-  // executerCycleTva (pipeline.ts) — dupliquée ici car ce popup tourne
-  // maintenant AVANT le cycle, plus dans son enchaînement.
+  // Noms de comptes fournisseur, pour l'affichage (libelleCompteFournisseur
+  // plus bas) — le détecteur hôtel qui utilisait aussi cette liste a été
+  // retiré (10/08, demande explicite de Rami : plus d'exception spéciale,
+  // un hôtel payé en plusieurs fois devient candidat comme n'importe quel
+  // autre fournisseur, via sa catégorisation normale en
+  // comptes_charge_service).
   const comptesFournisseurConcernes = [
     ...new Set(
       ecritures
@@ -121,30 +121,10 @@ export async function preparerRapprochementsPaiementAchat(
           )
         )
       : new Map<string, string>();
-  const anomaliesHotel = verifierCoherenceTvaHotel(ecritures, nomsComptesFournisseur);
-
-  const ledgerEntryIdsHotel = new Set<number>(anomaliesHotel.map((a) => a.ledgerEntryId));
-  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
-    const candidatsJugementHotel = identifierCandidatsJugementHotel(ecritures, nomsComptesFournisseur);
-    if (candidatsJugementHotel.length > 0) {
-      try {
-        const mistralClientHotel = new MistralClient({ apiKey: mistralApiKey });
-        const jugements = await jugerLibellesHotel(mistralClientHotel, candidatsJugementHotel);
-        for (const j of jugements.filter((j) => j.estHotel)) {
-          ledgerEntryIdsHotel.add(j.ledgerEntryId);
-        }
-      } catch (err) {
-        if (process.env.DEBUG_CYCLE) {
-          console.error(`[DEBUG_CYCLE] échec jugement IA (hôtel, popup rapprochement) : ${String(err)}`);
-        }
-      }
-    }
-  }
 
   const facturesCandidates = identifierFacturesCandidatesAcompte(
     ecritures,
     comptesChargeService,
-    ledgerEntryIdsHotel,
     comptesChargeAutoliquidation,
     comptesTvaIntracomExclus
   );
