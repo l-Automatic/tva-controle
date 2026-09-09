@@ -39,10 +39,20 @@ export interface FactureCandidateAcompte {
 // commence par le même préfixe "44566" que le déductible standard, mais
 // son exigibilité ne dépend jamais du paiement — ne doit donc jamais
 // apparaître ici, quel que soit son statut de lettrage.
+//
+// Exception "hôtel" retirée (10/08, demande explicite de Rami) : elle
+// forçait un compte 625 (paiement comptant) à devenir candidat même
+// sans être confirmé comptes_charge_service, en s'appuyant sur une
+// détection LLM dédiée (identifierCandidatsJugementHotel/jugerLibellesHotel,
+// chantier séparé). Retirée par cohérence — un hôtel payé en plusieurs
+// fois devient candidat comme n'importe quel autre fournisseur, en
+// confirmant simplement son compte de charge dans comptes_charge_service,
+// sans mécanisme spécial. Les fonctions de détection LLM associées
+// restent en place (utilisées ailleurs, cf. tva_hotel_a_verifier), seul
+// le court-circuit ici est retiré.
 export function identifierFacturesCandidatesAcompte(
   ecritures: EcritureTvaComplete[],
   comptesChargeService: string[],
-  ledgerEntryIdsExceptionPaiementComptant: Set<number> = new Set(),
   comptesChargeAutoliquidation: string[] = [],
   comptesTvaExclus: string[] = []
 ): FactureCandidateAcompte[] {
@@ -66,17 +76,11 @@ export function identifierFacturesCandidatesAcompte(
     // sans lettrage décrit à l'origine par Rami).
     if (ligneTiers.lettrage.estLettree) continue;
 
-    // Un hôtel identifié comme exception au "paiement comptant" (625) est
-    // candidat même si 625 n'est pas dans comptes_charge_service — c'est
-    // justement le cas où la nature service n'est pas la question, seul le
-    // fait qu'un hôtel peut être payé en deux fois compte ici.
-    const estExceptionForcee = ledgerEntryIdsExceptionPaiementComptant.has(ecriture.ligneTva.ledgerEntryId);
-
     const comptesChargeApplicables = [...comptesChargeService, ...comptesChargeAutoliquidation];
     const toucheChargeService = ecriture.autresLignes.some((l) =>
       comptesChargeApplicables.some((prefixe) => l.compte.startsWith(prefixe))
     );
-    if (!toucheChargeService && !estExceptionForcee) continue; // jamais un bien, sauf exception forcée
+    if (!toucheChargeService) continue; // jamais un bien, aucune exception
 
     const montantTva = Math.abs(ecriture.ligneTva.debit - ecriture.ligneTva.credit);
     if (montantTva === 0) continue;
