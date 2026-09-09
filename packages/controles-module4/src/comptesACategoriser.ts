@@ -21,6 +21,15 @@ export interface ComptesConnus {
   // lui-même. Rare pour les dossiers de ce projet selon Rami — une
   // catégorie optionnelle, pas un motif de blocage de cycle.
   comptesVenteExport?: string[];
+  // Ligne 7 CA3 (10/08) — livraisons intracommunautaires exonérées.
+  // Ajoutée après coup (10/08, demande de Rami) : le champ était déjà
+  // mentionné en commentaire ci-dessus depuis le chantier export, sans
+  // jamais avoir été réellement câblé comme catégorie du popup — un
+  // compte confirmé ici n'était donc jamais exclu de "à catégoriser",
+  // re-proposé indéfiniment. Même nature que comptesVenteExport : jamais
+  // une porte obligatoire, alimente uniquement la ligne 7 de la
+  // déclaration et le contrôle de cohérence (verifierAbsenceTvaLivraisonIntracom).
+  comptesVenteIntracomExoneree?: string[];
   // Bug réel corrigé le 10/08 : un compte marqué "aucune de celles-là"
   // dans le popup n'était jamais mémorisé nulle part — donc redétecté à
   // l'identique à chaque cycle suivant, indéfiniment. Ce n'est PAS une
@@ -62,6 +71,7 @@ export function identifierComptesACategoriser(
     ...(connus.comptesEntretienVehicule ?? []),
     ...(connus.comptesLocationVehicule ?? []),
     ...(connus.comptesVenteExport ?? []),
+    ...(connus.comptesVenteIntracomExoneree ?? []),
   ];
   const comptesSansCategorieExacts = new Set(connus.comptesSansCategorie ?? []);
 
