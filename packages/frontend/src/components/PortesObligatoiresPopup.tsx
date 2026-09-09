@@ -125,7 +125,7 @@ export function PortesObligatoiresPopup({
   return (
     <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Portes obligatoires avant le cycle">
       <div className="popup">
-        <div className="popup-header">
+        <div className={`popup-header${phase ? ' popup-header-centre' : ''}`}>
           <h2>Portes obligatoires avant le cycle</h2>
           <button className="popup-close" onClick={onClose} aria-label="Fermer">
             <X size={18} />

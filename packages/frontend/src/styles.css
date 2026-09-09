@@ -1430,6 +1430,23 @@ pre.details {
   margin: 0;
 }
 
+/* Titre centré pendant le chargement du popup portes obligatoires (le
+   bouton fermer reste accessible en haut à droite, sorti du flux via
+   position absolue, pour que le titre se centre sur toute la largeur). */
+.popup-header-centre {
+  position: relative;
+  justify-content: center;
+}
+
+.popup-header-centre h2 {
+  text-align: center;
+}
+
+.popup-header-centre .popup-close {
+  position: absolute;
+  right: 0;
+}
+
 .popup-close {
   background: transparent;
   border: none;
