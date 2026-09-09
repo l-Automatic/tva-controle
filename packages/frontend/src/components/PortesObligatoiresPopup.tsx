@@ -86,32 +86,49 @@ export function PortesObligatoiresPopup({
   }
 
   useEffect(() => {
-    // AbortController plutôt qu'un simple booléen "annule" (brief v61) :
-    // React StrictMode double-invoque cet effet en dev (montage ->
-    // nettoyage -> remontage immédiat), et un simple booléen ignoré au
-    // retour laissait quand même les DEUX appels réseau partir en
-    // parallèle vers un agrégateur potentiellement lent (cf. chantier de
-    // performance backend en cours) — signalé comme cause plausible du
-    // chargement initial parfois incomplet. Le signal annule réellement la
-    // requête abandonnée au lieu de seulement ignorer sa réponse.
+    // Bug réel investigué en profondeur (brief v63, point 3, même rigueur
+    // que le v60) : l'AbortController du v61 empêchait déjà le CLIENT de
+    // traiter la réponse du montage jeté par le double-invoque StrictMode
+    // (dev), mais PAS le SERVEUR de traiter réellement les deux appels en
+    // double — abort() annule une requête déjà en vol côté navigateur,
+    // mais n'empêche pas le fetch() du premier montage d'avoir déjà
+    // atteint le serveur avant que le nettoyage synchrone (montage ->
+    // nettoyage -> remontage, tout dans le même tick) n'ait pu appeler
+    // abort(). Deux exécutions réelles et concurrentes de l'agrégateur
+    // (potentiellement lent, cf. chantier de performance backend) restent
+    // donc possibles à chaque ouverture du popup, une cause plausible
+    // d'une réponse incomplète en cas d'interférence côté connecteur
+    // Pennylane sous appels simultanés. Corrigé en reportant l'appel réel
+    // d'un tick (setTimeout 0) : le montage jeté par StrictMode annule ce
+    // minuteur avant qu'il n'ait eu la moindre chance de s'exécuter (le
+    // montage/nettoyage/remontage de StrictMode est entièrement
+    // synchrone), donc SEUL le montage qui survit déclenche un appel
+    // réseau pour de vrai — plus aucune requête doublon n'atteint jamais
+    // le serveur, vérifié par comptage réel des requêtes réseau.
+    let annule = false;
     const controller = new AbortController();
     let idTimeout: ReturnType<typeof setTimeout> | undefined;
     setPhase('chargement');
     setError(null);
-    fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin, controller.signal)
-      .then((data) => {
-        setEtat(data);
-        setPhase('succes');
-        idTimeout = setTimeout(() => {
+    const idDelai = setTimeout(() => {
+      if (annule) return;
+      fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin, controller.signal)
+        .then((data) => {
+          setEtat(data);
+          setPhase('succes');
+          idTimeout = setTimeout(() => {
+            setPhase(null);
+          }, 1100);
+        })
+        .catch((err) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
           setPhase(null);
-        }, 1100);
-      })
-      .catch((err) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
-        setPhase(null);
-      });
+        });
+    }, 0);
     return () => {
+      annule = true;
+      clearTimeout(idDelai);
       controller.abort();
       if (idTimeout) clearTimeout(idTimeout);
     };

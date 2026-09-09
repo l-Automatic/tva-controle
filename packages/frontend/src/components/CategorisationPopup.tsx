@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { ApiError, ajouterConvention, confirmerConvention, fetchComptesACategoriser } from '../api';
 import { useToast } from '../toast';
@@ -235,11 +235,27 @@ export function CategorisationContenu({
   // s'affiche silencieusement. Rien n'incitait alors l'utilisateur à
   // attendre : il pouvait fermer l'onglet en pensant avoir terminé.
   const [verificationSousCategorie, setVerificationSousCategorie] = useState(false);
+  // Debounce de la re-vérification ciblée (brief v63, point 2) — Rami
+  // catégorise généralement tous les comptes d'abord, puis les valide en
+  // masse. Sans regroupement, chaque confirmation individuelle de
+  // comptes_charge_service relançait aussitôt fetchComptesACategoriser :
+  // une validation groupée produisait alors plusieurs réponses arrivant
+  // l'une après l'autre, donnant l'impression que les candidats
+  // sous-traitance apparaissaient par vagues plutôt que d'un coup.
+  const debounceSousCategorieRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     onCountChange?.(comptes.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comptes.length]);
+
+  // Nettoyage du minuteur en attente si le composant se démonte avant son
+  // déclenchement (ex : popup fermé pendant la fenêtre de debounce).
+  useEffect(() => {
+    return () => {
+      if (debounceSousCategorieRef.current) clearTimeout(debounceSousCategorieRef.current);
+    };
+  }, []);
 
   // Point 3 ajouté au brief v61 : identifierComptesServiceSansSousCategorieAutoliquidation
   // ne peut légitimement rien proposer tant que comptes_charge_service est
@@ -250,7 +266,6 @@ export function CategorisationContenu({
   // rouvrir tout le popup — cohérent avec le reste de ce brief (une action
   // dans un onglet ne doit affecter que cet onglet).
   async function rafraichirSousCategorie() {
-    setVerificationSousCategorie(true);
     try {
       const resultat = await fetchComptesACategoriser(cabinetId, dossierId, periodeDebut, periodeFin);
       setComptesSousCategorie(resultat.comptesServiceSansSousCategorieAutoliquidation);
@@ -264,9 +279,23 @@ export function CategorisationContenu({
     }
   }
 
+  // Chaque confirmation de comptes_charge_service reporte l'appel plutôt
+  // que de le relancer immédiatement — si une nouvelle confirmation arrive
+  // avant l'expiration du délai (validation groupée), le minuteur précédent
+  // est annulé et redémarré : un seul appel part au final, une fois la
+  // dernière confirmation du lot passée, jamais un par compte confirmé.
+  function planifierRafraichissementSousCategorie() {
+    setVerificationSousCategorie(true);
+    if (debounceSousCategorieRef.current) clearTimeout(debounceSousCategorieRef.current);
+    debounceSousCategorieRef.current = setTimeout(() => {
+      debounceSousCategorieRef.current = undefined;
+      void rafraichirSousCategorie();
+    }, 600);
+  }
+
   function retirer(compte: string, cle: string) {
     setComptes((prev) => prev.filter((c) => c.compte !== compte));
-    if (cle === 'comptes_charge_service') void rafraichirSousCategorie();
+    if (cle === 'comptes_charge_service') planifierRafraichissementSousCategorie();
   }
 
   function retirerSousCategorie(compte: string) {
@@ -281,7 +310,12 @@ export function CategorisationContenu({
       </p>
       {comptes.length === 0 ? (
         verificationSousCategorie ? (
-          <p className="empty">Vérification des sous-catégories…</p>
+          // Même classe que le rappel location/crédit-bail (brief v54) —
+          // le simple "empty" du v62 passait trop inaperçu, gras en plus
+          // pour renforcer la mise en évidence (brief v63).
+          <p className="avertissement">
+            <strong>Vérification des sous-catégories…</strong>
+          </p>
         ) : (
           <p className="empty">Tous les comptes ont été traités.</p>
         )
@@ -300,7 +334,9 @@ export function CategorisationContenu({
         </ul>
       )}
       {verificationSousCategorie && comptes.length > 0 && (
-        <p className="reference">Vérification des sous-catégories…</p>
+        <p className="avertissement">
+          <strong>Vérification des sous-catégories…</strong>
+        </p>
       )}
 
       {comptesSousCategorie.length > 0 && (
