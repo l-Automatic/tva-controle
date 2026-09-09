@@ -85,6 +85,24 @@ export function PortesObligatoiresPopup({
     return source.parcVehiculesNonRenseigne ? 1 : 0;
   }
 
+  // Brief v70, point 1 : Rami signale que le badge affiché À CÔTÉ DU NOM
+  // DE L'ONGLET (ex: "Catégorisation (17)") reste figé sur son décompte
+  // initial pendant que le travail avance DANS l'onglet — distinct du
+  // correctif v69 (rechargement complet une fois le LOT entier terminé).
+  // Chaque onglet gère déjà son propre état local (comptes retirés au fur
+  // et à mesure, sans re-fetch, cf. brief v60) ; ce qui manquait, c'est un
+  // canal pour que ce compte local remonte au badge du parent en temps
+  // réel, au lieu que le badge ne lise que l'instantané figé de la réponse
+  // initiale de l'agrégateur (compteur() ci-dessus). Initialisé depuis
+  // cette même réponse à chaque chargement, puis mis à jour par chaque
+  // onglet via son propre onCountChange dès que sa liste locale varie.
+  const [compteurs, setCompteurs] = useState<Record<SousOngletPorte, number>>({
+    categorisation: 0,
+    comptesTva: 0,
+    rapprochement: 0,
+    vehicules: 0,
+  });
+
   // Rechargement complet de l'agrégateur, réutilisé au montage initial ET
   // à la demande (brief v69, cf. useEffect et rechargerApresCategorisation
   // ci-dessous) — un seul minuteur de coche à annuler proprement dans les
@@ -99,13 +117,19 @@ export function PortesObligatoiresPopup({
     try {
       const data = await fetchPortesObligatoires(cabinetId, dossierId, periodeDebut, periodeFin, signal);
       setEtat(data);
+      setCompteurs({
+        categorisation: compteur('categorisation', data),
+        comptesTva: compteur('comptesTva', data),
+        rapprochement: compteur('rapprochement', data),
+        vehicules: compteur('vehicules', data),
+      });
       setPhase('succes');
       idTimeoutCocheRef.current = setTimeout(() => {
         setPhase(null);
       }, 1100);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setError(err instanceof ApiError ? err.message : 'Impossible de charger les portes obligatoires');
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger les vérifications préalables');
       setPhase(null);
     }
   }
@@ -172,14 +196,14 @@ export function PortesObligatoiresPopup({
     : 0;
   const messageSucces =
     totalAregler === 0
-      ? 'Vérification terminée, aucune porte obligatoire à régler pour cette période'
+      ? 'Vérification terminée, aucun point à régler pour cette période'
       : `Vérification terminée, ${totalAregler} élément(s) à régler`;
 
   return (
-    <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Portes obligatoires avant le cycle">
+    <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Vérifications préalables">
       <div className="popup">
         <div className={`popup-header${phase ? ' popup-header-centre' : ''}`}>
-          <h2>Portes obligatoires avant le cycle</h2>
+          <h2>Vérifications préalables</h2>
           <button className="popup-close" onClick={onClose} aria-label="Fermer">
             <X size={18} />
           </button>
@@ -201,10 +225,14 @@ export function PortesObligatoiresPopup({
                 l'état actuel de la catégorisation. Même mise en évidence que
                 la sous-catégorisation autoliquidation (brief v63) : reste
                 visible tant que le chargement n'est pas réellement terminé,
-                jamais un état "terminé" prématuré. */}
+                jamais un état "terminé" prématuré. Renommé "Vérifications
+                préalables" au brief v70 (décision prise avec Rami : "portes
+                obligatoires" sonnait trop technique pour un public
+                comptable) — seul le texte affiché change, les noms internes
+                (fichiers, variables, id d'onglets) restent inchangés. */}
             <p className="avertissement">
               <strong>
-                Chargement des 4 portes obligatoires en cours… Le contenu de chaque onglet (comptes à catégoriser,
+                Chargement des vérifications préalables en cours… Le contenu de chaque onglet (comptes à catégoriser,
                 TVA à confirmer, rapprochements, parc de véhicules) dépend de l'état actuel de la catégorisation et
                 des conventions déjà confirmées pour ce dossier.
               </strong>
@@ -216,7 +244,7 @@ export function PortesObligatoiresPopup({
           <>
             <nav className="sous-onglets">
               {ONGLETS_PORTES.map((o) => {
-                const n = compteur(o.id, etat);
+                const n = compteurs[o.id];
                 return (
                   <button
                     key={o.id}
@@ -251,6 +279,7 @@ export function PortesObligatoiresPopup({
                 periodeDebut={periodeDebut}
                 periodeFin={periodeFin}
                 onLotTermine={rechargerApresCategorisation}
+                onCountChange={(n) => setCompteurs((c) => ({ ...c, categorisation: n }))}
               />
             </div>
             <div className="sous-onglet-contenu" hidden={sousOnglet !== 'comptesTva'}>
@@ -259,6 +288,7 @@ export function PortesObligatoiresPopup({
                 dossierId={dossierId}
                 utilisateurId={utilisateurId}
                 donneesInitiales={{ periodeDebut, periodeFin, comptes: etat.comptesTvaAConfirmer }}
+                onCountChange={(n) => setCompteurs((c) => ({ ...c, comptesTva: n }))}
               />
             </div>
             <div className="sous-onglet-contenu" hidden={sousOnglet !== 'rapprochement'}>
@@ -268,10 +298,16 @@ export function PortesObligatoiresPopup({
                 utilisateurId={utilisateurId}
                 periodeDebut={periodeDebut}
                 factures={etat.rapprochementsPaiementAchat}
+                onCountChange={(n) => setCompteurs((c) => ({ ...c, rapprochement: n }))}
               />
             </div>
             <div className="sous-onglet-contenu" hidden={sousOnglet !== 'vehicules'}>
-              <VehiculesPanel cabinetId={cabinetId} dossierId={dossierId} utilisateurId={utilisateurId} />
+              <VehiculesPanel
+                cabinetId={cabinetId}
+                dossierId={dossierId}
+                utilisateurId={utilisateurId}
+                onCountChange={(n) => setCompteurs((c) => ({ ...c, vehicules: n }))}
+              />
             </div>
           </>
         )}

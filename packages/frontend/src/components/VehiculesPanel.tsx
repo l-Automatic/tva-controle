@@ -17,6 +17,12 @@ interface VehiculesPanelProps {
   cabinetId: string;
   dossierId: string;
   utilisateurId: string;
+  // Brief v70, point 1 : badge de l'onglet côté PortesObligatoiresPopup,
+  // sourcé jusqu'ici depuis l'instantané initial de l'agrégateur
+  // (parcVehiculesNonRenseigne) — remonte désormais le même booléen 0/1
+  // depuis l'état local réellement affiché, dès qu'un véhicule est ajouté
+  // ou retiré, sans attendre un rechargement complet.
+  onCountChange?: (n: number) => void;
 }
 
 function formatMontant(montant: number | null): string {
@@ -28,7 +34,7 @@ function formatMontant(montant: number | null): string {
 // alimente notamment le contrôle "flotte mixte" (véhicules tourisme ET
 // utilitaires) et la déductibilité carburant, jusqu'ici sans aucun moyen de
 // renseigner le parc autrement qu'à la main dans Pennylane (cf. brief v6).
-export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: VehiculesPanelProps) {
+export function VehiculesPanel({ cabinetId, dossierId, utilisateurId, onCountChange }: VehiculesPanelProps) {
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [designation, setDesignation] = useState('');
   const [typeBien, setTypeBien] = useState<TypeBienVehicule>('vehicule_tourisme');
@@ -39,6 +45,12 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
   const [submitting, setSubmitting] = useState(false);
   const [retraitEnCours, setRetraitEnCours] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Contrairement aux 3 autres onglets, ce panneau ne reçoit aucune donnée
+  // initiale de l'agrégateur : il refait toujours sa propre requête au
+  // montage. Sans cette garde, le tableau vehicules=[] du tout premier
+  // rendu (avant que charger() n'ait fini) ferait passer le badge à "(1)"
+  // même quand des véhicules existent déjà, le temps d'un aller-retour.
+  const [chargeInitiale, setChargeInitiale] = useState(false);
   const notifier = useToast();
 
   async function charger() {
@@ -50,6 +62,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
       setError(err instanceof ApiError ? err.message : 'Impossible de charger le parc de véhicules');
     } finally {
       setLoading(false);
+      setChargeInitiale(true);
     }
   }
 
@@ -57,6 +70,12 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId }: Vehicule
     if (cabinetId && dossierId) void charger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId, dossierId]);
+
+  useEffect(() => {
+    if (!chargeInitiale) return;
+    onCountChange?.(vehicules.length === 0 ? 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicules.length, chargeInitiale]);
 
   async function handleAjouter() {
     setSubmitting(true);

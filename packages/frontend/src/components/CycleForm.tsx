@@ -465,7 +465,7 @@ export function CycleForm({
           seulement en réaction à un 409 au lancement du cycle. */}
       <div className="cycle-form">
         <button className="secondary" onClick={handleVerifierPortesObligatoires}>
-          Vérifier les portes obligatoires
+          Vérifications préalables
         </button>
       </div>
 

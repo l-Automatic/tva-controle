@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiError, enregistrerRapprochementPaiementAchat } from '../api';
 import { formatDate } from '../dateUtils';
 import { useToast } from '../toast';
@@ -13,6 +13,11 @@ interface RapprochementPaiementAchatContenuProps {
   // backend (cf. listerFacturesLedgerEntryIdsRapprochees).
   periodeDebut: string;
   factures: FactureARapprocher[];
+  // Brief v70, point 1 : badge de l'onglet côté PortesObligatoiresPopup,
+  // sourcé jusqu'ici depuis l'instantané initial de l'agrégateur — remonte
+  // désormais le compte réel de factures restantes dès qu'il varie
+  // localement (validation), sans attendre un rechargement complet.
+  onCountChange?: (n: number) => void;
 }
 
 const LIBELLE_CONFIANCE: Record<ConfianceSuggestionIA, string> = {
@@ -145,8 +150,14 @@ export function RapprochementPaiementAchatContenu({
   utilisateurId,
   periodeDebut,
   factures: facturesInitiales,
+  onCountChange,
 }: RapprochementPaiementAchatContenuProps) {
   const [factures, setFactures] = useState(facturesInitiales);
+
+  useEffect(() => {
+    onCountChange?.(factures.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [factures.length]);
 
   // Bug réel corrigé (brief v61) : un re-fetch complet de cet onglet après
   // chaque validation (fetchRapprochementsPaiementAchat) vidait toute la

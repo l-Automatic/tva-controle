@@ -284,10 +284,15 @@ export function CategorisationContenu({
   // pris) — jamais sur un minuteur.
   const aConfirmeChargeServiceRef = useRef(false);
 
+  // Brief v70, point 1 : le badge affiché sur l'onglet lui-même (pas
+  // seulement le titre de la popup autonome, cf. onCountChange déjà
+  // existant depuis le v58) doit refléter en temps réel les deux listes de
+  // cet onglet, comme le fait déjà PortesObligatoiresPopup.compteur() côté
+  // agrégateur (comptesACategoriser + comptesServiceSansSousCategorieAutoliquidation).
   useEffect(() => {
-    onCountChange?.(comptes.length);
+    onCountChange?.(comptes.length + comptesSousCategorie.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comptes.length]);
+  }, [comptes.length, comptesSousCategorie.length]);
 
   // Point 3 ajouté au brief v61 : identifierComptesServiceSansSousCategorieAutoliquidation
   // ne peut légitimement rien proposer tant que comptes_charge_service est

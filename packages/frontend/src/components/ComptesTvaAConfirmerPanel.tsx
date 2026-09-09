@@ -21,6 +21,11 @@ interface ComptesTvaAConfirmerPanelProps {
   // formulaire habituel (bouton "Vérifier") si besoin. Absent = comportement
   // inchangé pour l'usage autonome (Configuration du dossier).
   donneesInitiales?: { periodeDebut: string; periodeFin: string; comptes: CompteTvaAConfirmer[] };
+  // Brief v70, point 1 : badge de l'onglet côté PortesObligatoiresPopup,
+  // sourcé jusqu'ici depuis l'instantané initial de l'agrégateur — remonte
+  // désormais le compte réel de comptes restants dès qu'il varie
+  // localement (confirmation), sans attendre un rechargement complet.
+  onCountChange?: (n: number) => void;
 }
 
 // Quatrième porte obligatoire avant un cycle (brief v46) — même principe
@@ -202,6 +207,7 @@ export function ComptesTvaAConfirmerPanel({
   dossierId,
   utilisateurId,
   donneesInitiales,
+  onCountChange,
 }: ComptesTvaAConfirmerPanelProps) {
   const [periodeDebut, setPeriodeDebut] = useState(donneesInitiales?.periodeDebut ?? '');
   const [periodeFin, setPeriodeFin] = useState(donneesInitiales?.periodeFin ?? '');
@@ -209,6 +215,11 @@ export function ComptesTvaAConfirmerPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshConfirmes, setRefreshConfirmes] = useState(0);
+
+  useEffect(() => {
+    onCountChange?.(comptes?.length ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comptes]);
 
   async function charger() {
     if (!periodeDebut || !periodeFin) {
