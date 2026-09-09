@@ -68,7 +68,7 @@ describe('verifierComptesACategoriser', () => {
     // 10/08 : format étendu à deux champs, couvre aussi la
     // sous-catégorisation autoliquidation (comptesChargeAutoliquidation),
     // jusqu'ici seulement une suggestion enfouie dans le cycle complet.
-    expect(resultat).toEqual({ comptesACategoriser: [], comptesServiceSansSousCategorieAutoliquidation: [] });
+    expect(resultat).toEqual({ comptesACategoriser: [], comptesServiceSansSousCategorieAutoliquidation: [], suggestions: [] });
   });
 
   it('bug réel corrigé (10/08, signalé par Claude Code) : un compte confirmé comptesEntretienVehicule/LocationVehicule/VenteExport est bien exclu de comptesACategoriser', async () => {
