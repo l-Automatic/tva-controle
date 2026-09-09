@@ -166,81 +166,100 @@ export async function preparerRapprochementsPaiementAchat(
 
   const resultat: FactureARapprocher[] = [];
 
-  for (const facture of facturesARapprocher) {
-    const mouvementsCompte = await fetchLignesParCompte(params.client, {
-      compteIds: [facture.compteTiersId],
-      periodeDebut: exerciceDebut,
-      periodeFin: exerciceFin,
-    });
-    // Un vrai paiement RÉDUIT ce qui est dû au fournisseur -> toujours au
-    // DÉBIT sur un compte 401 (10/08, bug réel corrigé — sans ce filtre,
-    // d'autres FACTURES du même fournisseur, au crédit, apparaissaient à
-    // tort comme candidats de règlement). Peu importe le journal d'origine
-    // (banque, caisse, OD) — le sens comptable suffit, pas besoin de
-    // connaître le journal précis.
-    const candidatsBruts = mouvementsCompte.filter(
-      (l) =>
-        l.ledgerEntryId !== facture.ledgerEntryId &&
-        !l.lettrage.estLettree &&
-        l.debit > 0 &&
-        !paiementsDejaReclames.has(l.ledgerEntryId)
-    );
-
-    // Aucun candidat du tout (10/08, demande de Rami) : rien à faire
-    // décider au collaborateur, on sait déjà que ce n'est pas déductible.
-    // Résolu automatiquement plutôt que de l'afficher pour une
-    // confirmation vide sans intérêt — retiré du panneau.
-    if (candidatsBruts.length === 0) {
-      await avecContexteCabinet(pool, params.cabinetId, (client) =>
-        autoResoudreFactureSansCandidat(client, params.dossierId, params.periodeDebut, facture.ledgerEntryId, facture.montantFactureTotal)
+  // Bug réel corrigé (10/08, trouvé par Rami en conditions réelles — un
+  // dossier vidé pour retester la détection a fait dépasser un timeout de
+  // passerelle) : cette boucle était entièrement séquentielle, un aller-
+  // retour Pennylane PLUS un appel Mistral par facture candidate — sur
+  // des dizaines de factures, largement de quoi dépasser n'importe quel
+  // délai raisonnable. Corrigé avec une concurrence limitée (4 en même
+  // temps) plutôt qu'un parallélisme total, pour rester dans une marge
+  // sûre vis-à-vis de la limite Pennylane (25 requêtes/5 secondes,
+  // maxRetries429 déjà relevé à 8 par ailleurs) — l'ordre final ne
+  // dépend pas de l'ordre de traitement, resultat.sort() ci-dessous
+  // s'en charge de toute façon.
+  const CONCURRENCE_MAX = 4;
+  let curseur = 0;
+  async function traiterUneFacture(): Promise<void> {
+    while (curseur < facturesARapprocher.length) {
+      const facture = facturesARapprocher[curseur++]!;
+      const mouvementsCompte = await fetchLignesParCompte(params.client, {
+        compteIds: [facture.compteTiersId],
+        periodeDebut: exerciceDebut,
+        periodeFin: exerciceFin,
+      });
+      // Un vrai paiement RÉDUIT ce qui est dû au fournisseur -> toujours au
+      // DÉBIT sur un compte 401 (10/08, bug réel corrigé — sans ce filtre,
+      // d'autres FACTURES du même fournisseur, au crédit, apparaissaient à
+      // tort comme candidats de règlement). Peu importe le journal d'origine
+      // (banque, caisse, OD) — le sens comptable suffit, pas besoin de
+      // connaître le journal précis.
+      const candidatsBruts = mouvementsCompte.filter(
+        (l) =>
+          l.ledgerEntryId !== facture.ledgerEntryId &&
+          !l.lettrage.estLettree &&
+          l.debit > 0 &&
+          !paiementsDejaReclames.has(l.ledgerEntryId)
       );
-      continue;
-    }
 
-    let precochageParId = new Map<number, { precoche: boolean; confiance: 'haute' | 'moyenne' | 'basse' }>();
-    if (mistralClient && candidatsBruts.length > 0) {
-      try {
-        const jugement = await jugerCandidatsPaiementAchat(
-          mistralClient,
-          { libelle: facture.libelle, montant: facture.montantFactureTotal, date: facture.date },
-          candidatsBruts.map((l) => ({
+      // Aucun candidat du tout (10/08, demande de Rami) : rien à faire
+      // décider au collaborateur, on sait déjà que ce n'est pas déductible.
+      // Résolu automatiquement plutôt que de l'afficher pour une
+      // confirmation vide sans intérêt — retiré du panneau.
+      if (candidatsBruts.length === 0) {
+        await avecContexteCabinet(pool, params.cabinetId, (client) =>
+          autoResoudreFactureSansCandidat(client, params.dossierId, params.periodeDebut, facture.ledgerEntryId, facture.montantFactureTotal)
+        );
+        continue;
+      }
+
+      let precochageParId = new Map<number, { precoche: boolean; confiance: 'haute' | 'moyenne' | 'basse' }>();
+      if (mistralClient && candidatsBruts.length > 0) {
+        try {
+          const jugement = await jugerCandidatsPaiementAchat(
+            mistralClient,
+            { libelle: facture.libelle, montant: facture.montantFactureTotal, date: facture.date },
+            candidatsBruts.map((l) => ({
+              ledgerEntryId: l.ledgerEntryId,
+              libelle: l.libelle,
+              montant: Math.abs(l.debit - l.credit),
+              date: l.date,
+            }))
+          );
+          if (jugement.candidats) {
+            precochageParId = new Map(jugement.candidats.map((c) => [c.ledgerEntryId, c]));
+          }
+        } catch (err) {
+          if (process.env.DEBUG_CYCLE) {
+            console.error(`[DEBUG_CYCLE] échec précochage rapprochement paiement (facture ${facture.ledgerEntryId}) : ${String(err)}`);
+          }
+          // Rien de précoché — jamais une erreur qui empêche d'afficher le popup lui-même.
+        }
+      }
+
+      resultat.push({
+        ledgerEntryId: facture.ledgerEntryId,
+        compteFournisseur: facture.compteTiers,
+        libelleCompteFournisseur: nomsComptesFournisseur.get(facture.compteTiers) ?? null,
+        libelle: facture.libelle,
+        montantFactureTotal: facture.montantFactureTotal,
+        date: facture.date,
+        candidats: candidatsBruts.map((l) => {
+          const p = precochageParId.get(l.ledgerEntryId);
+          return {
             ledgerEntryId: l.ledgerEntryId,
             libelle: l.libelle,
             montant: Math.abs(l.debit - l.credit),
             date: l.date,
-          }))
-        );
-        if (jugement.candidats) {
-          precochageParId = new Map(jugement.candidats.map((c) => [c.ledgerEntryId, c]));
-        }
-      } catch (err) {
-        if (process.env.DEBUG_CYCLE) {
-          console.error(`[DEBUG_CYCLE] échec précochage rapprochement paiement (facture ${facture.ledgerEntryId}) : ${String(err)}`);
-        }
-        // Rien de précoché — jamais une erreur qui empêche d'afficher le popup lui-même.
-      }
+            precoche: p?.precoche ?? false,
+            confiance: p?.confiance ?? null,
+          };
+        }),
+      });
     }
-
-    resultat.push({
-      ledgerEntryId: facture.ledgerEntryId,
-      compteFournisseur: facture.compteTiers,
-      libelleCompteFournisseur: nomsComptesFournisseur.get(facture.compteTiers) ?? null,
-      libelle: facture.libelle,
-      montantFactureTotal: facture.montantFactureTotal,
-      date: facture.date,
-      candidats: candidatsBruts.map((l) => {
-        const p = precochageParId.get(l.ledgerEntryId);
-        return {
-          ledgerEntryId: l.ledgerEntryId,
-          libelle: l.libelle,
-          montant: Math.abs(l.debit - l.credit),
-          date: l.date,
-          precoche: p?.precoche ?? false,
-          confiance: p?.confiance ?? null,
-        };
-      }),
-    });
   }
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCE_MAX, facturesARapprocher.length) }, () => traiterUneFacture())
+  );
 
   // Rangé par compte fournisseur (ordre alphabétique), puis par date
   // (ordre chronologique) au sein d'un même compte — demande de Rami.
