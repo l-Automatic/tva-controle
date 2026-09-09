@@ -140,9 +140,19 @@ export interface CompteACategoriser {
 // à deux champs (brief v46) — comptesServiceSansSousCategorieAutoliquidation
 // est un second motif de blocage distinct (sous-traitance liée ou non à
 // l'autoliquidation), même forme d'item que comptesACategoriser.
+//
+// `suggestions` (brief v64) : présélection IA pour cette porte précise
+// (Mistral, distincte du mécanisme suggestionIA déjà attaché à
+// CompteACategoriser depuis un cycle complet, cf. pipeline.ts côté
+// backend) — un tableau à part, apparié par numéro de compte plutôt que
+// nichée directement sur chaque CompteACategoriser. Même forme que
+// SuggestionIA (categorieSuggeree peut être null : pas d'indice pour ce
+// compte, ne rien afficher). Vide si aucune clé Mistral configurée ou en
+// cas d'échec de l'appel — l'écran doit alors rester identique à avant.
 export interface ResultatComptesACategoriser {
   comptesACategoriser: CompteACategoriser[];
   comptesServiceSansSousCategorieAutoliquidation: CompteACategoriser[];
+  suggestions: SuggestionIA[];
 }
 
 // GET /dossiers/:dossierId/comptes-tva-a-confirmer (brief v46, 4e porte

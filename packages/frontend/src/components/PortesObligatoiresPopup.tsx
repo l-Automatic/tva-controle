@@ -196,6 +196,7 @@ export function PortesObligatoiresPopup({
                 utilisateurId={utilisateurId}
                 comptes={etat.categorisation.comptesACategoriser}
                 comptesSousCategorieAutoliquidation={etat.categorisation.comptesServiceSansSousCategorieAutoliquidation}
+                suggestions={etat.categorisation.suggestions}
                 periodeDebut={periodeDebut}
                 periodeFin={periodeFin}
               />

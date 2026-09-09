@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { ApiError, ajouterConvention, confirmerConvention, fetchComptesACategoriser } from '../api';
 import { useToast } from '../toast';
 import { SuggestionIABlock } from './SuggestionIABlock';
-import type { CompteACategoriser } from '../types';
+import type { CompteACategoriser, SuggestionIA } from '../types';
 
 interface CategorisationContenuProps {
   cabinetId: string;
@@ -15,6 +15,14 @@ interface CategorisationContenuProps {
   // n'a jamais été tranché. Optionnel : les appelants pré-v46 (aucun ici en
   // pratique, mais gardé simple) n'ont qu'à ne pas le passer.
   comptesSousCategorieAutoliquidation?: CompteACategoriser[];
+  // Suggestions IA pour cette porte précise (brief v64) — distinct du
+  // suggestionIA déjà porté par un CompteACategoriser issu d'un cycle
+  // complet (pipeline.ts, backend, mécanisme plus ancien) : ici un
+  // tableau à part, apparié par numéro de compte, jamais nichée
+  // directement par le backend. Vide par défaut — les appelants qui n'ont
+  // pas cette donnée (aucun aujourd'hui, gardé simple) n'ont qu'à ne pas
+  // la passer.
+  suggestions?: SuggestionIA[];
   // Période du cycle en préparation (brief v61, point 3) — nécessaire pour
   // rejouer un contrôle ciblé (fetchComptesACategoriser) juste après la
   // confirmation d'un compte en comptes_charge_service : la sous-
@@ -29,6 +37,23 @@ interface CategorisationContenuProps {
   // futur popup à onglets) puisse l'afficher dans son propre titre sans
   // dupliquer la logique de retrait locale.
   onCountChange?: (n: number) => void;
+}
+
+// Associe chaque compte à sa suggestion IA par numéro de compte (brief
+// v64) — categorieSuggeree null = l'IA n'a pas assez d'indice, ne rien
+// associer dans ce cas (CompteCard n'affiche déjà rien sans suggestionIA).
+// N'écrase jamais un suggestionIA déjà présent (cas du cycle complet,
+// pipeline.ts) : sans correspondance ici, l'entrée d'origine est rendue
+// telle quelle.
+function avecSuggestions(comptes: CompteACategoriser[], suggestions: SuggestionIA[]): CompteACategoriser[] {
+  if (suggestions.length === 0) return comptes;
+  const suggestionParCompte = new Map(
+    suggestions.filter((s) => s.categorieSuggeree !== null).map((s) => [s.compte, s])
+  );
+  return comptes.map((c) => {
+    const suggestion = suggestionParCompte.get(c.compte);
+    return suggestion ? { ...c, suggestionIA: suggestion } : c;
+  });
 }
 
 interface CategorisationPopupProps extends Omit<CategorisationContenuProps, 'onCountChange'> {
@@ -222,11 +247,12 @@ export function CategorisationContenu({
   utilisateurId,
   comptes: comptesInitiaux,
   comptesSousCategorieAutoliquidation: comptesSousCategorieInitiaux = [],
+  suggestions = [],
   periodeDebut,
   periodeFin,
   onCountChange,
 }: CategorisationContenuProps) {
-  const [comptes, setComptes] = useState(comptesInitiaux);
+  const [comptes, setComptes] = useState(() => avecSuggestions(comptesInitiaux, suggestions));
   const [comptesSousCategorie, setComptesSousCategorie] = useState(comptesSousCategorieInitiaux);
   // État de chargement explicite (brief v62) — sans lui, confirmer le
   // dernier compte affichait d'abord "Tous les comptes ont été traités."
@@ -235,27 +261,21 @@ export function CategorisationContenu({
   // s'affiche silencieusement. Rien n'incitait alors l'utilisateur à
   // attendre : il pouvait fermer l'onglet en pensant avoir terminé.
   const [verificationSousCategorie, setVerificationSousCategorie] = useState(false);
-  // Debounce de la re-vérification ciblée (brief v63, point 2) — Rami
-  // catégorise généralement tous les comptes d'abord, puis les valide en
-  // masse. Sans regroupement, chaque confirmation individuelle de
-  // comptes_charge_service relançait aussitôt fetchComptesACategoriser :
-  // une validation groupée produisait alors plusieurs réponses arrivant
-  // l'une après l'autre, donnant l'impression que les candidats
-  // sous-traitance apparaissaient par vagues plutôt que d'un coup.
-  const debounceSousCategorieRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Le debounce du v63 (minuteur depuis la dernière confirmation) ne
+  // suffisait pas : une pause de plus de 600ms entre deux validations d'un
+  // même lot relançait quand même l'appel en plein milieu (brief v64,
+  // point 2, rappel explicite de Rami). Remplacé par un signal de fin de
+  // catégorisation : on retient juste qu'au moins UNE confirmation du lot
+  // en cours portait sur comptes_charge_service, et on ne déclenche la
+  // vérification ciblée que lorsque la liste principale devient vide
+  // (tous les comptes de ce lot traités, quel que soit le temps que ça a
+  // pris) — jamais sur un minuteur.
+  const aConfirmeChargeServiceRef = useRef(false);
 
   useEffect(() => {
     onCountChange?.(comptes.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comptes.length]);
-
-  // Nettoyage du minuteur en attente si le composant se démonte avant son
-  // déclenchement (ex : popup fermé pendant la fenêtre de debounce).
-  useEffect(() => {
-    return () => {
-      if (debounceSousCategorieRef.current) clearTimeout(debounceSousCategorieRef.current);
-    };
-  }, []);
 
   // Point 3 ajouté au brief v61 : identifierComptesServiceSansSousCategorieAutoliquidation
   // ne peut légitimement rien proposer tant que comptes_charge_service est
@@ -279,23 +299,21 @@ export function CategorisationContenu({
     }
   }
 
-  // Chaque confirmation de comptes_charge_service reporte l'appel plutôt
-  // que de le relancer immédiatement — si une nouvelle confirmation arrive
-  // avant l'expiration du délai (validation groupée), le minuteur précédent
-  // est annulé et redémarré : un seul appel part au final, une fois la
-  // dernière confirmation du lot passée, jamais un par compte confirmé.
-  function planifierRafraichissementSousCategorie() {
-    setVerificationSousCategorie(true);
-    if (debounceSousCategorieRef.current) clearTimeout(debounceSousCategorieRef.current);
-    debounceSousCategorieRef.current = setTimeout(() => {
-      debounceSousCategorieRef.current = undefined;
-      void rafraichirSousCategorie();
-    }, 600);
-  }
-
   function retirer(compte: string, cle: string) {
-    setComptes((prev) => prev.filter((c) => c.compte !== compte));
-    if (cle === 'comptes_charge_service') planifierRafraichissementSousCategorie();
+    if (cle === 'comptes_charge_service') aConfirmeChargeServiceRef.current = true;
+    // Filtrage direct sur l'état courant plutôt que la forme fonctionnelle
+    // de setComptes : cette fonction n'est appelée que depuis un
+    // gestionnaire d'événement (clic), jamais en rafale synchrone, et le
+    // déclenchement de rafraichirSousCategorie() est un effet de bord —
+    // le garder hors d'un updater évite un double appel si React
+    // l'invoque deux fois pour détecter les impuretés (StrictMode, dev).
+    const suivant = comptes.filter((c) => c.compte !== compte);
+    setComptes(suivant);
+    if (suivant.length === 0 && aConfirmeChargeServiceRef.current) {
+      aConfirmeChargeServiceRef.current = false;
+      setVerificationSousCategorie(true);
+      void rafraichirSousCategorie();
+    }
   }
 
   function retirerSousCategorie(compte: string) {
