@@ -40,3 +40,22 @@ constater l'affichage initial incomplet, revenir dessus, valider un
 rapprochement) et confirmer qu'aucun rechargement global ne se déclenche
 plus après une validation — seul l'élément validé doit disparaître de
 la liste, le reste doit rester stable.
+
+## Point 3 ajouté après coup — sous-traitance BTP en deux temps, mais dans le même onglet
+
+En creusant avec Rami : `identifierComptesServiceSansSousCategorieAutoliquidation`
+ne peut légitimement rien proposer tant que `comptes_charge_service`
+est vide — c'est un raffinement qui dépend d'une catégorisation déjà
+confirmée, pas un bug backend. Mais ça ne doit pas obliger à fermer le
+popup et relancer "portes obligatoires" depuis zéro pour voir cette
+suggestion apparaître.
+
+**Ce qu'il faut** : dans l'onglet catégorisation lui-même, après la
+confirmation d'un ou plusieurs comptes en `comptes_charge_service`,
+redéclencher un appel ciblé à `verifierComptesACategoriser` (pas
+l'agrégateur complet des 4 portes) pour voir si de nouveaux comptes
+sont maintenant candidats à la sous-catégorisation sous-traitance BTP,
+et les afficher dans ce même onglet s'il y en a — sans recharger les 3
+autres onglets, cohérent avec la correction déjà demandée plus haut
+dans ce brief (une action dans un onglet ne doit affecter que cet
+onglet).
