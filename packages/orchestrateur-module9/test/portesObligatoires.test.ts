@@ -65,7 +65,7 @@ describe('chargerPortesObligatoires', () => {
       periodeFin: '2025-01-31',
     });
 
-    expect(resultat.categorisation).toEqual({ comptesACategoriser: [], comptesServiceSansSousCategorieAutoliquidation: [] });
+    expect(resultat.categorisation).toEqual({ comptesACategoriser: [], comptesServiceSansSousCategorieAutoliquidation: [], suggestions: [] });
     expect(resultat.comptesTvaAConfirmer).toEqual([]);
     expect(resultat.rapprochementsPaiementAchat).toEqual([]);
     expect(resultat.parcVehiculesNonRenseigne).toBe(false);
