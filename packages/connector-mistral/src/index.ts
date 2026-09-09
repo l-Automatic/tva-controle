@@ -13,6 +13,11 @@ export {
   jugerVehiculeIdentifieDansLibelle,
   type JugementVehiculeIdentifie,
 } from './jugerVehiculeIdentifieDansLibelle.js';
+export {
+  suggererCategorisationComptes,
+  type SuggestionCategorisation,
+  type CategorieSuggeree,
+} from './suggererCategorisationComptes.js';
 export { decouvrirMotifNumerotation, type MotifNumerotation } from './decouvrirMotifNumerotation.js';
 export {
   jugerCandidatsPaiementAchat,
