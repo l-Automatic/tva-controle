@@ -213,32 +213,41 @@ async function construireAnomaliesFraisVehicule(
   const candidats = identifierCandidatsFraisVehicule(ecritures, comptesConcernes);
   if (candidats.length === 0) return [];
 
+  // Bug réel corrigé (10/08, chantier performance cycle complet, trouvé en
+  // reproduisant le même principe qui avait déjà servi pour le popup
+  // portes obligatoires) : jugerVehiculeIdentifieDansLibelle accepte
+  // pourtant déjà un tableau complet d'écritures — un seul appel suffit,
+  // jamais besoin d'un appel par candidat. La boucle appelait la fonction
+  // UNE FOIS PAR CANDIDAT (`[candidat]`, un tableau à un seul élément à
+  // chaque itération), créant même un nouveau MistralClient à chaque
+  // tour — N allers-retours réseau séquentiels au lieu d'un seul.
+  let jugementsParId = new Map<number, { vehiculeIdentifie: boolean; confiance: 'haute' | 'moyenne' | 'basse'; justification: string }>();
+  if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
+    try {
+      const mistralClient = new MistralClient({ apiKey: mistralApiKey });
+      const jugements = await jugerVehiculeIdentifieDansLibelle(
+        mistralClient,
+        candidats.map((c) => ({ ledgerEntryId: c.ledgerEntryId, libelle: c.libelle }))
+      );
+      jugementsParId = new Map(jugements.map((j) => [j.ledgerEntryId, j]));
+    } catch (err) {
+      if (process.env.DEBUG_CYCLE) {
+        console.error(`[DEBUG_CYCLE] échec jugement IA (frais véhicule) : ${String(err)}`);
+      }
+      // Rien de jugé : jamais une erreur qui empêche le reste du cycle.
+    }
+  }
+
   const anomalies: Anomalie[] = [];
 
   for (const candidat of candidats) {
     const ecritureConcernee = ecritures.find((e) => e.ligneTva.ledgerEntryId === candidat.ledgerEntryId);
     if (!ecritureConcernee) continue;
 
-    let vehiculeIdentifie = false;
-    let confiance: 'haute' | 'moyenne' | 'basse' = 'basse';
-    let justification = '';
-
-    if (typeof mistralApiKey === 'string' && mistralApiKey.length > 0) {
-      try {
-        const mistralClient = new MistralClient({ apiKey: mistralApiKey });
-        const jugements = await jugerVehiculeIdentifieDansLibelle(mistralClient, [candidat]);
-        const jugement = jugements[0];
-        if (jugement) {
-          vehiculeIdentifie = jugement.vehiculeIdentifie;
-          confiance = jugement.confiance;
-          justification = jugement.justification;
-        }
-      } catch (err) {
-        if (process.env.DEBUG_CYCLE) {
-          console.error(`[DEBUG_CYCLE] échec jugement IA (frais véhicule) : ${String(err)}`);
-        }
-      }
-    }
+    const jugement = jugementsParId.get(candidat.ledgerEntryId);
+    const vehiculeIdentifie = jugement?.vehiculeIdentifie ?? false;
+    const confiance = jugement?.confiance ?? 'basse';
+    const justification = jugement?.justification ?? '';
 
     anomalies.push({
       type: typeAnomalie,
@@ -529,8 +538,21 @@ export async function executerCycleTva(
       c.ligneTiers !== undefined && c.ligneTiers.lettrage.groupeIds.length > 2
     );
   const prorataParEcriture = new Map<number, number>();
+  // Bug réel corrigé (10/08, chantier performance cycle complet) :
+  // fetchLignesGroupeLettrage accepte déjà un tableau d'ids complet — un
+  // seul appel suffit pour TOUS les candidats à la fois plutôt qu'un par
+  // candidat. Chaque ligne renvoyée garde son id d'origine, donc on peut
+  // reconstituer après coup quel sous-ensemble appartient à quel candidat
+  // (groupeIds ne se recoupent jamais entre deux candidats différents —
+  // un id de ligne n'appartient qu'à un seul groupe de lettrage).
+  const tousLesGroupeIds = [...new Set(candidatsProrataVente.flatMap((c) => c.ligneTiers.lettrage.groupeIds))];
+  const toutesLesLignesGroupe =
+    tousLesGroupeIds.length > 0 ? await fetchLignesGroupeLettrage(params.client, tousLesGroupeIds) : [];
+  const lignesGroupeParId = new Map(toutesLesLignesGroupe.map((l) => [l.id, l]));
   for (const candidat of candidatsProrataVente) {
-    const lignesGroupe = await fetchLignesGroupeLettrage(params.client, candidat.ligneTiers.lettrage.groupeIds);
+    const lignesGroupe = candidat.ligneTiers.lettrage.groupeIds
+      .map((id) => lignesGroupeParId.get(id))
+      .filter((l): l is NonNullable<typeof l> => l !== undefined);
     prorataParEcriture.set(candidat.ledgerEntryId, calculerProrataEncaissement(lignesGroupe));
   }
 
