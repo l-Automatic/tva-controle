@@ -53,7 +53,7 @@ import {
   jugerLibellesVehiculeTourisme,
   jugerVehiculeIdentifieDansLibelle,
 } from '@tva-controle/connector-mistral';
-import type { Anomalie } from '@tva-controle/core';
+import type { Anomalie, EcritureTvaComplete } from '@tva-controle/core';
 import { avecContexteCabinet } from './db/pool.js';
 import { chargerContexteDossier, conventionValeur, conventionListe, conventionObjet } from './db/dossierRepository.js';
 import {
@@ -94,6 +94,16 @@ export interface ParametresCycleTva {
   // un solde réellement mouvementé, éliminant ces faux positifs à la racine
   // plutôt que par une liste d'exclusions fragile.
   comptesTvaOverride?: string[];
+  // Performance (10/08, chantier lancement de cycle) : le lancement d'un
+  // cycle (POST /dossiers/:id/cycles) fait déjà 4 appels indépendants aux
+  // 4 portes obligatoires AVANT d'appeler executerCycleTva — chacun avec
+  // son propre aller-retour Pennylane (balance + écritures), pour la
+  // MÊME période. Si l'un de ces 4 fetchs a déjà eu lieu (ce qui est
+  // TOUJOURS le cas ici, puisque les 4 portes doivent réussir avant que
+  // ce point du code ne soit atteint), les écritures peuvent être
+  // réutilisées ici au lieu d'être fetchées une 5e fois. Même principe
+  // exactement que verifierComptesACategoriser.ts et les 3 autres portes.
+  ecrituresPreChargees?: EcritureTvaComplete[];
   // Dérivés de conventions_dossier (comptes_vente_service,
   // comptes_charge_service, comptes_equipement, comptes_carburant) si non
   // fournis ici. Un override reste possible — utile en test, ou pour un
@@ -279,23 +289,27 @@ export async function executerCycleTva(
   );
 
   const comptesTva =
-    params.comptesTvaOverride ??
-    (await (async () => {
-      const balance = await fetchTrialBalance(params.client, {
-        dossierId: params.dossierId,
-        periodeDebut: params.periodeDebut,
-        periodeFin: params.periodeFin,
-      });
-      return filterComptesParPrefixe(balance, ['445'])
-        .filter((c) => c.debit !== 0 || c.credit !== 0)
-        .map((c) => c.numeroCompte);
-    })());
+    params.ecrituresPreChargees === undefined
+      ? params.comptesTvaOverride ??
+        (await (async () => {
+          const balance = await fetchTrialBalance(params.client, {
+            dossierId: params.dossierId,
+            periodeDebut: params.periodeDebut,
+            periodeFin: params.periodeFin,
+          });
+          return filterComptesParPrefixe(balance, ['445'])
+            .filter((c) => c.debit !== 0 || c.credit !== 0)
+            .map((c) => c.numeroCompte);
+        })())
+      : [...new Set(params.ecrituresPreChargees.map((e) => e.ligneTva.compte))];
 
-  const ecritures = await fetchEcrituresTvaCompletes(params.client, {
-    comptesTva,
-    periodeDebut: params.periodeDebut,
-    periodeFin: params.periodeFin,
-  });
+  const ecritures =
+    params.ecrituresPreChargees ??
+    (await fetchEcrituresTvaCompletes(params.client, {
+      comptesTva,
+      periodeDebut: params.periodeDebut,
+      periodeFin: params.periodeFin,
+    }));
 
   const compteAutoliquidationDue = conventionValeur(contexteDossier, 'compte_tva_due_autoliquidee');
   const compteAutoliquidationDeductible = conventionValeur(
