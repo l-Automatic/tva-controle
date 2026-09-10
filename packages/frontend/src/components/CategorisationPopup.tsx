@@ -71,18 +71,22 @@ interface CategorisationPopupProps extends Omit<CategorisationContenuProps, 'onC
   onClose: () => void;
 }
 
-// comptes_vente_export (brief v51) — censée être la seule catégorie
-// jamais bloquante : n'affecte que l'affichage déclaratif (lignes 6/7 de
-// la CA3), jamais le calcul de TVA, peut rester non confirmée
-// indéfiniment sans bloquer un cycle. Ajoutée ici comme les 8 autres
-// (même route générique de conventions) — MAIS un compte confirmé sous
-// cette clé n'est aujourd'hui PAS exempté de la porte de catégorisation
-// obligatoire côté backend (verifierComptesACategoriser ne passe pas
-// comptesVenteExport à identifierComptesACategoriser, alors que la
-// fonction de détection elle-même le supporte déjà) : tant que ce n'est
-// pas corrigé côté backend, ce compte réapparaîtra dans ce même popup à
-// chaque cycle malgré la confirmation, contrairement à ce que ce brief
-// demande. Signalé, pas corrigé ici (hors périmètre frontend).
+// comptes_vente_export (brief v51) — jamais bloquante : n'affecte que
+// l'affichage déclaratif (lignes 6/7 de la CA3), jamais le calcul de TVA,
+// peut rester non confirmée indéfiniment sans bloquer un cycle. Ajoutée ici
+// comme les autres (même route générique de conventions). Le bug signalé au
+// v51 (compte confirmé sous cette clé jamais exempté de la porte de
+// catégorisation obligatoire) a depuis été corrigé côté backend (10/08,
+// verifierComptesACategoriser.ts) : un compte confirmé ici n'est bien plus
+// redemandé.
+//
+// comptes_vente_intracom_exoneree (brief v72) — même statut non bloquant
+// que comptes_vente_export (ligne 7 de la CA3, livraisons
+// intracommunautaires exonérées), même comportement une fois confirmée.
+// Point de conception confirmé avec Rami : un compte export ou intracom
+// exonéré n'a par nature aucune TVA collectée, donc jamais besoin d'être
+// aussi confirmé "vente service" — l'exclusivité entre catégories reste
+// correcte sans changement.
 const CHOIX = [
   { cle: 'comptes_vente_service', libelle: 'Vente de service' },
   { cle: 'comptes_charge_service', libelle: 'Charge de service' },
@@ -93,6 +97,7 @@ const CHOIX = [
   { cle: 'comptes_entretien_vehicule', libelle: 'Entretien véhicule' },
   { cle: 'comptes_location_vehicule', libelle: 'Location véhicule' },
   { cle: 'comptes_vente_export', libelle: 'Vente export' },
+  { cle: 'comptes_vente_intracom_exoneree', libelle: 'Ventes intracom exonérées' },
 ] as const;
 
 function CompteCard({
@@ -356,7 +361,7 @@ export function CategorisationContenu({
   return (
     <>
       <p className="reference">
-        Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 9 conventions. Les
+        Ces comptes produit/charge ont bougé sur la période mais ne sont dans aucune des 10 conventions. Les
         comptes non traités réapparaîtront au prochain cycle.
       </p>
       {comptes.length === 0 ? (

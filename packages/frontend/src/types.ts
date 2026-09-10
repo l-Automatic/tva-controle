@@ -60,6 +60,7 @@ export const CLES_CONVENTIONS_COMPTES = [
   'comptes_entretien_vehicule',
   'comptes_location_vehicule',
   'comptes_vente_export',
+  'comptes_vente_intracom_exoneree',
 ] as const;
 export type CleConventionCompte = (typeof CLES_CONVENTIONS_COMPTES)[number];
 
@@ -73,6 +74,9 @@ export const LIBELLE_CLE_CONVENTION: Record<CleConventionCompte, string> = {
   comptes_entretien_vehicule: 'Comptes d’entretien véhicule',
   comptes_location_vehicule: 'Comptes de location véhicule',
   comptes_vente_export: 'Comptes de vente export',
+  // 10ᵉ catégorie (brief v72) — livraisons intracommunautaires exonérées
+  // (ligne 7 de la CA3), même statut non bloquant que comptes_vente_export.
+  comptes_vente_intracom_exoneree: 'Comptes de vente intracom exonérée',
 };
 
 // --- Cycle TVA (Module 9) ---
