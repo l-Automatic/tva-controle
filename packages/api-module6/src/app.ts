@@ -4,6 +4,9 @@ import {
   PennylaneClient,
   FirmApiClient,
   fetchDossiersCabinet,
+  fetchTrialBalance,
+  filterComptesParPrefixe,
+  fetchEcrituresTvaCompletes,
   type IPennylaneApiClient,
 } from '@tva-controle/connector-pennylane';
 import {
@@ -1742,6 +1745,30 @@ export function buildApp(pool: Pool): FastifyInstance {
       throw err;
     }
 
+    // Performance (10/08, bug réel majeur corrigé — trouvé après un
+    // cycle réel mesuré à ~2 minutes) : les 4 portes obligatoires ci-
+    // dessous faisaient CHACUNE leur propre aller-retour Pennylane
+    // (balance + écritures) pour la MÊME période, puis executerCycleTva
+    // en refaisait un 5e — cinq allers-retours identiques et redondants
+    // pour lancer un seul cycle. Même principe exactement que le
+    // correctif déjà fait pour le popup portes obligatoires
+    // (chargerPortesObligatoires) : un seul fetch ici, partagé aux 4
+    // vérifications ET au calcul lui-même via leur paramètre optionnel
+    // ecrituresPreChargees.
+    const balancePourCycle = await fetchTrialBalance(client, {
+      dossierId: request.params.dossierId,
+      periodeDebut,
+      periodeFin,
+    });
+    const comptesTvaPourCycle = filterComptesParPrefixe(balancePourCycle, ['445'])
+      .filter((c) => c.debit !== 0 || c.credit !== 0)
+      .map((c) => c.numeroCompte);
+    const ecrituresPourCycle = await fetchEcrituresTvaCompletes(client, {
+      comptesTva: comptesTvaPourCycle,
+      periodeDebut,
+      periodeFin,
+    });
+
     // Porte obligatoire (10/08, demande de Rami) : la catégorisation
     // bien/service doit être garantie complète AVANT qu'un cycle ne parte
     // — jamais rattrapée après coup. Contrairement à encaissement_non_affecte
@@ -1755,6 +1782,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       client,
       periodeDebut,
       periodeFin,
+      ecrituresPreChargees: ecrituresPourCycle,
     });
     if (resultatCategorisation.comptesACategoriser.length > 0) {
       return reply.code(409).send({
@@ -1784,6 +1812,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       client,
       periodeDebut,
       periodeFin,
+      ecrituresPreChargees: ecrituresPourCycle,
     });
     if (facturesARapprocher.length > 0) {
       return reply.code(409).send({
@@ -1804,6 +1833,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       client,
       periodeDebut,
       periodeFin,
+      ecrituresPreChargees: ecrituresPourCycle,
     });
     if (parcNonRenseigne) {
       return reply.code(409).send({
@@ -1824,6 +1854,7 @@ export function buildApp(pool: Pool): FastifyInstance {
       client,
       periodeDebut,
       periodeFin,
+      ecrituresPreChargees: ecrituresPourCycle,
     });
     if (comptesTvaAConfirmer.length > 0) {
       return reply.code(409).send({
@@ -1839,6 +1870,7 @@ export function buildApp(pool: Pool): FastifyInstance {
         periodeDebut,
         periodeFin,
         client,
+        ecrituresPreChargees: ecrituresPourCycle,
         ...(overrides.comptesVenteService ? { comptesVenteServiceOverride: overrides.comptesVenteService } : {}),
         ...(overrides.comptesChargeService
           ? { comptesChargeServiceOverride: overrides.comptesChargeService }
