@@ -1584,8 +1584,8 @@ export interface InfosIdentiteDossier {
   formeJuridique?: string | null;
   fiscalite?: 'is' | 'ir' | null;
   comptabilite?: 'engagement' | 'tresorerie' | null;
-  dateDebutExercice?: string | null; // 'YYYY-MM-DD'
-  dateFinExercice?: string | null;
+  // dateDebutExercice/dateFinExercice retirés (10/08, migration 028) —
+  // remplacés par exercices_comptables ci-dessous.
   emailContact?: string | null;
   contactNom?: string | null;
   contactTelephone?: string | null;
@@ -1606,8 +1606,6 @@ export async function mettreAJourInfosDossier(
     formeJuridique: 'forme_juridique',
     fiscalite: 'fiscalite',
     comptabilite: 'comptabilite',
-    dateDebutExercice: 'date_debut_exercice',
-    dateFinExercice: 'date_fin_exercice',
     emailContact: 'email_contact',
     contactNom: 'contact_nom',
     contactTelephone: 'contact_telephone',
@@ -1627,6 +1625,50 @@ export async function mettreAJourInfosDossier(
   if (res.rowCount === 0) {
     throw new DossierIntrouvableError(dossierId);
   }
+}
+
+// ============================================================================
+// EXERCICES COMPTABLES (10/08, migration 028)
+// ============================================================================
+// Objectif explicite de Rami : pouvoir ajouter les prochains exercices à
+// l'avance, pour que rien de ce qui en dépend (ligne 10 CA3, cf.
+// pipeline.ts) ne s'arrête silencieusement faute d'exercice défini pour
+// une période donnée. Pas de workflow de clôture construit pour l'instant
+// — juste la possibilité d'ajouter, la colonne statut existe pour plus
+// tard sans forcer une migration supplémentaire le jour où ça devient
+// nécessaire.
+
+export class ExerciceChevauchementError extends Error {
+  constructor() {
+    super('Cet exercice chevauche un exercice déjà existant pour ce dossier.');
+    this.name = 'ExerciceChevauchementError';
+  }
+}
+
+export async function creerExerciceComptable(
+  client: PoolClient,
+  dossierId: string,
+  dateDebut: string,
+  dateFin: string
+): Promise<string> {
+  // Chevauchement vérifié applicativement plutôt qu'avec une contrainte
+  // d'exclusion PostgreSQL (btree_gist) — éviterait une extension
+  // supplémentaire pour un cas d'usage à faible fréquence (quelques
+  // exercices ajoutés par an, jamais en écriture concurrente).
+  const chevauchement = await client.query(
+    `SELECT 1 FROM exercices_comptables
+     WHERE dossier_id = $1 AND date_debut <= $3 AND date_fin >= $2`,
+    [dossierId, dateDebut, dateFin]
+  );
+  if ((chevauchement.rowCount ?? 0) > 0) {
+    throw new ExerciceChevauchementError();
+  }
+
+  const res = await client.query<{ id: string }>(
+    `INSERT INTO exercices_comptables (dossier_id, date_debut, date_fin) VALUES ($1, $2, $3) RETURNING id`,
+    [dossierId, dateDebut, dateFin]
+  );
+  return res.rows[0]!.id;
 }
 
 // ============================================================================
