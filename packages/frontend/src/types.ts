@@ -522,13 +522,6 @@ export interface Vehicule {
 
 export const CLE_REGIME_TVA_ENCAISSEMENT = 'regime_tva_encaissement';
 
-// Paramètre dossier distinct de dossiers.date_debut_exercice (colonne
-// administrative éditée dans Identité du dossier) — celui-ci alimente
-// spécifiquement le calcul de la ligne 10 (crédit de TVA antérieur, brief
-// v53), lu côté backend via parametreDossierValeur, jamais synchronisé
-// avec la colonne homonyme. Valeur attendue : chaîne 'YYYY-MM-DD'.
-export const CLE_DATE_DEBUT_EXERCICE = 'date_debut_exercice';
-
 export const VALEURS_REGIME_TVA_ENCAISSEMENT = ['service', 'bien', 'mixte'] as const;
 export type RegimeTvaEncaissement = (typeof VALEURS_REGIME_TVA_ENCAISSEMENT)[number];
 
@@ -608,9 +601,11 @@ export interface DetailCalculLigne {
 // 6 de la CA3, pas la 5, erreur de nommage du brief v49) ; ligne07IntracomExoneree
 // nouvelle. `disponible` entièrement retiré (brief v53, chantier CA3
 // terminé) — ligne10CreditAnterieur vaut désormais soit un nombre (y
-// compris 0, un vrai crédit nul), soit null quand le paramètre dossier
-// date_debut_exercice n'est pas encore défini. Bien distinguer les deux :
-// null → "Pas encore disponible", 0 → "0 €", jamais confondus.
+// compris 0, un vrai crédit nul), soit null quand aucun exercice
+// comptable ne couvre encore la période (10/08, basculé sur
+// exercices_comptables — cf. écran dédié dans les paramètres dossier).
+// Bien distinguer les deux : null → "Pas encore disponible", 0 → "0 €",
+// jamais confondus.
 export interface DeclarationCalcul {
   ligne01CollecteTotal: number;
   ligne02ParTaux: { taux20: number; taux10: number; taux5_5: number; taux2_1: number };
