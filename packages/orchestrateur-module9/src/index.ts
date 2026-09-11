@@ -129,6 +129,8 @@ export {
   mettreAJourInfosDossier,
   type InfosIdentiteDossier,
   DossierIntrouvableError,
+  creerExerciceComptable,
+  ExerciceChevauchementError,
   type DossierSynchronise,
   EmailDejaUtiliseError,
   qualifierEncaissementNonAffecte,
@@ -192,6 +194,8 @@ export {
   type ParametreDb,
   type ElementATraiter,
   type TiersReferenceDb,
+  listerExercicesComptables,
+  type ExerciceComptable,
 } from './db/readRepository.js';
 export {
   hasherMotDePasse,
