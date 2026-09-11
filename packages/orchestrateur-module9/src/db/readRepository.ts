@@ -892,3 +892,44 @@ export async function chargerDeclarationCalcul(client: PoolClient, calculId: str
     solde: { sens: montantNet >= 0 ? 'a_decaisser' : 'credit', montant: Math.abs(montantNet) },
   };
 }
+
+// ============================================================================
+// EXERCICES COMPTABLES (10/08, migration 028)
+// ============================================================================
+
+export interface ExerciceComptable {
+  id: string;
+  dateDebut: string;
+  dateFin: string;
+  statut: string;
+}
+
+export async function listerExercicesComptables(client: PoolClient, dossierId: string): Promise<ExerciceComptable[]> {
+  const res = await client.query<{ id: string; date_debut: string; date_fin: string; statut: string }>(
+    `SELECT id, date_debut, date_fin, statut FROM exercices_comptables WHERE dossier_id = $1 ORDER BY date_debut ASC`,
+    [dossierId]
+  );
+  return res.rows.map((r) => ({ id: r.id, dateDebut: r.date_debut, dateFin: r.date_fin, statut: r.statut }));
+}
+
+// Trouve l'exercice dont l'intervalle contient la date donnée — utilisé par
+// la ligne 10 CA3 (pipeline.ts) pour retrouver le début de l'exercice
+// courant sans dépendre d'un paramètre dossier séparé et à maintenir à la
+// main (cf. migration 028, ancien parametres_dossier.date_debut_exercice,
+// retiré). Retourne null si aucun exercice ne couvre cette date — la ligne
+// 10 reste alors simplement non calculée, jamais un zéro deviné, même
+// logique de prudence que l'ancien mécanisme.
+export async function trouverExerciceContenant(
+  client: PoolClient,
+  dossierId: string,
+  date: string
+): Promise<ExerciceComptable | null> {
+  const res = await client.query<{ id: string; date_debut: string; date_fin: string; statut: string }>(
+    `SELECT id, date_debut, date_fin, statut FROM exercices_comptables
+     WHERE dossier_id = $1 AND date_debut <= $2 AND date_fin >= $2
+     LIMIT 1`,
+    [dossierId, date]
+  );
+  const r = res.rows[0];
+  return r ? { id: r.id, dateDebut: r.date_debut, dateFin: r.date_fin, statut: r.statut } : null;
+}
