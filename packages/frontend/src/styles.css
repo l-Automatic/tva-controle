@@ -783,6 +783,84 @@ button:focus-visible {
   border: 1.5px solid var(--neutral);
 }
 
+/* Nouveau système de design appliqué à l'ENTIÈRE carte d'anomalie, pas
+   seulement le contour (brief v82, point 2 — le v81 n'avait touché que
+   .card.gravite-xxx et l'ombre pulsée ci-dessus). .statut-ouvert est partagé
+   avec .statut-candidate (conventions, propositions, taux historique,
+   ailleurs dans l'app) : jamais touché directement, scopé ici via
+   .card.anomalie pour ne recolorer QUE la pastille statut d'une
+   anomalie, sans effet sur les autres écrans. .gravite-badge-* et
+   .type-anomalie n'ont, eux, jamais d'autre usage que sur cette carte
+   (vérifié), donc modifiés directement sans scope superflu. */
+.card.anomalie .badge.statut-ouvert {
+  background: var(--alerte-100);
+  color: var(--alerte-900);
+}
+
+.card.anomalie .badge {
+  font-family: var(--typo-police-systeme);
+}
+
+/* Fusionné avec l'ancienne règle .type-anomalie/.type-evenement (plus bas
+   dans le fichier) — bug réel corrigé au v82 : les deux existaient
+   séparément, l'ancienne (plus loin dans le fichier, donc gagnante à
+   spécificité égale) écrasait celle-ci. .type-evenement a maintenant sa
+   propre copie des propriétés de mise en page ci-dessous. */
+.type-anomalie {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text);
+  font-family: var(--typo-police-systeme);
+  font-size: var(--typo-h3-taille);
+  font-weight: var(--typo-h3-graisse);
+}
+
+/* Blocs d'info (brief v79 point 5, restylés au v82) : rayon et fond du
+   nouveau système plutôt que le cadre gris/bordure de l'ancien style ;
+   labels en Légende (12px/400/neutre-500), fini les majuscules ; contenu
+   en Corps de texte (14px/400). .anomalie-bloc* n'a aucun autre usage
+   dans l'app (créé pour cette carte au v79) — fusionné avec l'ancienne
+   règle (même bug de duplication que .type-anomalie ci-dessus, ancienne
+   règle retirée plus bas dans le fichier). */
+.anomalie-bloc {
+  background: var(--neutre-50);
+  border: 1px solid var(--neutre-100);
+  border-radius: var(--rayon-carte);
+  padding: 0.35rem 0.6rem;
+  min-width: 7rem;
+}
+
+.anomalie-bloc-titre {
+  margin: 0 0 0.15rem;
+  font-family: var(--typo-police-systeme);
+  font-size: var(--typo-legende-taille);
+  font-weight: var(--typo-legende-graisse);
+  color: var(--neutre-500);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.anomalie-bloc-valeur {
+  margin: 0;
+  word-break: break-word;
+  font-family: var(--typo-police-systeme);
+  font-size: var(--typo-corps-taille);
+  font-weight: var(--typo-corps-graisse);
+}
+
+/* Boutons (Ok/Ignorer, Confirmer/Ignorer...) : même traitement que
+   l'étape 2 du v81 (popup Vérifications préalables, panneau Calcul de la
+   période) — scopé à .card.anomalie, jamais les boutons du reste de
+   l'app. */
+.card.anomalie button {
+  border-radius: var(--radius);
+  transition: background-color var(--transition-legere), border-color var(--transition-legere), opacity var(--transition-legere);
+}
+.card.anomalie button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 /* Corrigé au v80 : le v79 faisait varier flou (spread) ET opacité en sens
    opposés (spread grandit pendant que l'opacité tombe à 0) — un effet
    d'anneau qui s'étend et s'efface, puis, en boucle continue, semble
@@ -790,19 +868,25 @@ button:focus-visible {
    Rami). Corrigé en faisant varier le flou ET l'opacité DANS LE MÊME SENS
    (les deux montent vers le pic, les deux redescendent ensemble) : l'ombre
    respire entre un état "faible" et un état "fort", jamais un anneau qui
-   se creuse puis se recreuse en sens inverse. Intensité nettement relevée
-   (flou et opacité au pic) par rapport au v79, sur demande explicite de
-   Rami — doit vraiment se ressentir comme une alerte. Couleur alignée sur
+   se creuse puis se recreuse en sens inverse. Couleur alignée sur
    --danger-500 (#d92d20 = rgb(217,45,32)) au v81 — la fonction rgba() ne
    peut pas dériver son alpha depuis une variable CSS, valeur recopiée à la
-   main, à resynchroniser si --danger-500 change un jour. */
+   main, à resynchroniser si --danger-500 change un jour.
+   Intensité revue à la baisse au v82 : le pic du v80/v81 (26px de flou,
+   10px d'étendue, opacité 0.9) écrasait la lisibilité de la carte en
+   dessous (retour de Rami, capture à l'appui) — jamais changé
+   numériquement entre le v80 et le v81 (seule la couleur avait bougé),
+   donc "revenir au v80" ici veut dire revenir à une intensité
+   raisonnable, pas au chiffre littéral. Ramenée nettement plus bas, puis
+   augmentée très légèrement à partir de ce nouveau palier, comme demandé
+   — jamais un retour au niveau d'avant. */
 @keyframes anomalie-pulsation-bloquant {
   0%,
   100% {
-    box-shadow: 0 0 6px 1px rgba(217, 45, 32, 0.4);
+    box-shadow: 0 0 5px 1px rgba(217, 45, 32, 0.3);
   }
   50% {
-    box-shadow: 0 0 26px 10px rgba(217, 45, 32, 0.9);
+    box-shadow: 0 0 18px 4px rgba(217, 45, 32, 0.62);
   }
 }
 .card.proposition {
@@ -845,7 +929,6 @@ button:focus-visible {
   margin-bottom: 0.35rem;
 }
 
-.type-anomalie,
 .type-evenement {
   display: inline-flex;
   align-items: center;
@@ -931,13 +1014,19 @@ button:focus-visible {
   color: var(--neutral);
 }
 
+/* Basculées sur le nouveau système de design au v82 (brief v82, point 2) —
+   fini l'ancien orange terne (--warning) : teinte 100 en fond, texte en
+   900 pour un contraste net, cohérent avec le contour de la carte
+   (--danger-500/--alerte-500, cf. plus bas). .gravite-badge-info non
+   demandée par le brief, laissée sur l'ancienne palette neutre — pas de
+   changement hors périmètre. */
 .gravite-badge-bloquant {
-  background: var(--danger-soft-bg);
-  color: var(--danger);
+  background: var(--danger-100);
+  color: var(--danger-900);
 }
 .gravite-badge-signale {
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 .gravite-badge-info {
   background: var(--neutral-soft-bg);
@@ -994,38 +1083,14 @@ button:focus-visible {
 /* Blocs d'information dédiés sur une carte d'anomalie (brief v79, point 5)
    — un bloc par info (compte, montant, date, confiance IA, justification,
    etc.), titre court en haut, contenu en dessous, jamais mélangés entre
-   eux. Même convention visuelle que .jauge-titre/.identite-champ-lecture-libelle
-   pour le titre (petit, majuscules, espacé) — cohérente avec le reste de
-   l'app plutôt qu'un style inventé pour l'occasion. */
+   eux. .anomalie-bloc/.anomalie-bloc-titre/.anomalie-bloc-valeur ont été
+   fusionnées avec le nouveau système de design plus haut dans le fichier
+   au v82 (brief v82, point 2) — seul le conteneur flex reste ici. */
 .anomalie-blocs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
-}
-
-.anomalie-bloc {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.35rem 0.6rem;
-  min-width: 7rem;
-}
-
-.anomalie-bloc-titre {
-  margin: 0 0 0.15rem;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.anomalie-bloc-valeur {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text);
-  word-break: break-word;
 }
 
 .actions {
