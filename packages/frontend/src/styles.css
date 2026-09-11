@@ -691,14 +691,34 @@ button:focus-visible {
   background: var(--accent-soft-bg);
 }
 
+/* Cartes d'anomalies (brief v79, point 6) : contour complet dans la
+   couleur de gravité plutôt que la simple bande latérale de .card — ces 3
+   classes ne s'appliquent nulle part ailleurs que sur .card.anomalie
+   (AnomaliesPanel.tsx), sans effet sur les autres usages de .card
+   (calculs, propositions, décisions...), qui gardent leur bande latérale
+   inchangée. */
 .card.gravite-bloquant {
-  border-left-color: var(--danger);
+  border: 1.5px solid var(--danger);
+  /* Ombre pulsée (brief v79, point 2) : respiration douce, jamais un
+     clignotement — même couleur que le contour ci-dessus, pour un
+     ensemble cohérent plutôt que deux effets qui se contredisent. */
+  animation: anomalie-pulsation-bloquant 2.4s ease-in-out infinite;
 }
 .card.gravite-signale {
-  border-left-color: var(--warning);
+  border: 1.5px solid var(--warning);
 }
 .card.gravite-info {
-  border-left-color: var(--neutral);
+  border: 1.5px solid var(--neutral);
+}
+
+@keyframes anomalie-pulsation-bloquant {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(192, 57, 43, 0);
+  }
 }
 .card.proposition {
   border-left-color: var(--accent);
@@ -886,8 +906,41 @@ button:focus-visible {
   font-weight: 600;
 }
 
-.piece-technique {
-  font-style: italic;
+/* Blocs d'information dédiés sur une carte d'anomalie (brief v79, point 5)
+   — un bloc par info (compte, montant, date, confiance IA, justification,
+   etc.), titre court en haut, contenu en dessous, jamais mélangés entre
+   eux. Même convention visuelle que .jauge-titre/.identite-champ-lecture-libelle
+   pour le titre (petit, majuscules, espacé) — cohérente avec le reste de
+   l'app plutôt qu'un style inventé pour l'occasion. */
+.anomalie-blocs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.anomalie-bloc {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  min-width: 7rem;
+}
+
+.anomalie-bloc-titre {
+  margin: 0 0 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.anomalie-bloc-valeur {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+  word-break: break-word;
 }
 
 .actions {

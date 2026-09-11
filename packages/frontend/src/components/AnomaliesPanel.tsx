@@ -254,29 +254,101 @@ function libellesDePiece(details: unknown): string[] {
   return typeof d.libelle === 'string' ? [d.libelle] : [];
 }
 
-// Champs déjà affichés séparément (libellé(s), montant, date) — le reste
-// (ex : tauxImplicite/tauxAttendu, nbEcritures/references) garde un intérêt
-// de vérification, affiché en JSON compact plutôt que perdu.
+// Champs déjà affichés séparément (libellé(s), montant, date, compte) — le
+// reste (ex : confiance/justification, tauxImplicite/tauxAttendu) garde un
+// intérêt de vérification, affiché en blocs individuels ci-dessous plutôt
+// que perdu (brief v79, point 5 : un bloc dédié par information, jamais un
+// mélange de plusieurs infos dans un seul bloc — remplace l'ancien JSON.stringify
+// compact qui les entassait tous ensemble).
 const CLES_DEJA_AFFICHEES = new Set(['libelle', 'exemplesLibelle', 'montantTTC', 'date']);
 
-function detailsResiduels(details: unknown): string | null {
-  if (!details || typeof details !== 'object') return null;
+// Titre court affiché en haut de chaque bloc (brief v79, point 5) — couvre
+// toutes les clés `details` connues du catalogue backend (CATALOGUE_ANOMALIES.md).
+// Clé absente de cette table : repli sur une version espacée de la clé brute
+// (cf. humaniserCle ci-dessous), jamais une clé technique perdue en silence.
+const LIBELLE_CLE_DETAIL: Record<string, string> = {
+  debit: 'Débit',
+  credit: 'Crédit',
+  sens: 'Sens',
+  compteTvaTrouve: 'Compte TVA trouvé',
+  tauxImplicite: 'Taux implicite',
+  tauxAttendu: 'Taux attendu',
+  sourceTaux: 'Source du taux',
+  baseHT: 'Base HT',
+  montantTva: 'Montant de TVA',
+  nbEcritures: "Nombre d'écritures",
+  references: 'Références',
+  tauxApplique: 'Taux appliqué',
+  source: 'Source',
+  nomTiers: 'Nom du tiers',
+  montantTtc: 'Montant TTC',
+  seuil: 'Seuil',
+  montantDue: 'Montant dû',
+  montantDeductible: 'Montant déductible',
+  nomFournisseur: 'Nom du fournisseur',
+  compteFournisseur: 'Compte fournisseur',
+  doublons: 'Doublons',
+  manquants: 'Manquants',
+  confiance: 'Confiance IA',
+  justification: 'Justification',
+  montantDeduit: 'Montant déduit',
+  vehiculeIdentifie: 'Véhicule identifié',
+  compteTiers: 'Compte tiers',
+  groupeIds: 'Autres pièces du groupe de lettrage',
+};
+
+// Clés dont la valeur numérique est un montant en euros plutôt qu'un
+// nombre brut (taux, compteur...) — seules celles-ci passent par
+// formatMontant, cf. brief v75 (formats français).
+const CLES_MONTANT = new Set([
+  'debit',
+  'credit',
+  'baseHT',
+  'montantTva',
+  'montantTtc',
+  'seuil',
+  'montantDue',
+  'montantDeductible',
+  'montantDeduit',
+]);
+
+function humaniserCle(cle: string): string {
+  const espace = cle.replace(/([A-Z])/g, ' $1');
+  return espace.charAt(0).toUpperCase() + espace.slice(1);
+}
+
+function formatValeurDetail(cle: string, valeur: unknown): string {
+  if (valeur === null || valeur === undefined) return 'Non renseigné';
+  if (Array.isArray(valeur)) return valeur.length > 0 ? valeur.join(', ') : 'Aucun';
+  if (typeof valeur === 'boolean') return valeur ? 'Oui' : 'Non';
+  if (typeof valeur === 'number' && CLES_MONTANT.has(cle)) return formatMontant(valeur);
+  return String(valeur);
+}
+
+interface BlocDetail {
+  titre: string;
+  valeur: string;
+}
+
+function detailsResiduels(details: unknown): BlocDetail[] {
+  if (!details || typeof details !== 'object') return [];
   const d = details as Record<string, unknown>;
-  // Cas concret (type d'anomalie retiré depuis, brief v35 — conservé au
-  // cas où une future anomalie de groupe de lettrage réapparaîtrait) : le
-  // compte tiers (411/401) et les autres pièces du groupe sont la seule
-  // info qui permette d'aller vérifier manuellement dans Pennylane ; le champ
-  // `compte` de l'anomalie est le compte TVA, pas le compte tiers, d'où le
-  // besoin de l'afficher séparément plutôt que de laisser croire que
-  // "Compte : 445711" est le compte client/fournisseur concerné.
-  if (Array.isArray(d.groupeIds)) {
-    const compteTiers = typeof d.compteTiers === 'string' ? `Compte tiers : ${d.compteTiers}. ` : '';
-    return `${compteTiers}Autres pièces du même groupe de lettrage : ${d.groupeIds.join(', ')}`;
-  }
   const clesRestantes = Object.keys(d).filter((k) => !CLES_DEJA_AFFICHEES.has(k));
-  if (clesRestantes.length === 0) return null;
-  const reste = Object.fromEntries(clesRestantes.map((k) => [k, d[k]]));
-  return JSON.stringify(reste, null, 2);
+  return clesRestantes.map((cle) => ({
+    titre: LIBELLE_CLE_DETAIL[cle] ?? humaniserCle(cle),
+    valeur: formatValeurDetail(cle, d[cle]),
+  }));
+}
+
+// Bloc visuel dédié à une seule information (brief v79, point 5) — titre
+// court en haut, contenu juste en-dessous, jamais mélangé à une autre info.
+function BlocInfo({ titre, valeur }: { titre: string; valeur: string }) {
+  return (
+    <div className="anomalie-bloc">
+      <p className="anomalie-bloc-titre">{titre}</p>
+      <p className="anomalie-bloc-valeur">{valeur}</p>
+    </div>
+  );
 }
 
 // Qualification structurée d'un encaissement non affecté (compte d'attente
@@ -1601,39 +1673,35 @@ function AnomalieRow({
         meta={<span className="periode">{formatDate(anomalie.periode)}</span>}
       >
         <p className="description">{anomalie.description}</p>
-        {estEncaissement && montantTTC !== null && (
-          <p className="label">
-            Montant TTC : <strong>{formatMontant(montantTTC)}</strong>
-          </p>
-        )}
 
         {/* Le libellé de la pièce est la référence principale — l'ID technique
-            Pennylane passe en information secondaire (cf. brief v5). */}
-        {libelles.length > 0 ? (
-          <>
-            {libelles.length === 1 ? (
-              <p className="label piece-libelle">{libelles[0]}</p>
-            ) : (
-              <ul className="piece-libelles-liste">
-                {libelles.map((l, i) => (
-                  <li key={i}>{l}</li>
-                ))}
-              </ul>
-            )}
-            <p className="reference piece-technique">
-              (pièce {anomalie.referencePiece ?? 'inconnue'}
-              {date ? `, ${date}` : ''})
-            </p>
-          </>
-        ) : (
-          <p className="reference">
-            {date ? `${date}. ` : ''}
-            {anomalie.referencePiece ? `Pièce : ${anomalie.referencePiece}` : 'Pièce inconnue'}
-          </p>
-        )}
+            Pennylane, lui, ne servait à rien à l'affichage : retiré (brief v79,
+            point 3), plus jamais montré nulle part sur la carte. */}
+        {libelles.length > 0 &&
+          (libelles.length === 1 ? (
+            <p className="label piece-libelle">{libelles[0]}</p>
+          ) : (
+            <ul className="piece-libelles-liste">
+              {libelles.map((l, i) => (
+                <li key={i}>{l}</li>
+              ))}
+            </ul>
+          ))}
 
-        {anomalie.compte && <p className="reference">Compte : {anomalie.compte}</p>}
-        {detailsRestants && <p className="reference details">{detailsRestants}</p>}
+        {/* Toute autre information (compte, montant, date, confiance IA,
+            justification...) dans un bloc dédié par info (brief v79, point 5) —
+            jamais mélangées entre elles ni avec la phrase d'explication ou le
+            libellé ci-dessus, qui restent inchangés. */}
+        {(estEncaissement && montantTTC !== null) || date || anomalie.compte || detailsRestants.length > 0 ? (
+          <div className="anomalie-blocs">
+            {estEncaissement && montantTTC !== null && <BlocInfo titre="Montant TTC" valeur={formatMontant(montantTTC)} />}
+            {date && <BlocInfo titre="Date" valeur={formatDate(date)} />}
+            {anomalie.compte && <BlocInfo titre="Compte" valeur={anomalie.compte} />}
+            {detailsRestants.map((bloc) => (
+              <BlocInfo key={bloc.titre} titre={bloc.titre} valeur={bloc.valeur} />
+            ))}
+          </div>
+        ) : null}
 
         {estOuverte && estCompteNonReconnu && (
           <div className="actions">
