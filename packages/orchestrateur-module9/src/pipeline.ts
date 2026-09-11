@@ -73,6 +73,7 @@ import {
   listerTiersReference,
   parametreCabinetValeur,
   listerRapprochementsPaiementAchat,
+  trouverExerciceContenant,
 } from './db/readRepository.js';
 
 export interface ParametresCycleTva {
@@ -926,17 +927,23 @@ export async function executerCycleTva(
     params.periodeFin
   );
 
-  // Ligne 10 CA3 (10/08, phase 2) — solde débiteur du 44567 à l'ouverture
-  // de la période, depuis le début de l'exercice (paramètre dossier
-  // date_debut_exercice, pas encore construit ailleurs — si absent,
-  // cette ligne reste simplement non calculée, jamais un zéro deviné).
+  // Ligne 10 CA3 (10/08, phase 2 ; basculé le même jour sur
+  // exercices_comptables, migration 028, demande de Rami) — solde débiteur
+  // du 44567 à l'ouverture de la période, depuis le début de l'exercice
+  // COMPTABLE contenant la période déclarée — recherché dans la nouvelle
+  // table plutôt que lu depuis un paramètre dossier à maintenir à la main
+  // (ancien mécanisme : parametres_dossier.date_debut_exercice, retiré).
+  // Si aucun exercice ne couvre cette période (pas encore ajouté à
+  // l'avance), cette ligne reste simplement non calculée, jamais un zéro
+  // deviné — même principe de prudence qu'avant.
   // fetchTrialBalance sur une fenêtre large donne bien un solde CUMULÉ
   // sur toute la fenêtre (confirmé par Rami sur un exemple réel), pas
   // seulement les mouvements du dernier mois — d'où la réutilisation
   // directe de cette même fonction, aucun nouveau mécanisme nécessaire.
-  const dateDebutExerciceBrut = await avecContexteCabinet(pool, params.cabinetId, (client) =>
-    parametreDossierValeur(client, params.dossierId, 'date_debut_exercice')
+  const exerciceCourant = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    trouverExerciceContenant(client, params.dossierId, params.periodeDebut)
   );
+  const dateDebutExerciceBrut = exerciceCourant?.dateDebut;
   let creditTvaAnterieur = 0;
   if (typeof dateDebutExerciceBrut === 'string') {
     const veilleDebutPeriode = new Date(params.periodeDebut);
