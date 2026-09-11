@@ -126,6 +126,19 @@ const TYPE_CADEAU_CLIENT_SEUIL_DEPASSE = 'cadeau_client_seuil_depasse';
 const TYPE_ENTRETIEN_VEHICULE_A_TORT = 'entretien_vehicule_tourisme_deduit_a_tort';
 const TYPE_LOCATION_VEHICULE_A_TORT = 'location_vehicule_tourisme_deduite_a_tort';
 
+// Flotte mixte (brief v78) : version purement informative des deux types
+// ci-dessus, jamais bloquante, aucune qualification structurée côté
+// backend (ni jugement LLM, ni resolution typée) — juste un rappel qu'une
+// vérification manuelle reste nécessaire. Demande explicite de Rami :
+// deux boutons simples "Ok"/"Ignorer", sans commentaire, plutôt que le
+// bloc générique Résoudre(+commentaire optionnel)/Justifier(+commentaire
+// requis). Les deux boutons réutilisent resoudreAnomalie tel quel (option
+// la plus simple retenue côté backend : même effet technique, seule la
+// sémantique affichée à l'utilisateur diffère) — jamais justifierAnomalie
+// ici, ces anomalies n'ont pas besoin de la distinction résolu/justifié.
+const TYPE_ENTRETIEN_VEHICULE_FLOTTE_MIXTE = 'entretien_vehicule_flotte_mixte_a_verifier';
+const TYPE_LOCATION_VEHICULE_FLOTTE_MIXTE = 'location_vehicule_flotte_mixte_a_verifier';
+
 // Tous les types actifs du catalogue ont un libellé dédié ici — cf.
 // CATALOGUE_ANOMALIES.md. tva_sur_livraison_intracom_exoneree existe dans
 // le code mais reste volontairement hors périmètre (décision explicite,
@@ -167,6 +180,8 @@ const LIBELLE_TYPE_ANOMALIE: Record<string, string> = {
   cadeau_client_seuil_depasse: 'Cadeau client, seuil de 73€ dépassé',
   entretien_vehicule_tourisme_deduit_a_tort: 'Entretien véhicule tourisme déduit à tort',
   location_vehicule_tourisme_deduite_a_tort: 'Location véhicule tourisme déduite à tort',
+  entretien_vehicule_flotte_mixte_a_verifier: 'Entretien véhicule, flotte mixte à vérifier',
+  location_vehicule_flotte_mixte_a_verifier: 'Location véhicule, flotte mixte à vérifier',
 };
 
 interface AnomaliesPanelProps {
@@ -1559,6 +1574,9 @@ function AnomalieRow({
       ? (anomalie.resolution as { type?: string }).type
       : null;
   const afficherVerificationFraisVehicule = estFraisVehicule && resolutionFraisVehiculeType === 'confirme';
+  const estFraisVehiculeFlotteMixte =
+    anomalie.typeAnomalie === TYPE_ENTRETIEN_VEHICULE_FLOTTE_MIXTE ||
+    anomalie.typeAnomalie === TYPE_LOCATION_VEHICULE_FLOTTE_MIXTE;
   const detailsRestants = detailsResiduels(anomalie.details);
   const { montantTTC, date } = detailsMontant(anomalie.details);
   const libelles = libellesDePiece(anomalie.details);
@@ -1787,6 +1805,16 @@ function AnomalieRow({
             <QualificationTvaHotel anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
           ) : estFraisVehicule ? (
             <QualificationFraisVehicule anomalie={anomalie} cabinetId={cabinetId} utilisateurId={utilisateurId} onChanged={onChanged} />
+          ) : estFraisVehiculeFlotteMixte ? (
+            <div className="actions">
+              <button onClick={handleResoudre} disabled={submitting !== null}>
+                <ICONE_ACTION.resoudre size={14} aria-hidden="true" />
+                {submitting === 'resoudre' ? '…' : 'Ok'}
+              </button>
+              <button onClick={handleResoudre} className="secondary" disabled={submitting !== null}>
+                {submitting === 'resoudre' ? '…' : 'Ignorer'}
+              </button>
+            </div>
           ) : (
             <div className="actions">
               <input
