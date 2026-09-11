@@ -586,6 +586,14 @@ function DossiersActivationSection({ cabinetId }: { cabinetId: string }) {
 // cabinet, réservé à admin_cabinet (masqué entièrement pour un
 // collaborateur dans ParametresPanel ci-dessous, même principe que
 // CabinetSection). Écrit via definirParametreCabinet, plus definirParametreDossier.
+//
+// DEVENU UN CONTRÔLE MORT depuis le brief v84 (retrait de --degrade-actif
+// de styles.css, repointé vers --accent-500 fixe partout) : choisir un
+// dégradé ici n'a plus aucun effet visible, décision actée avec Rami plutôt
+// que de préserver la personnalisation, incompatible avec la nouvelle
+// direction Stripe/claire à couleur unique. À masquer ou supprimer
+// entièrement (UI + paramètre backend) lors d'une prochaine phase de la
+// refonte (v83, phase B ou D).
 function DegradeSection({
   cabinetId,
   utilisateurId,

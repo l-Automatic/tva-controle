@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--typo-police-systeme), system-ui, 'Segoe UI', sans-serif;
 
   --bg: #f6f7fa;
   --bg-raised: #ffffff;
@@ -9,45 +9,17 @@
   --text: #1c2128;
   --text-muted: #64707d;
 
-  --accent: #2f6fed;
-  --accent-hover: #2559c7;
-  --accent-soft-bg: #eaf0fe;
-
-  --success: #1e8a5f;
-  --success-soft-bg: #e4f5ec;
-  /* Rouge/jaune-orange intensifiés (brief v80) : Rami trouvait l'ancien
-     jaune "orange marron" et le rouge trop terne pour des couleurs
-     d'alerte — remplacés par des teintes nettement plus vives/saturées.
-     Uniquement ces deux tokens (couleurs d'alerte) : le reste de la
-     palette (succès, accent, neutre, violet) n'est volontairement pas
-     touché, une refonte plus large étant prévue séparément. */
-  --warning: #d97706;
-  --warning-soft-bg: #fef0d9;
-  --danger: #dc2626;
-  --danger-soft-bg: #fce3e3;
-  --neutral: #6b7684;
-  --neutral-soft-bg: #eef0f3;
-  --violet: #6a3fc0;
-  --violet-soft-bg: #f0e9fb;
-
-  --degrade-actif: linear-gradient(135deg, #142174, #434d90);
   --sidebar-width: 250px;
-
   --radius: 8px;
-  --shadow-card: 0 1px 2px rgba(23, 27, 33, 0.04);
 
-  /* --- Nouveau système de design, direction "Stripe" (brief v81) ---
-     Fondations du futur système complet, validées avec Rami mais
-     déployées PAR ÉTAPES : ces tokens existent déjà partout, mais ne
-     sont pour l'instant appliqués qu'aux 3 écrans de référence de
-     l'étape 2 (cartes d'anomalies, popup Vérifications préalables,
-     Calcul de la période) — jamais au reste de l'app tant que la
-     généralisation n'a pas été validée visuellement. Ancienne palette
-     (--accent, --danger, --success...) volontairement conservée
-     intacte en parallèle : les deux coexistent jusqu'à la
-     généralisation. --accent-500 (indigo) est un choix provisoire de
-     Rami/Claude en cours d'exploration, pas figé — le reste de cette
-     nouvelle palette est plus assuré. */
+  /* --- Système de design, direction "Stripe" (brief v81, généralisé au
+     v84 — Phase A du brief v83) --- Seul système de couleurs actif dans
+     tout le fichier : l'ancienne palette (--accent/--danger/--warning/
+     --success/--neutral, --degrade-actif, --shadow-card) a été
+     entièrement repointée vers celui-ci puis retirée (brief v84,
+     "repointer, jamais laisser cohabiter"). --accent-500 (indigo) reste
+     un choix provisoire de Rami/Claude en cours d'exploration, pas figé
+     — le reste de cette palette est plus assuré. */
   --neutre-50: #f9fafb;
   --neutre-100: #eaecf0;
   --neutre-500: #98a2b3;
@@ -56,6 +28,10 @@
   --accent-50: #edf2ff;
   --accent-100: #c7d2fe;
   --accent-500: #4f46e5;
+  /* Teinte de survol (brief v84) : l'ancien système avait --accent-hover,
+     le nouveau n'avait aucun équivalent entre -500 et -900 — ajoutée ici
+     plutôt que de bricoler un survol via opacity/filter. */
+  --accent-600: #4338ca;
   --accent-900: #312e81;
 
   --succes-50: #ecfdf3;
@@ -73,11 +49,21 @@
   --danger-500: #d92d20;
   --danger-900: #7a271a;
 
+  /* Remplace --violet/--violet-soft-bg (brief v84) : seule couleur de
+     l'ancien système sans équivalent dans la nouvelle palette (distingue
+     visuellement un acteur "agent IA" des acteurs utilisateur/système
+     dans l'historique d'audit) — gardée comme extension délibérée du
+     nouveau système plutôt que fondue dans le gris neutre, ce qui aurait
+     perdu cette distinction. Même paire à 2 teintes que l'ancien système
+     (jamais eu besoin d'un -900 séparé, le -500 sert déjà de texte sur
+     fond -100, cf. .acteur-badge-agent). */
+  --agent-100: #f0e9fb;
+  --agent-500: #6a3fc0;
+
   /* Typographie : police système plutôt qu'une police chargée à part,
-     pour rester léger (Montserrat, chargée via Google Fonts, reste la
-     police active de l'app tant que l'étape 2 n'est appliquée qu'à un
-     périmètre limité — changer --font-family ici propagerait
-     immédiatement à toute l'app, contrairement à la consigne). */
+     pour rester léger — Montserrat (Google Fonts) entièrement retirée au
+     v84 (Phase A du brief v83), --typo-police-systeme est désormais la
+     seule police de toute l'app (cf. font-family ci-dessus). */
   --typo-police-systeme: -apple-system, 'Helvetica Neue', sans-serif;
   --typo-h1-taille: 28px;
   --typo-h1-graisse: 600;
@@ -140,7 +126,7 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--degrade-actif);
+  background: var(--accent-500);
   padding: 1.5rem;
 }
 
@@ -149,7 +135,7 @@ p {
   max-width: 340px;
   background: var(--bg-raised);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--ombre-carte-repos);
   padding: 2rem 1.75rem;
   display: flex;
   flex-direction: column;
@@ -194,7 +180,7 @@ p {
   flex: 0 0 var(--sidebar-width);
   width: var(--sidebar-width);
   min-height: 100vh;
-  background: var(--degrade-actif);
+  background: var(--accent-500);
   color: #fff;
   padding: 1.25rem 1rem;
   display: flex;
@@ -474,7 +460,7 @@ p {
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--ombre-carte-repos);
   padding: 1.1rem 1.25rem;
 }
 
@@ -538,7 +524,7 @@ button {
   justify-content: center;
   gap: 0.4rem;
   border: 1px solid transparent;
-  background: var(--degrade-actif);
+  background: var(--accent-500);
   color: #fff;
   border-radius: 8px;
   padding: 0.5rem 0.9rem;
@@ -561,13 +547,13 @@ button:active:not(:disabled) {
 
 button.secondary {
   background: var(--bg-raised);
-  color: var(--danger);
-  border-color: var(--danger);
+  color: var(--danger-500);
+  border-color: var(--danger-500);
 }
 
 button.secondary:hover:not(:disabled) {
-  background: var(--danger-soft-bg);
-  box-shadow: 0 4px 10px rgba(192, 57, 43, 0.14);
+  background: var(--danger-100);
+  box-shadow: 0 4px 10px rgba(217, 45, 32, 0.14);
 }
 
 button:disabled {
@@ -593,7 +579,7 @@ select {
 input:focus-visible,
 select:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-500);
   outline-offset: 1px;
 }
 
@@ -615,13 +601,13 @@ button:focus-visible {
 }
 
 .sous-onglet:hover:not(.actif) {
-  background: var(--accent-soft-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent-50);
+  border-color: var(--accent-100);
+  color: var(--accent-500);
 }
 
 .sous-onglet.actif {
-  background: var(--degrade-actif);
+  background: var(--accent-500);
   border-color: transparent;
   color: #fff;
 }
@@ -636,8 +622,8 @@ button:focus-visible {
 
 .a-traiter-panel {
   margin-bottom: 1.5rem;
-  border-color: var(--warning);
-  background: var(--warning-soft-bg);
+  border-color: var(--alerte-500);
+  background: var(--alerte-50);
 }
 
 .a-traiter-card {
@@ -647,12 +633,12 @@ button:focus-visible {
 }
 
 .a-traiter-card:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-500);
 }
 
 .a-traiter-badge {
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 
 /* --- Progression (jauges sobres) --- */
@@ -681,11 +667,11 @@ button:focus-visible {
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: var(--neutral-soft-bg);
+  background: var(--neutre-100);
 }
 
 .jauge-barre-simple {
-  background: var(--neutral-soft-bg);
+  background: var(--neutre-100);
 }
 
 .jauge-segment {
@@ -694,15 +680,15 @@ button:focus-visible {
 }
 
 .jauge-segment-confiance {
-  background: var(--success);
+  background: var(--succes-500);
 }
 
 .jauge-segment-surveiller {
-  background: var(--warning);
+  background: var(--alerte-500);
 }
 
 .jauge-segment-nouveau {
-  background: var(--neutral);
+  background: var(--neutre-500);
 }
 
 .jauge-legende {
@@ -712,7 +698,7 @@ button:focus-visible {
 }
 
 .jauge-legende.jauge-ok {
-  color: var(--success);
+  color: var(--succes-500);
   font-weight: 500;
 }
 
@@ -725,15 +711,15 @@ button:focus-visible {
 }
 
 .jauge-puce-confiance {
-  background: var(--success);
+  background: var(--succes-500);
 }
 
 .jauge-puce-surveiller {
-  background: var(--warning);
+  background: var(--alerte-500);
 }
 
 .jauge-puce-nouveau {
-  background: var(--neutral);
+  background: var(--neutre-500);
 }
 
 /* --- Cartes / listes --- */
@@ -757,8 +743,8 @@ button:focus-visible {
 
 /* Calcul sélectionné dans l'onglet Déclaration (brief v49). */
 .card.actif {
-  border-left-color: var(--accent);
-  background: var(--accent-soft-bg);
+  border-left-color: var(--accent-500);
+  background: var(--accent-50);
 }
 
 /* Cartes d'anomalies (brief v79, point 6 ; couleurs basculées sur le
@@ -767,7 +753,10 @@ button:focus-visible {
    .card — ces 3 classes ne s'appliquent nulle part ailleurs que sur
    .card.anomalie (AnomaliesPanel.tsx), sans effet sur les autres usages
    de .card (calculs, propositions, décisions...), qui gardent leur
-   bande latérale et l'ancienne palette inchangées. */
+   mécanisme de bande latérale (repeint avec les mêmes tokens de couleur
+   au v84, cf. .card.actif, .card.proposition, .card.acteur-xxx et
+   .card.statut-carte-xxx plus bas — seul le mécanisme diffère encore,
+   plus la palette). */
 .card.gravite-bloquant {
   border: 1.5px solid var(--danger-500);
   /* Ombre pulsée (brief v79 point 2, corrigée au v80) : respiration
@@ -780,7 +769,7 @@ button:focus-visible {
   border: 1.5px solid var(--alerte-500);
 }
 .card.gravite-info {
-  border: 1.5px solid var(--neutral);
+  border: 1.5px solid var(--neutre-500);
 }
 
 /* Nouveau système de design appliqué à l'ENTIÈRE carte d'anomalie, pas
@@ -890,28 +879,28 @@ button:focus-visible {
   }
 }
 .card.proposition {
-  border-left-color: var(--accent);
+  border-left-color: var(--accent-500);
 }
 .card.acteur-utilisateur {
-  border-left-color: var(--accent);
+  border-left-color: var(--accent-500);
 }
 .card.acteur-systeme {
-  border-left-color: var(--neutral);
+  border-left-color: var(--neutre-500);
 }
 .card.acteur-agent {
-  border-left-color: var(--violet);
+  border-left-color: var(--agent-500);
 }
 .card.statut-carte-brouillon {
-  border-left-color: var(--warning);
+  border-left-color: var(--alerte-500);
 }
 .card.statut-carte-valide {
-  border-left-color: var(--success);
+  border-left-color: var(--succes-500);
 }
 .card.statut-carte-declare {
-  border-left-color: var(--accent);
+  border-left-color: var(--accent-500);
 }
 .card.statut-carte-rejete {
-  border-left-color: var(--neutral);
+  border-left-color: var(--neutre-500);
 }
 
 /* Utilisateur désactivé (brief v26) — grisé, reste visible/lisible */
@@ -954,72 +943,72 @@ button:focus-visible {
 }
 
 .badge-origine {
-  background: var(--neutral-soft-bg);
-  color: var(--neutral);
+  background: var(--neutre-100);
+  color: var(--neutre-900);
 }
 
 /* Ligne de détail de calcul dont le montant reflète un ajustement manuel
    plutôt que la somme brute du cycle (brief v44). */
 .badge-ajuste {
   margin-left: 0.4rem;
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 
 .niveau-confiance-nouveau {
-  background: var(--neutral-soft-bg);
-  color: var(--neutral);
+  background: var(--neutre-100);
+  color: var(--neutre-900);
 }
 .niveau-confiance-a_surveiller {
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 .niveau-confiance-confiance {
-  background: var(--success-soft-bg);
-  color: var(--success);
+  background: var(--succes-100);
+  color: var(--succes-900);
 }
 
 .statut-ouvert,
 .statut-candidate {
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 .statut-resolu,
 .statut-confirmed {
-  background: var(--success-soft-bg);
-  color: var(--success);
+  background: var(--succes-100);
+  color: var(--succes-900);
 }
 .statut-justifie {
-  background: var(--accent-soft-bg);
-  color: var(--accent-hover);
+  background: var(--accent-100);
+  color: var(--accent-900);
 }
 .statut-rejected {
-  background: var(--danger-soft-bg);
-  color: var(--danger);
+  background: var(--danger-100);
+  color: var(--danger-900);
 }
 .statut-brouillon {
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 .statut-valide {
-  background: var(--success-soft-bg);
-  color: var(--success);
+  background: var(--succes-100);
+  color: var(--succes-900);
 }
 .statut-declare {
-  background: var(--accent-soft-bg);
-  color: var(--accent-hover);
+  background: var(--accent-100);
+  color: var(--accent-900);
 }
 .statut-rejete {
-  background: var(--neutral-soft-bg);
-  color: var(--neutral);
+  background: var(--neutre-100);
+  color: var(--neutre-900);
 }
 
 /* Basculées sur le nouveau système de design au v82 (brief v82, point 2) —
    fini l'ancien orange terne (--warning) : teinte 100 en fond, texte en
    900 pour un contraste net, cohérent avec le contour de la carte
-   (--danger-500/--alerte-500, cf. plus bas). .gravite-badge-info non
-   demandée par le brief, laissée sur l'ancienne palette neutre — pas de
-   changement hors périmètre. */
+   (--danger-500/--alerte-500, cf. plus bas). .gravite-badge-info repeinte
+   en --neutre-100/-900 au v84 (repointage complet de l'app, plus de
+   distinction "hors périmètre" à faire). */
 .gravite-badge-bloquant {
   background: var(--danger-100);
   color: var(--danger-900);
@@ -1029,21 +1018,21 @@ button:focus-visible {
   color: var(--alerte-900);
 }
 .gravite-badge-info {
-  background: var(--neutral-soft-bg);
-  color: var(--neutral);
+  background: var(--neutre-100);
+  color: var(--neutre-900);
 }
 
 .acteur-badge-utilisateur {
-  background: var(--accent-soft-bg);
-  color: var(--accent-hover);
+  background: var(--accent-100);
+  color: var(--accent-900);
 }
 .acteur-badge-systeme {
-  background: var(--neutral-soft-bg);
-  color: var(--neutral);
+  background: var(--neutre-100);
+  color: var(--neutre-900);
 }
 .acteur-badge-agent {
-  background: var(--violet-soft-bg);
-  color: var(--violet);
+  background: var(--agent-100);
+  color: var(--agent-500);
 }
 
 .description,
@@ -1106,7 +1095,7 @@ button:focus-visible {
 }
 
 .error {
-  color: var(--danger);
+  color: var(--danger-500);
   font-size: 0.8rem;
   margin-top: 0.4rem;
 }
@@ -1188,7 +1177,7 @@ button:focus-visible {
 }
 
 .card.compte-confirme {
-  border-left-color: var(--success);
+  border-left-color: var(--succes-500);
 }
 
 .cycle-form {
@@ -1272,7 +1261,7 @@ button:focus-visible {
 }
 
 .accordion-header:hover {
-  background: var(--neutral-soft-bg);
+  background: var(--neutre-100);
 }
 
 .accordion-titre {
@@ -1326,8 +1315,8 @@ button:focus-visible {
 }
 
 .error-409 {
-  color: var(--warning);
-  background: var(--warning-soft-bg);
+  color: var(--alerte-900);
+  background: var(--alerte-100);
   border-radius: 6px;
   padding: 0.4rem 0.6rem;
 }
@@ -1347,8 +1336,8 @@ button:focus-visible {
 /* Calcul produit mais incomplet (brief v31) — visible, pas alarmiste :
    même ton que error-409, jamais aussi appuyé qu'une vraie erreur. */
 .avertissement {
-  color: var(--warning);
-  background: var(--warning-soft-bg);
+  color: var(--alerte-900);
+  background: var(--alerte-100);
   border-radius: 6px;
   padding: 0.4rem 0.6rem;
   margin: 0.5rem 0;
@@ -1414,7 +1403,7 @@ pre.details {
   align-items: center;
   gap: 0.5rem;
   background: var(--bg-raised);
-  border: 1px solid var(--success);
+  border: 1px solid var(--succes-500);
   color: var(--text);
   border-radius: 7px;
   box-shadow: 0 4px 14px rgba(23, 27, 33, 0.12);
@@ -1424,7 +1413,7 @@ pre.details {
 }
 
 .toast-check {
-  color: var(--success);
+  color: var(--succes-500);
   font-weight: 700;
 }
 
@@ -1486,7 +1475,7 @@ pre.details {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  background: var(--neutral-soft-bg);
+  background: var(--neutre-100);
   color: var(--text);
   border-radius: 999px;
   padding: 0.2rem 0.3rem 0.2rem 0.6rem;
@@ -1508,8 +1497,8 @@ pre.details {
 }
 
 .chip-remove:hover:not(:disabled) {
-  background: var(--danger-soft-bg);
-  color: var(--danger);
+  background: var(--danger-50);
+  color: var(--danger-500);
 }
 
 /* --- Popup de catégorisation des comptes --- */
@@ -1686,7 +1675,7 @@ pre.details {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: var(--neutral-soft-bg);
+  background: var(--neutre-100);
   overflow: hidden;
 }
 
@@ -1694,7 +1683,7 @@ pre.details {
   height: 100%;
   width: 40%;
   border-radius: 999px;
-  background: var(--degrade-actif);
+  background: var(--accent-500);
   animation: barre-indeterminee-glisse 1.3s ease-in-out infinite;
 }
 
@@ -1715,7 +1704,7 @@ pre.details {
 }
 
 .check-anime-cercle {
-  stroke: var(--success);
+  stroke: var(--succes-500);
   stroke-width: 3;
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
@@ -1723,7 +1712,7 @@ pre.details {
 }
 
 .check-anime-trait {
-  stroke: var(--success);
+  stroke: var(--succes-500);
   stroke-width: 5;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -1777,7 +1766,7 @@ pre.details {
 }
 
 .popup-close:hover {
-  background: var(--neutral-soft-bg);
+  background: var(--neutre-100);
   opacity: 1;
 }
 
@@ -1805,26 +1794,26 @@ pre.details {
 .suggestion-ia svg {
   flex-shrink: 0;
   margin-top: 0.15rem;
-  color: var(--accent);
+  color: var(--accent-500);
 }
 
 .confiance-haute {
-  background: var(--success-soft-bg);
-  color: var(--success);
+  background: var(--succes-100);
+  color: var(--succes-900);
 }
 .confiance-moyenne {
-  background: var(--warning-soft-bg);
-  color: var(--warning);
+  background: var(--alerte-100);
+  color: var(--alerte-900);
 }
 .confiance-basse {
-  background: var(--neutral-soft-bg);
-  color: var(--neutral);
+  background: var(--neutre-100);
+  color: var(--neutre-900);
 }
 
 /* Suggestion 'plan_comptable' (brief v11) — correspondance déterministe,
    pas une estimation : couleur accent (pas la palette confiance-*) pour
    marquer visuellement la différence de nature. */
 .badge-plan-comptable {
-  background: var(--accent-soft-bg);
-  color: var(--accent-hover);
+  background: var(--accent-100);
+  color: var(--accent-900);
 }
