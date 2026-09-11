@@ -11,8 +11,13 @@ import {
 import { identifierFacturesCandidatesAcompte } from '@tva-controle/controles-module4';
 import { MistralClient, jugerCandidatsPaiementAchat } from '@tva-controle/connector-mistral';
 import { avecContexteCabinet } from './db/pool.js';
-import { chargerContexteDossier, chargerDossierComplet, conventionListe, conventionValeur } from './db/dossierRepository.js';
-import { parametreCabinetValeur, listerFacturesLedgerEntryIdsRapprochees, listerPaiementsDejaReclames } from './db/readRepository.js';
+import { chargerContexteDossier, conventionListe, conventionValeur } from './db/dossierRepository.js';
+import {
+  parametreCabinetValeur,
+  listerFacturesLedgerEntryIdsRapprochees,
+  listerPaiementsDejaReclames,
+  trouverExerciceContenant,
+} from './db/readRepository.js';
 import { autoResoudreFactureSansCandidat } from './db/writeRepository.js';
 
 // Prépare le contenu du popup de rapprochement des paiements achats
@@ -60,9 +65,6 @@ export async function preparerRapprochementsPaiementAchat(
 ): Promise<FactureARapprocher[]> {
   const contexteDossier = await avecContexteCabinet(pool, params.cabinetId, (client) =>
     chargerContexteDossier(client, params.dossierId)
-  );
-  const dossierComplet = await avecContexteCabinet(pool, params.cabinetId, (client) =>
-    chargerDossierComplet(client, params.dossierId)
   );
   const comptesChargeService = conventionListe(contexteDossier, 'comptes_charge_service') ?? [];
   // Sous-traitance BTP (10/08, bug réel corrigé, confirmé par Rami) —
@@ -142,12 +144,17 @@ export async function preparerRapprochementsPaiementAchat(
     listerPaiementsDejaReclames(client, params.dossierId)
   );
 
-  // Fenêtre = tout l'exercice comptable du dossier — repli sur l'année
-  // civile de la période si l'exercice n'a pas encore été renseigné
-  // (champ ajouté migration 015, pas toujours déjà rempli).
+  // Fenêtre = tout l'exercice comptable contenant la période — recherché
+  // dans exercices_comptables (10/08, migration 028) plutôt que lu depuis
+  // les anciennes colonnes dossiers.date_debut_exercice/date_fin_exercice
+  // (retirées) — repli sur l'année civile de la période si aucun exercice
+  // ne couvre cette date (pas encore ajouté à l'avance).
   const anneeCivile = params.periodeDebut.slice(0, 4);
-  const exerciceDebut = dossierComplet?.dateDebutExercice ?? `${anneeCivile}-01-01`;
-  const exerciceFin = dossierComplet?.dateFinExercice ?? `${anneeCivile}-12-31`;
+  const exerciceCourant = await avecContexteCabinet(pool, params.cabinetId, (client) =>
+    trouverExerciceContenant(client, params.dossierId, params.periodeDebut)
+  );
+  const exerciceDebut = exerciceCourant?.dateDebut ?? `${anneeCivile}-01-01`;
+  const exerciceFin = exerciceCourant?.dateFin ?? `${anneeCivile}-12-31`;
 
   const mistralClient =
     typeof mistralApiKey === 'string' && mistralApiKey.length > 0 ? new MistralClient({ apiKey: mistralApiKey }) : null;
