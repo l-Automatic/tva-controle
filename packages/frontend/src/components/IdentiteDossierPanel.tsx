@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ApiError, fetchDossierComplet, mettreAJourIdentiteDossier } from '../api';
-import { toDateOnly } from '../dateUtils';
+import {
+  ApiError,
+  ajouterExerciceComptable,
+  fetchDossierComplet,
+  fetchExercicesComptables,
+  mettreAJourIdentiteDossier,
+} from '../api';
+import { formatDate } from '../dateUtils';
 import { useToast } from '../toast';
 import {
   FORMES_JURIDIQUES_COURANTES,
@@ -8,6 +14,7 @@ import {
   LIBELLE_FISCALITE,
   type Comptabilite,
   type DossierComplet,
+  type ExerciceComptable,
   type Fiscalite,
   type InfosIdentiteDossier,
 } from '../types';
@@ -17,8 +24,6 @@ interface ChampsEditables {
   formeJuridique: string;
   fiscalite: Fiscalite | '';
   comptabilite: Comptabilite | '';
-  dateDebutExercice: string;
-  dateFinExercice: string;
   numeroTvaIntracom: string;
   emailContact: string;
   contactNom: string;
@@ -31,13 +36,124 @@ function versChamps(d: DossierComplet): ChampsEditables {
     formeJuridique: d.formeJuridique ?? '',
     fiscalite: d.fiscalite ?? '',
     comptabilite: d.comptabilite ?? '',
-    dateDebutExercice: d.dateDebutExercice ? toDateOnly(d.dateDebutExercice) : '',
-    dateFinExercice: d.dateFinExercice ? toDateOnly(d.dateFinExercice) : '',
     numeroTvaIntracom: d.numeroTvaIntracom ?? '',
     emailContact: d.emailContact ?? '',
     contactNom: d.contactNom ?? '',
     contactTelephone: d.contactTelephone ?? '',
   };
+}
+
+// Remplace l'ancienne paire unique dateDebutExercice/dateFinExercice (brief
+// v74, migration 028) — plusieurs exercices consécutifs, ajoutables à
+// l'avance. Périmètre volontairement réduit : pas de clôture ni de
+// verrouillage pour l'instant, juste lister et ajouter (le statut est
+// affiché à titre indicatif, aucune action dessus ici).
+function ExercicesComptablesPanel({ cabinetId, dossierId }: { cabinetId: string; dossierId: string }) {
+  const [exercices, setExercices] = useState<ExerciceComptable[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const notifier = useToast();
+
+  async function charger() {
+    setLoading(true);
+    setError(null);
+    try {
+      const { exercices: data } = await fetchExercicesComptables(cabinetId, dossierId);
+      setExercices(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de charger les exercices comptables');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (cabinetId && dossierId) void charger();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId, dossierId]);
+
+  async function handleAjouter() {
+    if (!dateDebut || !dateFin) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ajouterExerciceComptable(cabinetId, dossierId, { dateDebut, dateFin });
+      notifier('Exercice comptable ajouté');
+      setDateDebut('');
+      setDateFin('');
+      setFormulaireOuvert(false);
+      await charger();
+    } catch (err) {
+      // 400 (dates incohérentes) et 409 (chevauchement) sont déjà
+      // contrôlés côté API — le message y est directement exploitable, pas
+      // besoin de validation client dupliquée (brief v74).
+      setError(err instanceof ApiError ? err.message : "Échec de l'ajout de l'exercice comptable");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <h3>Exercices comptables</h3>
+      <p className="reference">
+        Un ou plusieurs exercices consécutifs pour ce dossier, à renseigner à l'avance pour que la ligne 10 de la
+        CA3 ne reste jamais sans exercice à s'y rattacher.
+      </p>
+      {error && <p className="error">{error}</p>}
+      {!loading && exercices.length === 0 && <p className="empty">Aucun exercice comptable renseigné.</p>}
+      {exercices.length > 0 && (
+        <ul className="card-list">
+          {exercices.map((ex) => (
+            <li key={ex.id} className="card">
+              <p className="label">
+                {formatDate(ex.dateDebut)} → {formatDate(ex.dateFin)}
+              </p>
+              <p className="reference">Statut : {ex.statut}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {formulaireOuvert ? (
+        <div className="cycle-form">
+          <label>
+            Date début
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              disabled={submitting}
+            />
+          </label>
+          <label>
+            Date fin
+            <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} disabled={submitting} />
+          </label>
+          <button onClick={() => void handleAjouter()} disabled={submitting || !dateDebut || !dateFin}>
+            {submitting ? '…' : 'Ajouter'}
+          </button>
+          <button
+            className="secondary"
+            onClick={() => {
+              setFormulaireOuvert(false);
+              setError(null);
+            }}
+            disabled={submitting}
+          >
+            Annuler
+          </button>
+        </div>
+      ) : (
+        <button className="secondary" onClick={() => setFormulaireOuvert(true)}>
+          Ajouter un exercice comptable
+        </button>
+      )}
+    </>
+  );
 }
 
 // Ne renvoie que les champs qui ont réellement changé par rapport à
@@ -220,24 +336,6 @@ export function IdentiteDossierPanel({ cabinetId, dossierId }: { cabinetId: stri
           </select>
         </label>
         <label>
-          Date début exercice
-          <input
-            type="date"
-            value={champs.dateDebutExercice}
-            onChange={(e) => majChamp('dateDebutExercice', e.target.value)}
-            disabled={submitting}
-          />
-        </label>
-        <label>
-          Date fin exercice
-          <input
-            type="date"
-            value={champs.dateFinExercice}
-            onChange={(e) => majChamp('dateFinExercice', e.target.value)}
-            disabled={submitting}
-          />
-        </label>
-        <label>
           Numéro de TVA intracommunautaire
           <input
             type="text"
@@ -278,6 +376,10 @@ export function IdentiteDossierPanel({ cabinetId, dossierId }: { cabinetId: stri
         </button>
       </div>
       {error && <p className="error">{error}</p>}
+
+      <div className="panel-separateur" />
+
+      <ExercicesComptablesPanel cabinetId={cabinetId} dossierId={dossierId} />
     </section>
   );
 }

@@ -334,8 +334,6 @@ export interface DossierComplet {
   formeJuridique: string | null;
   fiscalite: Fiscalite | null;
   comptabilite: Comptabilite | null;
-  dateDebutExercice: string | null;
-  dateFinExercice: string | null;
   regimeTva: string;
   periodiciteDeclaration: string;
   tvaEncaissement: boolean;
@@ -359,12 +357,23 @@ export interface InfosIdentiteDossier {
   formeJuridique?: string | null;
   fiscalite?: Fiscalite | null;
   comptabilite?: Comptabilite | null;
-  dateDebutExercice?: string | null;
-  dateFinExercice?: string | null;
   emailContact?: string | null;
   contactNom?: string | null;
   contactTelephone?: string | null;
   numeroTvaIntracom?: string | null;
+}
+
+// --- Exercices comptables (brief v74) — remplace l'ancienne paire unique
+// dateDebutExercice/dateFinExercice (un seul exercice par dossier, retirée
+// de l'API le 10/08, migration 028) par une vraie liste, ajoutable à
+// l'avance. `statut` existe côté backend pour un futur workflow de
+// clôture, pas encore construit : affiché ici à titre indicatif seulement,
+// aucune action de clôture/verrouillage dans cette version.
+export interface ExerciceComptable {
+  id: string;
+  dateDebut: string;
+  dateFin: string;
+  statut: string;
 }
 
 // --- Point d'entrée "à traiter" ---

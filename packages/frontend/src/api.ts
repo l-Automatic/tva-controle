@@ -12,6 +12,7 @@ import type {
   DossierComplet,
   ElementATraiter,
   EtatPortesObligatoires,
+  ExerciceComptable,
   FactureARapprocher,
   InfosIdentiteDossier,
   MotifNumerotation,
@@ -950,6 +951,26 @@ export function mettreAJourIdentiteDossier(
   return request<void>(`/dossiers/${dossierId}/identite`, cabinetId, {
     method: 'PUT',
     body: JSON.stringify(infos),
+  });
+}
+
+// --- Exercices comptables (brief v74) — remplace l'ancienne paire unique
+// dateDebutExercice/dateFinExercice, retirée de DossierComplet/InfosIdentiteDossier.
+export function fetchExercicesComptables(
+  cabinetId: string,
+  dossierId: string
+): Promise<{ exercices: ExerciceComptable[] }> {
+  return request<{ exercices: ExerciceComptable[] }>(`/dossiers/${dossierId}/exercices-comptables`, cabinetId);
+}
+
+export function ajouterExerciceComptable(
+  cabinetId: string,
+  dossierId: string,
+  exercice: { dateDebut: string; dateFin: string }
+): Promise<{ id: string }> {
+  return request<{ id: string }>(`/dossiers/${dossierId}/exercices-comptables`, cabinetId, {
+    method: 'POST',
+    body: JSON.stringify(exercice),
   });
 }
 
