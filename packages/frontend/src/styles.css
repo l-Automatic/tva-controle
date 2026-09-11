@@ -1148,6 +1148,13 @@ button:focus-visible {
   border-radius: 6px;
   padding: 0.4rem 0.6rem;
   margin: 0.5rem 0;
+  /* Brief v76 : dans .popup-cycle-loading (flex, align-items: center), ce
+     bloc se réduisait à la largeur de son texte au lieu de prendre toute
+     la largeur utile du popup. align-self n'a aucun effet en dehors d'un
+     contexte flex/grid — sans incidence sur les autres usages de cette
+     classe (CategorisationPopup, VehiculesPanel, CalculsPanel), déjà en
+     flux normal où un <p> occupe déjà toute la largeur disponible. */
+  align-self: stretch;
 }
 
 /* Ajustement manuel des montants de TVA (brief v23) */
@@ -1325,6 +1332,30 @@ pre.details {
   max-height: 85vh;
   overflow-y: auto;
   animation: popup-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+/* Popup "Vérifications préalables" (brief v76) : contenu jugé un peu
+   compressé par Rami, légèrement élargi par rapport aux autres popups
+   (.popup seul) — modificateur dédié plutôt qu'un changement du max-width
+   partagé, pour ne pas élargir tous les autres popups de l'app. */
+.popup.popup-large {
+  max-width: 720px;
+}
+
+/* .popup-cycle-loading (brief v59) est aussi utilisé tel quel par
+   CycleLoadingPopup.tsx, son propre petit popup dédié — jamais touché son
+   max-width/padding horizontal partagés directement. Ici, à l'intérieur
+   du popup élargi ci-dessus, ce plafond et ce padding empêcheraient le
+   bloc en évidence (.avertissement) de profiter de la largeur gagnée, et
+   ajouteraient un second niveau de marge qui le rendrait plus étroit que
+   le reste du contenu du popup (onglets, une fois chargés) — neutralisés
+   seulement dans ce contexte précis (sélecteur descendant, sans effet sur
+   CycleLoadingPopup.tsx qui n'est jamais imbriqué dans .popup-large), pour
+   une largeur utile identique à celle du reste du contenu. */
+.popup-large .popup-cycle-loading {
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 @keyframes popup-overlay-in {

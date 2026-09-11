@@ -201,7 +201,7 @@ export function PortesObligatoiresPopup({
 
   return (
     <div className="popup-overlay" role="dialog" aria-modal="true" aria-label="Vérifications préalables">
-      <div className="popup">
+      <div className="popup popup-large">
         <div className={`popup-header${phase ? ' popup-header-centre' : ''}`}>
           <h2>Vérifications préalables</h2>
           <button className="popup-close" onClick={onClose} aria-label="Fermer">
