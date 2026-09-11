@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { ApiError, ajouterVehicule, fetchVehicules, retirerVehicule } from '../api';
+import { formatDate } from '../dateUtils';
 import { ICONE_ACTION } from '../icons';
+import { formatMontant as formatMontantEuros } from '../montantUtils';
 import { useToast } from '../toast';
 import {
   LIBELLE_TYPE_BIEN_VEHICULE,
@@ -26,8 +28,7 @@ interface VehiculesPanelProps {
 }
 
 function formatMontant(montant: number | null): string {
-  if (montant === null) return 'montant inconnu';
-  return `${montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`;
+  return montant === null ? 'montant inconnu' : formatMontantEuros(montant);
 }
 
 // Formulaire simple, confirmé immédiatement (pas de candidate/confirmed) —
@@ -155,7 +156,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId, onCountCha
             </p>
             <p className="reference">
               {formatMontant(v.montantHt)}
-              {v.dateAcquisition ? `, acquis le ${v.dateAcquisition.split('T')[0]}` : ''}
+              {v.dateAcquisition ? `, acquis le ${formatDate(v.dateAcquisition)}` : ''}
               {v.typeCarburant ? `, ${LIBELLE_TYPE_CARBURANT[v.typeCarburant]}` : ''}
             </p>
             <div className="actions">

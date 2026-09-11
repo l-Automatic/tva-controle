@@ -12,6 +12,7 @@ import {
   fetchParametresDossier,
   synchroniserDossiers,
 } from '../api';
+import { formatHorodatage } from '../dateUtils';
 import { useToast } from '../toast';
 import { Accordion } from './Accordion';
 import {
@@ -69,19 +70,11 @@ const ONGLETS_PARAMETRES: { id: SousOngletParametres; libelle: string; descripti
     id: 'dossier',
     libelle: 'Paramètres dossier',
     description:
-      "Réglages propres à ce dossier précis : régime TVA sur encaissement, date de début d'exercice, paramètres libres, décisions déjà validées modifiables.",
+      "Réglages propres à ce dossier précis : régime TVA sur encaissement, paramètres libres, décisions déjà validées modifiables.",
   },
 ];
 
 const CLE_MISTRAL = 'mistral_api_key';
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('fr-FR');
-  } catch {
-    return iso;
-  }
-}
 
 // Un champ par clé secrète cabinet (clé Mistral, jeton API Cabinet
 // Pennylane — brief v27) — jamais réaffichée en clair une fois enregistrée,
@@ -134,7 +127,7 @@ function ChampSecretCabinet({
     <div className="parametre-secret-cabinet">
       <p className="reference">
         {libelle} : <strong>{loading ? '…' : (valeurAffichee ?? 'Non définie')}</strong>
-        {parametre && ` (dernière mise à jour ${formatDate(parametre.updatedAt)})`}
+        {parametre && ` (dernière mise à jour ${formatHorodatage(parametre.updatedAt)})`}
       </p>
       <div className="cycle-form">
         <label className="cycle-form-token">
@@ -800,7 +793,7 @@ function DossierSection({
                   <p className="label">
                     {p.cle} : <strong>{String(p.valeur)}</strong>
                   </p>
-                  <p className="reference">Mis à jour {formatDate(p.updatedAt)}</p>
+                  <p className="reference">Mis à jour {formatHorodatage(p.updatedAt)}</p>
                 </li>
               ))}
             </ul>

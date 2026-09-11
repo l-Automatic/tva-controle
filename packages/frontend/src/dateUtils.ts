@@ -6,8 +6,19 @@ export function toDateOnly(iso: string): string {
   return iso.split('T')[0] ?? iso;
 }
 
+// Bug réel corrigé (brief v75, audit des formats français) : cette
+// fonction se contentait de renvoyer la date ISO brute (YYYY-MM-DD),
+// jamais reformatée — affichée telle quelle dans toute l'app malgré son
+// nom. Reformate en JJ/MM/AAAA (convention française demandée par Rami),
+// par manipulation de chaîne plutôt que via un objet Date : un Date
+// construit depuis une simple date (sans heure) est interprété en UTC
+// minuit, et toLocaleDateString le reconvertirait dans le fuseau local du
+// navigateur, pouvant décaler le jour affiché de un pour certains fuseaux
+// (jamais un souci ici, la date reste la même chaîne du début à la fin).
 export function formatDate(iso: string): string {
-  return toDateOnly(iso);
+  const [annee, mois, jour] = toDateOnly(iso).split('-');
+  if (!annee || !mois || !jour) return iso;
+  return `${jour}/${mois}/${annee}`;
 }
 
 export function formatHorodatage(iso: string): string {

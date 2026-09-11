@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, ajusterMontantCalcul, fetchAjustementsCalcul, lancerCycle, retirerAjustementCalcul } from '../api';
+import { formatMontant } from '../montantUtils';
 import { useToast } from '../toast';
 import type {
   AjustementCalcul,
@@ -43,10 +44,6 @@ export const LIBELLE_CATEGORIE: Record<string, string> = {
   autoliquidation_due_intracom: 'Autoliquidation due (intracom)',
   autoliquidation_deductible: 'Autoliquidation déductible',
 };
-
-function formatMontant(montant: number): string {
-  return `${montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`;
-}
 
 // Même regroupement que calculerTva (calcul-module7/src/calcul.ts) :
 // l'autoliquidation due s'ajoute au côté collecté, l'autoliquidation
@@ -310,7 +307,7 @@ function ResultatCycleView({
             {calcul.lignes.map((l, i) => (
               <tr key={i}>
                 <td>{LIBELLE_CATEGORIE[l.categorie] ?? l.categorie}</td>
-                <td>{l.montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</td>
+                <td>{formatMontant(l.montant)}</td>
                 <td>{l.referencesPieces.length}</td>
               </tr>
             ))}

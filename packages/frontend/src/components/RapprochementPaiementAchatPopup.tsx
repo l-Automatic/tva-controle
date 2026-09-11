@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ApiError, enregistrerRapprochementPaiementAchat } from '../api';
 import { formatDate } from '../dateUtils';
+import { formatMontant } from '../montantUtils';
 import { useToast } from '../toast';
-import { formatMontant } from './CalculsPanel';
 import type { ConfianceSuggestionIA, FactureARapprocher } from '../types';
 
 interface RapprochementPaiementAchatContenuProps {

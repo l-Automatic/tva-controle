@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { ApiError, fetchAjustementsCalcul, fetchCalculs, fetchDetailCalcul, rejeterCalcul, validerCalcul } from '../api';
 import { formatDate } from '../dateUtils';
 import { ICONE_ACTION } from '../icons';
+import { formatMontant } from '../montantUtils';
 import { useToast } from '../toast';
 import type { AjustementCalcul, Calcul, DetailCalculLigne, StatutCalcul } from '../types';
 import { BadgeStatut } from './BadgeStatut';
@@ -20,10 +21,6 @@ export const LIBELLE_STATUT_CALCUL: Record<StatutCalcul, string> = {
   declare: 'Déclaré',
   rejete: 'Rejeté',
 };
-
-export function formatMontant(montant: number): string {
-  return `${montant.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`;
-}
 
 // Le calcul se produit toujours, même incomplet (brief v31) — ce message
 // remplace l'ancien écran plein "Cycle bloqué" : visible à côté du montant,

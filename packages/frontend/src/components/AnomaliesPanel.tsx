@@ -27,8 +27,9 @@ import {
   verifierTvaHotel,
   verifierVehiculeTourisme,
 } from '../api';
-import { toDateOnly } from '../dateUtils';
+import { formatDate, toDateOnly } from '../dateUtils';
 import { ICONE_ACTION, iconeTypeAnomalie } from '../icons';
+import { formatMontant } from '../montantUtils';
 import { useToast } from '../toast';
 import type { Anomalie, GraviteAnomalie, StatutAnomalie } from '../types';
 import { Accordion } from './Accordion';
@@ -1579,12 +1580,12 @@ function AnomalieRow({
             </span>
           </span>
         }
-        meta={<span className="periode">{anomalie.periode}</span>}
+        meta={<span className="periode">{formatDate(anomalie.periode)}</span>}
       >
         <p className="description">{anomalie.description}</p>
         {estEncaissement && montantTTC !== null && (
           <p className="label">
-            Montant TTC : <strong>{montantTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</strong>
+            Montant TTC : <strong>{formatMontant(montantTTC)}</strong>
           </p>
         )}
 

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { fetchCalculs } from '../../api';
 import { toDateOnly } from '../../dateUtils';
+import { formatMontant } from '../../montantUtils';
 import { AnomaliesPanel } from '../AnomaliesPanel';
-import { CalculRow, formatMontant } from '../CalculsPanel';
+import { CalculRow } from '../CalculsPanel';
 import { CategorisationPopup } from '../CategorisationPopup';
 import { CycleForm } from '../CycleForm';
 import type {
