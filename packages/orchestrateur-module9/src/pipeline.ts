@@ -281,6 +281,44 @@ async function construireAnomaliesFraisVehicule(
   return anomalies;
 }
 
+// Flotte mixte (10/08, demande de Rami) : version informative, jamais
+// bloquante, du contrôle ci-dessus — aucun jugement LLM nécessaire (on ne
+// cherche pas à savoir SI c'est déductible à tort, juste à signaler que ce
+// contrôle automatique ne s'applique pas ici et qu'une vérification
+// manuelle reste nécessaire). Détail volontairement pauvre par rapport à
+// construireAnomaliesFraisVehicule ci-dessus : pas de libellé/confiance à
+// afficher, cette anomalie ne prétend rien savoir sur le véhicule
+// concerné.
+function construireAnomaliesFraisVehiculeFlotteMixte(
+  ecritures: EcritureTvaComplete[],
+  comptesConcernes: string[],
+  typeAnomalie: string
+): Anomalie[] {
+  if (comptesConcernes.length === 0) return [];
+
+  const candidats = identifierCandidatsFraisVehicule(ecritures, comptesConcernes);
+  const anomalies: Anomalie[] = [];
+
+  for (const candidat of candidats) {
+    const ecritureConcernee = ecritures.find((e) => e.ligneTva.ledgerEntryId === candidat.ledgerEntryId);
+    if (!ecritureConcernee) continue;
+
+    anomalies.push({
+      type: typeAnomalie,
+      gravite: 'signale',
+      ledgerEntryId: candidat.ledgerEntryId,
+      compte: candidat.compte,
+      description: `TVA déduite (${ecritureConcernee.ligneTva.debit.toFixed(2)} €) sur ce compte — flotte mixte (tourisme et utilitaire) : la déductibilité selon le véhicule concerné n'est pas vérifiable automatiquement. Vérification manuelle nécessaire.`,
+      details: {
+        libelle: candidat.libelle,
+        montantDeduit: ecritureConcernee.ligneTva.debit,
+      },
+    });
+  }
+
+  return anomalies;
+}
+
 export async function executerCycleTva(
   pool: Pool,
   params: ParametresCycleTva
@@ -764,6 +802,20 @@ export async function executerCycleTva(
     contexteDossier.parcVehicules.length > 0 &&
     contexteDossier.parcVehicules.every((v) => v.type === 'vehicule_tourisme');
 
+  // Flotte mixte (10/08, demande de Rami après discussion) : sur une
+  // flotte 100% tourisme, le contrôle ci-dessus bloque une TVA déduite à
+  // tort — sur une flotte mixte, ce même contrôle ne se déclenche pas DU
+  // TOUT (impossible de savoir à quel véhicule une facture se rapporte),
+  // et jusqu'ici rien ne le signalait : un collaborateur voyant "aucune
+  // anomalie" pouvait à tort en déduire que tout était vérifié, alors que
+  // rien ne l'était. Différent du choix fait pour le carburant (silence
+  // assumé, cas jugé rare) : ici, le pire cas est une vraie TVA déduite à
+  // tort qui passe inaperçue, uniquement parce que la flotte n'est pas
+  // homogène — jamais bloquant, juste un rappel qu'une vérification
+  // manuelle reste nécessaire ici.
+  const flotteMixte =
+    contexteDossier.parcVehicules.some((v) => v.type === 'vehicule_tourisme') && !flotteTourismeUniquement;
+
   const anomaliesEntretienVehicule = flotteTourismeUniquement
     ? await construireAnomaliesFraisVehicule(
         ecritures,
@@ -771,7 +823,9 @@ export async function executerCycleTva(
         'entretien_vehicule_tourisme_deduit_a_tort',
         mistralApiKey
       )
-    : [];
+    : flotteMixte
+      ? construireAnomaliesFraisVehiculeFlotteMixte(ecritures, comptesEntretienVehicule, 'entretien_vehicule_flotte_mixte_a_verifier')
+      : [];
   const anomaliesLocationVehicule = flotteTourismeUniquement
     ? await construireAnomaliesFraisVehicule(
         ecritures,
@@ -779,7 +833,9 @@ export async function executerCycleTva(
         'location_vehicule_tourisme_deduite_a_tort',
         mistralApiKey
       )
-    : [];
+    : flotteMixte
+      ? construireAnomaliesFraisVehiculeFlotteMixte(ecritures, comptesLocationVehicule, 'location_vehicule_flotte_mixte_a_verifier')
+      : [];
 
   const anomaliesCoherenceAutoliquidation =
     compteAutoliquidationDeductible !== undefined
