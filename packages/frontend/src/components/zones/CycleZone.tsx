@@ -133,7 +133,14 @@ function CalculsDuCycle({
   }, [cabinetId, dossierId, periode.debut, periode.fin, refreshKey]);
 
   return (
-    <div className="panel-section">
+    // panel-calcul-periode (brief v81, étape 2 point 3) : scope dédié pour
+    // le 3e écran de référence du nouveau système de design, choisi ici
+    // car c'est l'écran qui bénéficie le plus visiblement du changement
+    // (le montant de TVA est l'info la plus importante de tout l'écran
+    // Cycle). panel-section est partagé par de nombreux autres écrans —
+    // cette classe supplémentaire scope les nouveaux tokens sans y
+    // toucher (cf. .popup-large, même principe qu'au point 2).
+    <div className="panel-section panel-calcul-periode">
       <div className="panel-header">
         <h2>Calcul de la période</h2>
       </div>

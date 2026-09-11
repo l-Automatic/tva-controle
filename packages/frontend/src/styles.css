@@ -35,6 +35,70 @@
 
   --radius: 8px;
   --shadow-card: 0 1px 2px rgba(23, 27, 33, 0.04);
+
+  /* --- Nouveau système de design, direction "Stripe" (brief v81) ---
+     Fondations du futur système complet, validées avec Rami mais
+     déployées PAR ÉTAPES : ces tokens existent déjà partout, mais ne
+     sont pour l'instant appliqués qu'aux 3 écrans de référence de
+     l'étape 2 (cartes d'anomalies, popup Vérifications préalables,
+     Calcul de la période) — jamais au reste de l'app tant que la
+     généralisation n'a pas été validée visuellement. Ancienne palette
+     (--accent, --danger, --success...) volontairement conservée
+     intacte en parallèle : les deux coexistent jusqu'à la
+     généralisation. --accent-500 (indigo) est un choix provisoire de
+     Rami/Claude en cours d'exploration, pas figé — le reste de cette
+     nouvelle palette est plus assuré. */
+  --neutre-50: #f9fafb;
+  --neutre-100: #eaecf0;
+  --neutre-500: #98a2b3;
+  --neutre-900: #101828;
+
+  --accent-50: #edf2ff;
+  --accent-100: #c7d2fe;
+  --accent-500: #4f46e5;
+  --accent-900: #312e81;
+
+  --succes-50: #ecfdf3;
+  --succes-100: #a6f4c5;
+  --succes-500: #12b76a;
+  --succes-900: #054f31;
+
+  --alerte-50: #fef6e7;
+  --alerte-100: #fde29a;
+  --alerte-500: #f5a623;
+  --alerte-900: #7a4a08;
+
+  --danger-50: #fef3f2;
+  --danger-100: #fecdca;
+  --danger-500: #d92d20;
+  --danger-900: #7a271a;
+
+  /* Typographie : police système plutôt qu'une police chargée à part,
+     pour rester léger (Montserrat, chargée via Google Fonts, reste la
+     police active de l'app tant que l'étape 2 n'est appliquée qu'à un
+     périmètre limité — changer --font-family ici propagerait
+     immédiatement à toute l'app, contrairement à la consigne). */
+  --typo-police-systeme: -apple-system, 'Helvetica Neue', sans-serif;
+  --typo-h1-taille: 28px;
+  --typo-h1-graisse: 600;
+  --typo-h1-espacement: -0.03em;
+  --typo-h2-taille: 20px;
+  --typo-h2-graisse: 600;
+  --typo-h2-espacement: -0.02em;
+  --typo-h3-taille: 15px;
+  --typo-h3-graisse: 500;
+  --typo-corps-taille: 14px;
+  --typo-corps-graisse: 400;
+  --typo-corps-interligne: 1.6;
+  --typo-legende-taille: 12px;
+  --typo-legende-graisse: 400;
+
+  /* Rayons et ombres — --radius existant (8px) déjà utilisé pour la
+     valeur "boutons/champs" demandée ici, pas de doublon créé pour ça. */
+  --rayon-carte: 12px;
+  --ombre-carte-repos: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --ombre-carte-survol: 0 4px 8px rgba(16, 24, 40, 0.1), 0 2px 4px rgba(16, 24, 40, 0.06);
+  --transition-legere: 150ms ease;
 }
 
 * {
@@ -697,14 +761,15 @@ button:focus-visible {
   background: var(--accent-soft-bg);
 }
 
-/* Cartes d'anomalies (brief v79, point 6) : contour complet dans la
-   couleur de gravité plutôt que la simple bande latérale de .card — ces 3
-   classes ne s'appliquent nulle part ailleurs que sur .card.anomalie
-   (AnomaliesPanel.tsx), sans effet sur les autres usages de .card
-   (calculs, propositions, décisions...), qui gardent leur bande latérale
-   inchangée. */
+/* Cartes d'anomalies (brief v79, point 6 ; couleurs basculées sur le
+   nouveau système de design au v81, étape 2 point 1) : contour complet
+   dans la couleur de gravité plutôt que la simple bande latérale de
+   .card — ces 3 classes ne s'appliquent nulle part ailleurs que sur
+   .card.anomalie (AnomaliesPanel.tsx), sans effet sur les autres usages
+   de .card (calculs, propositions, décisions...), qui gardent leur
+   bande latérale et l'ancienne palette inchangées. */
 .card.gravite-bloquant {
-  border: 1.5px solid var(--danger);
+  border: 1.5px solid var(--danger-500);
   /* Ombre pulsée (brief v79 point 2, corrigée au v80) : respiration
      continue, jamais un clignotement — même couleur que le contour
      ci-dessus, pour un ensemble cohérent plutôt que deux effets qui se
@@ -712,7 +777,7 @@ button:focus-visible {
   animation: anomalie-pulsation-bloquant 2.4s ease-in-out infinite;
 }
 .card.gravite-signale {
-  border: 1.5px solid var(--warning);
+  border: 1.5px solid var(--alerte-500);
 }
 .card.gravite-info {
   border: 1.5px solid var(--neutral);
@@ -727,14 +792,17 @@ button:focus-visible {
    respire entre un état "faible" et un état "fort", jamais un anneau qui
    se creuse puis se recreuse en sens inverse. Intensité nettement relevée
    (flou et opacité au pic) par rapport au v79, sur demande explicite de
-   Rami — doit vraiment se ressentir comme une alerte. */
+   Rami — doit vraiment se ressentir comme une alerte. Couleur alignée sur
+   --danger-500 (#d92d20 = rgb(217,45,32)) au v81 — la fonction rgba() ne
+   peut pas dériver son alpha depuis une variable CSS, valeur recopiée à la
+   main, à resynchroniser si --danger-500 change un jour. */
 @keyframes anomalie-pulsation-bloquant {
   0%,
   100% {
-    box-shadow: 0 0 6px 1px rgba(220, 38, 38, 0.4);
+    box-shadow: 0 0 6px 1px rgba(217, 45, 32, 0.4);
   }
   50% {
-    box-shadow: 0 0 26px 10px rgba(220, 38, 38, 0.9);
+    box-shadow: 0 0 26px 10px rgba(217, 45, 32, 0.9);
   }
 }
 .card.proposition {
@@ -1427,6 +1495,93 @@ pre.details {
   max-width: none;
   padding-left: 0;
   padding-right: 0;
+}
+
+/* Nouveau système de design, étape 2 point 2 (brief v81) : popup
+   "Vérifications préalables" comme deuxième écran de référence — badges
+   d'onglets, fond des cartes et boutons basculés sur les nouveaux tokens
+   (.popup-large comme scope, jamais le reste de l'app à ce stade). */
+.popup-large .sous-onglet {
+  border-radius: var(--radius);
+  background: var(--neutre-50);
+  color: var(--neutre-500);
+  border-color: var(--neutre-100);
+  transition: background-color var(--transition-legere), color var(--transition-legere), border-color var(--transition-legere);
+}
+.popup-large .sous-onglet:hover:not(.actif) {
+  background: var(--accent-50);
+  border-color: var(--accent-100);
+  color: var(--accent-500);
+}
+.popup-large .sous-onglet.actif {
+  background: var(--accent-500);
+  border-color: transparent;
+  color: #fff;
+}
+
+.popup-large .card {
+  background: var(--neutre-50);
+  border-radius: var(--rayon-carte);
+  box-shadow: var(--ombre-carte-repos);
+  transition: transform var(--transition-legere), box-shadow var(--transition-legere);
+}
+.popup-large .card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ombre-carte-survol);
+}
+
+.popup-large button {
+  border-radius: var(--radius);
+  transition: background-color var(--transition-legere), border-color var(--transition-legere), opacity var(--transition-legere);
+}
+.popup-large button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Nouveau système de design, étape 2 point 3 (brief v81) : "Calcul de la
+   période" (CycleZone.tsx) comme 3e écran de référence, choisi par Claude
+   Code — l'écran de calcul avec les cartes de montants, celui qui rend le
+   changement le plus visible (le montant de TVA est l'info la plus
+   importante de tout l'écran Cycle). */
+.panel-calcul-periode > .panel-header h2 {
+  font-size: var(--typo-h2-taille);
+  font-weight: var(--typo-h2-graisse);
+  letter-spacing: var(--typo-h2-espacement);
+}
+
+.panel-calcul-periode .card {
+  background: var(--neutre-50);
+  border-radius: var(--rayon-carte);
+  box-shadow: var(--ombre-carte-repos);
+  transition: transform var(--transition-legere), box-shadow var(--transition-legere);
+}
+.panel-calcul-periode .card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ombre-carte-survol);
+}
+
+.panel-calcul-periode .card-header .periode {
+  font-size: var(--typo-legende-taille);
+  font-weight: var(--typo-legende-graisse);
+  color: var(--neutre-500);
+}
+
+/* Le montant de TVA est le titre de facto de cet écran (brief v31 déjà :
+   "l'information la plus importante... doit se voir immédiatement") —
+   échelle H1 plutôt que la taille de section habituelle, pour qu'il se
+   voie vraiment comme LE chiffre qui compte sur cet écran. */
+.panel-calcul-periode .montant-principal strong {
+  font-size: var(--typo-h1-taille);
+  font-weight: var(--typo-h1-graisse);
+  letter-spacing: var(--typo-h1-espacement);
+}
+
+.panel-calcul-periode button {
+  border-radius: var(--radius);
+  transition: background-color var(--transition-legere), border-color var(--transition-legere), opacity var(--transition-legere);
+}
+.panel-calcul-periode button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 @keyframes popup-overlay-in {
