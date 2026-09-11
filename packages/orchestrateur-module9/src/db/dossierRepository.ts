@@ -93,8 +93,9 @@ export interface DossierComplet {
   formeJuridique: string | null;
   fiscalite: 'is' | 'ir' | null;
   comptabilite: 'engagement' | 'tresorerie' | null;
-  dateDebutExercice: string | null;
-  dateFinExercice: string | null;
+  // dateDebutExercice/dateFinExercice retirés (10/08, migration 028) —
+  // remplacés par la table exercices_comptables (plusieurs exercices par
+  // dossier), cf. dossierRepository.ts / listerExercicesComptables.
   regimeTva: string;
   periodiciteDeclaration: string;
   tvaEncaissement: boolean;
@@ -119,7 +120,7 @@ export interface DossierComplet {
 export async function chargerDossierComplet(client: PoolClient, dossierId: string): Promise<DossierComplet | null> {
   const res = await client.query(
     `SELECT id, nom, nom_commercial, siren, siret, forme_juridique, fiscalite, comptabilite,
-            date_debut_exercice, date_fin_exercice, regime_tva, periodicite_declaration,
+            regime_tva, periodicite_declaration,
             tva_encaissement, numero_tva_intracom, adresse, ville, code_postal, code_naf,
             email_contact, contact_nom, contact_telephone, logiciel_source, statut, motif_desactivation
      FROM dossiers WHERE id = $1`,
@@ -136,8 +137,6 @@ export async function chargerDossierComplet(client: PoolClient, dossierId: strin
     formeJuridique: r.forme_juridique,
     fiscalite: r.fiscalite,
     comptabilite: r.comptabilite,
-    dateDebutExercice: r.date_debut_exercice,
-    dateFinExercice: r.date_fin_exercice,
     regimeTva: r.regime_tva,
     periodiciteDeclaration: r.periodicite_declaration,
     tvaEncaissement: r.tva_encaissement,
