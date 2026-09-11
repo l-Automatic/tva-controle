@@ -110,6 +110,9 @@ import {
   mettreAJourInfosDossier,
   type InfosIdentiteDossier,
   definirStatutDossier,
+  listerExercicesComptables,
+  creerExerciceComptable,
+  ExerciceChevauchementError,
 } from '@tva-controle/orchestrateur-module9';
 
 // Authentification (10/08) — remplace l'ancien stand-in (header cabinet non
@@ -2096,6 +2099,44 @@ export function buildApp(pool: Pool): FastifyInstance {
       } catch (err) {
         if (err instanceof DossierIntrouvableError) {
           return reply.code(404).send({ erreur: err.message });
+        }
+        throw err;
+      }
+    }
+  );
+
+  // Exercices comptables (10/08, migration 028) — remplace l'ancienne
+  // paire unique dateDebutExercice/dateFinExercice : plusieurs exercices
+  // consécutifs par dossier, ajoutables à l'avance. Objectif de Rami :
+  // que rien de ce qui en dépend (ligne 10 CA3) ne s'arrête
+  // silencieusement faute d'exercice défini pour une période à venir.
+  app.get<{ Params: { dossierId: string } }>('/dossiers/:dossierId/exercices-comptables', async (request) => {
+    const cabinetId = request.utilisateur!.cabinetId;
+    const exercices = await avecContexteCabinet(pool, cabinetId, (client) =>
+      listerExercicesComptables(client, request.params.dossierId)
+    );
+    return { exercices };
+  });
+
+  app.post<{ Params: { dossierId: string }; Body: { dateDebut: string; dateFin: string } }>(
+    '/dossiers/:dossierId/exercices-comptables',
+    async (request, reply) => {
+      const cabinetId = request.utilisateur!.cabinetId;
+      const { dateDebut, dateFin } = request.body;
+      if (!dateDebut || !dateFin) {
+        return reply.code(400).send({ erreur: 'dateDebut et dateFin sont requis' });
+      }
+      if (dateFin <= dateDebut) {
+        return reply.code(400).send({ erreur: 'dateFin doit être postérieure à dateDebut' });
+      }
+      try {
+        const id = await avecContexteCabinet(pool, cabinetId, (client) =>
+          creerExerciceComptable(client, request.params.dossierId, dateDebut, dateFin)
+        );
+        reply.code(201).send({ id });
+      } catch (err) {
+        if (err instanceof ExerciceChevauchementError) {
+          return reply.code(409).send({ erreur: err.message });
         }
         throw err;
       }
