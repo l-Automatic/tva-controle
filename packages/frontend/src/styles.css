@@ -15,10 +15,16 @@
 
   --success: #1e8a5f;
   --success-soft-bg: #e4f5ec;
-  --warning: #a9660a;
-  --warning-soft-bg: #fdf1d9;
-  --danger: #c0392b;
-  --danger-soft-bg: #fbe9e7;
+  /* Rouge/jaune-orange intensifiés (brief v80) : Rami trouvait l'ancien
+     jaune "orange marron" et le rouge trop terne pour des couleurs
+     d'alerte — remplacés par des teintes nettement plus vives/saturées.
+     Uniquement ces deux tokens (couleurs d'alerte) : le reste de la
+     palette (succès, accent, neutre, violet) n'est volontairement pas
+     touché, une refonte plus large étant prévue séparément. */
+  --warning: #d97706;
+  --warning-soft-bg: #fef0d9;
+  --danger: #dc2626;
+  --danger-soft-bg: #fce3e3;
   --neutral: #6b7684;
   --neutral-soft-bg: #eef0f3;
   --violet: #6a3fc0;
@@ -699,9 +705,10 @@ button:focus-visible {
    inchangée. */
 .card.gravite-bloquant {
   border: 1.5px solid var(--danger);
-  /* Ombre pulsée (brief v79, point 2) : respiration douce, jamais un
-     clignotement — même couleur que le contour ci-dessus, pour un
-     ensemble cohérent plutôt que deux effets qui se contredisent. */
+  /* Ombre pulsée (brief v79 point 2, corrigée au v80) : respiration
+     continue, jamais un clignotement — même couleur que le contour
+     ci-dessus, pour un ensemble cohérent plutôt que deux effets qui se
+     contredisent. */
   animation: anomalie-pulsation-bloquant 2.4s ease-in-out infinite;
 }
 .card.gravite-signale {
@@ -711,13 +718,23 @@ button:focus-visible {
   border: 1.5px solid var(--neutral);
 }
 
+/* Corrigé au v80 : le v79 faisait varier flou (spread) ET opacité en sens
+   opposés (spread grandit pendant que l'opacité tombe à 0) — un effet
+   d'anneau qui s'étend et s'efface, puis, en boucle continue, semble
+   "se rembobiner" en se rétractant à l'identique à l'envers (retour de
+   Rami). Corrigé en faisant varier le flou ET l'opacité DANS LE MÊME SENS
+   (les deux montent vers le pic, les deux redescendent ensemble) : l'ombre
+   respire entre un état "faible" et un état "fort", jamais un anneau qui
+   se creuse puis se recreuse en sens inverse. Intensité nettement relevée
+   (flou et opacité au pic) par rapport au v79, sur demande explicite de
+   Rami — doit vraiment se ressentir comme une alerte. */
 @keyframes anomalie-pulsation-bloquant {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.35);
+    box-shadow: 0 0 6px 1px rgba(220, 38, 38, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(192, 57, 43, 0);
+    box-shadow: 0 0 26px 10px rgba(220, 38, 38, 0.9);
   }
 }
 .card.proposition {
