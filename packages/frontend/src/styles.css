@@ -265,7 +265,7 @@ p {
   transition: background-color 0.18s ease;
 }
 
-.sidebar-dossier-actuel:hover {
+.sidebar-dossier-actuel:hover:not(:disabled) {
   background: var(--neutre-100);
 }
 
@@ -338,7 +338,7 @@ p {
   transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
-.sidebar-dossier-item:hover {
+.sidebar-dossier-item:hover:not(:disabled) {
   background: var(--neutre-100);
   border-color: var(--border);
 }
@@ -375,7 +375,7 @@ p {
   transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.sidebar-nav-item:hover {
+.sidebar-nav-item:hover:not(:disabled) {
   background: var(--neutre-100);
   color: var(--text);
 }
@@ -413,7 +413,7 @@ p {
   border-radius: var(--radius);
 }
 
-.sidebar-logout:hover {
+.sidebar-logout:hover:not(:disabled) {
   background: var(--neutre-100);
   opacity: 1;
 }
@@ -590,7 +590,24 @@ button {
    button.tertiaire:hover (var(--danger-100)/var(--neutre-100), plus bas)
    continuent de l'emporter sur ce background-color, comme elles
    l'emportaient déjà sur l'ancien fond quand les deux n'étaient qu'une
-   seule classe .secondary. */
+   seule classe .secondary.
+
+   Piège de spécificité corrigé au brief v88 : `:not(:disabled)` ajoute un
+   point de spécificité (élément + 2 pseudo-classes = 0,2,1) plus élevé
+   qu'une simple règle `.xxx:hover { background: ... }` sur un <button>
+   (classe + pseudo-classe = 0,2,0) — cette dernière PERD alors le combat
+   de spécificité sur `background`, silencieusement, même si elle est
+   écrite après dans le fichier. Plusieurs boutons de la sidebar (item de
+   nav, dossier actuel, item de dossier, déconnexion) ainsi que
+   .accordion-header et .popup-close gardaient donc un fond --accent-600
+   au survol au lieu du leur, avec une couleur de texte pensée pour un
+   fond clair — d'où le texte illisible signalé par Rami. Ces règles ont
+   toutes reçu un `:not(:disabled)` à leur tour (elles ne sont jamais
+   réellement disabled, ajouté uniquement pour regagner la priorité), même
+   principe déjà en place pour button.danger/tertiaire et .sous-onglet
+   ci-dessous — pas une exception isolée mais la même règle du jeu
+   appliquée partout où un <button> a besoin d'un fond de survol distinct
+   du fond générique. */
 button:hover:not(:disabled) {
   background-color: var(--accent-600);
 }
@@ -835,29 +852,33 @@ button:focus-visible {
   background: var(--accent-50);
 }
 
-/* Cartes d'anomalies (brief v79, point 6 ; couleurs basculées sur le
-   nouveau système de design au v81, étape 2 point 1) : contour complet
-   dans la couleur de gravité plutôt que la simple bande latérale de
-   .card — ces 3 classes ne s'appliquent nulle part ailleurs que sur
-   .card.anomalie (AnomaliesPanel.tsx), sans effet sur les autres usages
-   de .card (calculs, propositions, décisions...), qui gardent leur
-   mécanisme de bande latérale (repeint avec les mêmes tokens de couleur
-   au v84, cf. .card.actif, .card.proposition, .card.acteur-xxx et
-   .card.statut-carte-xxx plus bas — seul le mécanisme diffère encore,
-   plus la palette). */
+/* Cartes d'anomalies — contour complet + ombre pulsée (brief v79, point 6 ;
+   couleurs basculées sur le nouveau système au v81) réexaminés au brief
+   v88 : Rami a précisé que la refonte v83 portait sur TOUT, y compris les
+   choix déjà pris avant, pas seulement ce qui restait à traiter — la
+   Phase C avait pourtant tranché de garder ce traitement "tel quel,
+   jamais généralisé" sans jamais se demander s'il avait sa place dans la
+   direction Stripe/Vercel retenue depuis. Contour complet animé = langage
+   "alerte visuelle appuyée" du tout début du chantier (v79-v80), pas
+   celui de Stripe/Linear/Vercel, qui signalent une urgence par une
+   pastille de couleur franche et un fin liseré latéral, presque jamais un
+   contour intégral animé en continu. Basculé sur EXACTEMENT le même
+   mécanisme de bande latérale que .card.actif/.statut-carte-xxx/
+   .acteur-xxx ci-dessous — ces 3 classes ne sont donc plus un cas à part,
+   juste une nuance de couleur de plus dans un mécanisme déjà partagé par
+   toute l'app. Le signal reste net sans animation : la pastille
+   .gravite-badge-bloquant (rouge, texte "Bloquant" explicite, plus bas)
+   porte déjà toute l'information de gravité — l'ombre pulsée n'ajoutait
+   qu'un mouvement continu, jamais nécessaire pour qu'un état persistant
+   (pas une notification transitoire) reste visible. */
 .card.gravite-bloquant {
-  border: 1.5px solid var(--danger-500);
-  /* Ombre pulsée (brief v79 point 2, corrigée au v80) : respiration
-     continue, jamais un clignotement — même couleur que le contour
-     ci-dessus, pour un ensemble cohérent plutôt que deux effets qui se
-     contredisent. */
-  animation: anomalie-pulsation-bloquant 2.4s ease-in-out infinite;
+  border-left-color: var(--danger-500);
 }
 .card.gravite-signale {
-  border: 1.5px solid var(--alerte-500);
+  border-left-color: var(--alerte-500);
 }
 .card.gravite-info {
-  border: 1.5px solid var(--neutre-500);
+  border-left-color: var(--neutre-500);
 }
 
 /* Nouveau système de design appliqué à l'ENTIÈRE carte d'anomalie, pas
@@ -938,34 +959,6 @@ button:focus-visible {
   transform: scale(0.98);
 }
 
-/* Corrigé au v80 : le v79 faisait varier flou (spread) ET opacité en sens
-   opposés (spread grandit pendant que l'opacité tombe à 0) — un effet
-   d'anneau qui s'étend et s'efface, puis, en boucle continue, semble
-   "se rembobiner" en se rétractant à l'identique à l'envers (retour de
-   Rami). Corrigé en faisant varier le flou ET l'opacité DANS LE MÊME SENS
-   (les deux montent vers le pic, les deux redescendent ensemble) : l'ombre
-   respire entre un état "faible" et un état "fort", jamais un anneau qui
-   se creuse puis se recreuse en sens inverse. Couleur alignée sur
-   --danger-500 (#d92d20 = rgb(217,45,32)) au v81 — la fonction rgba() ne
-   peut pas dériver son alpha depuis une variable CSS, valeur recopiée à la
-   main, à resynchroniser si --danger-500 change un jour.
-   Intensité revue à la baisse au v82 : le pic du v80/v81 (26px de flou,
-   10px d'étendue, opacité 0.9) écrasait la lisibilité de la carte en
-   dessous (retour de Rami, capture à l'appui) — jamais changé
-   numériquement entre le v80 et le v81 (seule la couleur avait bougé),
-   donc "revenir au v80" ici veut dire revenir à une intensité
-   raisonnable, pas au chiffre littéral. Ramenée nettement plus bas, puis
-   augmentée très légèrement à partir de ce nouveau palier, comme demandé
-   — jamais un retour au niveau d'avant. */
-@keyframes anomalie-pulsation-bloquant {
-  0%,
-  100% {
-    box-shadow: 0 0 5px 1px rgba(217, 45, 32, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 18px 4px rgba(217, 45, 32, 0.62);
-  }
-}
 .card.proposition {
   border-left-color: var(--accent-500);
 }
@@ -1097,9 +1090,10 @@ button:focus-visible {
 
 /* Basculées sur le nouveau système de design au v82 (brief v82, point 2) —
    fini l'ancien orange terne (--warning) : teinte 100 en fond, texte en
-   900 pour un contraste net, cohérent avec le contour de la carte
-   (--danger-500/--alerte-500, cf. plus bas). .gravite-badge-info repeinte
-   en --neutre-100/-900 au v84 (repointage complet de l'app, plus de
+   900 pour un contraste net, cohérent avec la bande latérale de la carte
+   (--danger-500/--alerte-500, cf. plus haut — contour complet remplacé
+   par cette même bande au v88). .gravite-badge-info repeinte en
+   --neutre-100/-900 au v84 (repointage complet de l'app, plus de
    distinction "hors périmètre" à faire). */
 .gravite-badge-bloquant {
   background: var(--danger-100);
@@ -1352,7 +1346,7 @@ button:focus-visible {
   justify-content: flex-start;
 }
 
-.accordion-header:hover {
+.accordion-header:hover:not(:disabled) {
   background: var(--neutre-100);
 }
 
@@ -1773,7 +1767,7 @@ pre.details {
   padding: 0.3rem;
 }
 
-.popup-close:hover {
+.popup-close:hover:not(:disabled) {
   background: var(--neutre-100);
   opacity: 1;
 }
