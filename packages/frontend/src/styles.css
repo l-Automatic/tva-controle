@@ -80,7 +80,13 @@
   --typo-legende-graisse: 400;
 
   /* Rayons et ombres — --radius existant (8px) déjà utilisé pour la
-     valeur "boutons/champs" demandée ici, pas de doublon créé pour ça. */
+     valeur "boutons/champs" demandée ici, pas de doublon créé pour ça.
+     Brief v86 (Phase C) : les 15 valeurs 6/7/8px codées en dur hors de
+     .card/.panel (sidebar, boutons, champs, tooltip, accordéon, toast,
+     bannières d'erreur/avertissement, degrade-swatch...) repointées vers
+     var(--radius) — aucune n'était un "carte" méritant var(--rayon-carte).
+     Les rayons 999px/50%/0 restants (pilules, cercles, coins carrés
+     volontaires) ne sont pas des doublons de ces tokens, donc non touchés. */
   --rayon-carte: 12px;
   --ombre-carte-repos: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
   --ombre-carte-survol: 0 4px 8px rgba(16, 24, 40, 0.1), 0 2px 4px rgba(16, 24, 40, 0.06);
@@ -97,17 +103,38 @@ body {
   color: var(--text);
 }
 
-/* Hiérarchie de graisses claire et volontaire, posée une fois ici plutôt
-   que laissée aux graisses par défaut du navigateur (gras partout) — corps
-   de texte en normal (400), titres/sous-titres en 600, un seul niveau
-   (zone-intro h1) monte à 700 pour rester un vrai point d'ancrage visuel
-   (cf. brief v8, section 3). */
+/* Hiérarchie de tailles/graisses posée une fois ici plutôt que laissée aux
+   valeurs par défaut du navigateur (brief v8 section 3, complétée au v86
+   Phase C avec les tailles du système de tokens --typo-h1/h2/h3, jusqu'ici
+   seulement appliquées aux titres déjà scopés .panel-header h2/h3, plus
+   bas). Pas de --typo-h4-* dédié dans le système (jamais eu de <h4> dans
+   l'app, vérifié) — h4 reprend l'échelle h3, la plus petite définie,
+   plutôt que de rester sans taille. .zone-intro h1 garde sa propre règle
+   (plus bas) — taille et graisse 700 délibérément distinctes de l'échelle
+   h1 générique, pour rester un vrai point d'ancrage visuel. */
 h1,
 h2,
 h3,
 h4 {
   margin: 0;
-  font-weight: 600;
+}
+
+h1 {
+  font-size: var(--typo-h1-taille);
+  font-weight: var(--typo-h1-graisse);
+  letter-spacing: var(--typo-h1-espacement);
+}
+
+h2 {
+  font-size: var(--typo-h2-taille);
+  font-weight: var(--typo-h2-graisse);
+  letter-spacing: var(--typo-h2-espacement);
+}
+
+h3,
+h4 {
+  font-size: var(--typo-h3-taille);
+  font-weight: var(--typo-h3-graisse);
 }
 
 p {
@@ -208,7 +235,7 @@ p {
 
 .sidebar-brand-logo {
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 .sidebar-section-titre {
@@ -231,7 +258,7 @@ p {
   font-weight: 600;
   font-size: 0.85rem;
   padding: 0.5rem 0.7rem;
-  border-radius: 7px;
+  border-radius: var(--radius);
   text-align: left;
   transition: background-color 0.18s ease;
 }
@@ -252,7 +279,7 @@ p {
   gap: 0.4rem;
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius);
   padding: 0.4rem 0.6rem;
 }
 
@@ -304,7 +331,7 @@ p {
   border: 1px solid transparent;
   color: var(--text);
   padding: 0.4rem 0.6rem;
-  border-radius: 6px;
+  border-radius: var(--radius);
   text-align: left;
   transition: background-color 0.18s ease, border-color 0.18s ease;
 }
@@ -341,7 +368,7 @@ p {
   font-weight: 500;
   font-size: 0.87rem;
   padding: 0.5rem 0.65rem;
-  border-radius: 7px;
+  border-radius: var(--radius);
   text-align: left;
   transition: background-color 0.18s ease, color 0.18s ease;
 }
@@ -381,7 +408,7 @@ p {
   color: var(--text);
   font-size: 0.78rem;
   padding: 0.4rem 0.6rem;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 .sidebar-logout:hover {
@@ -466,10 +493,15 @@ p {
   }
 }
 
+/* Fond/rayon généralisés au traitement décidé au v83 (brief v86, Phase C) —
+   déjà le défaut des .card scopées .popup-large/.panel-calcul-periode
+   depuis le v81 (cf. plus bas dans le fichier, désormais redondantes mais
+   pas retirées ici, nettoyage prévu en Phase D). Bordure et ombre déjà
+   posées avant cette phase, inchangées. */
 .panel {
-  background: var(--bg-raised);
+  background: var(--neutre-50);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--rayon-carte);
   box-shadow: var(--ombre-carte-repos);
   padding: 1.1rem 1.25rem;
 }
@@ -502,16 +534,23 @@ p {
   margin-bottom: 0.75rem;
 }
 
+/* Tailles/graisses du système de tokens (brief v86, Phase C) — jusqu'ici
+   des valeurs ad hoc proches mais pas identiques ; .panel-calcul-periode
+   > .panel-header h2 (plus bas) appliquait déjà --typo-h2-* en avance sur
+   ce seul écran, devenue redondante ici mais pas retirée (Phase D). h3
+   passe de 600 à 500 : graisse plus légère du token, cohérente avec le
+   reste de l'échelle. */
 .panel-header h2 {
-  font-size: 1.02rem;
-  font-weight: 600;
+  font-size: var(--typo-h2-taille);
+  font-weight: var(--typo-h2-graisse);
+  letter-spacing: var(--typo-h2-espacement);
   margin: 0;
   flex: 1 1 100%;
 }
 
 .panel-header h3 {
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: var(--typo-h3-taille);
+  font-weight: var(--typo-h3-graisse);
   flex: 1 1 100%;
 }
 
@@ -536,7 +575,7 @@ button {
   border: 1px solid transparent;
   background: var(--accent-500);
   color: #fff;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.5rem 0.9rem;
   font-size: 0.85rem;
   font-weight: 500;
@@ -579,7 +618,7 @@ input[type='email'],
 input[type='tel'],
 select {
   border: 1px solid var(--border-strong);
-  border-radius: 7px;
+  border-radius: var(--radius);
   padding: 0.45rem 0.6rem;
   font-size: 0.85rem;
   background: var(--bg-raised);
@@ -744,12 +783,24 @@ button:focus-visible {
   gap: 0.6rem;
 }
 
+/* Fond/rayon/ombre généralisés au traitement décidé au v83 (brief v86,
+   Phase C) — déjà le défaut de .popup-large .card/.panel-calcul-periode
+   .card depuis le v81 (plus bas dans le fichier), qui n'avaient jamais
+   retiré la bordure/bande latérale de base : elles s'additionnaient déjà
+   au shadow/fond/rayon plutôt que de les remplacer. Pas de survol
+   "soulèvement" (translateY) ajouté ici, volontairement : sur les ~75
+   usages de .card de l'app, un seul (.a-traiter-card, plus haut) est
+   réellement cliquable dans son ensemble — et il a déjà son propre signal
+   de survol (cursor + bordure). Généraliser translateY donnerait un faux
+   signal "cliquable" aux cartes purement informatives (calculs, tiers,
+   audit...), exactement le risque que ce brief demandait de trancher. */
 .card {
   border: 1px solid var(--border);
   border-left-width: 4px;
-  border-radius: 6px;
+  border-radius: var(--rayon-carte);
   padding: 0.65rem 0.8rem;
-  background: var(--bg-raised);
+  background: var(--neutre-50);
+  box-shadow: var(--ombre-carte-repos);
 }
 
 /* Calcul sélectionné dans l'onglet Déclaration (brief v49). */
@@ -919,12 +970,16 @@ button:focus-visible {
   opacity: 0.6;
 }
 
+/* Taille/graisse du token Légende (brief v86, Phase C) — 0.8rem (12.8px)
+   était déjà quasi identique à --typo-legende-taille (12px), le rôle
+   correspond exactement (meta au-dessus du contenu d'une carte). */
 .card-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  font-size: 0.8rem;
+  font-size: var(--typo-legende-taille);
+  font-weight: var(--typo-legende-graisse);
   color: var(--text-muted);
   margin-bottom: 0.35rem;
 }
@@ -1170,7 +1225,7 @@ button:focus-visible {
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0.5rem 0.65rem;
   box-shadow: 0 4px 14px rgba(23, 27, 33, 0.2);
   opacity: 0;
@@ -1248,7 +1303,7 @@ button:focus-visible {
 /* Accordéon générique (brief v29 §3) */
 .accordion {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -1328,7 +1383,7 @@ button:focus-visible {
 .error-409 {
   color: var(--alerte-900);
   background: var(--alerte-100);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0.4rem 0.6rem;
 }
 
@@ -1349,7 +1404,7 @@ button:focus-visible {
 .avertissement {
   color: var(--alerte-900);
   background: var(--alerte-100);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0.4rem 0.6rem;
   margin: 0.5rem 0;
   /* Brief v76 : dans .popup-cycle-loading (flex, align-items: center), ce
@@ -1389,7 +1444,7 @@ button:focus-visible {
 pre.details {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 0.5rem 0.6rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
@@ -1416,7 +1471,7 @@ pre.details {
   background: var(--bg-raised);
   border: 1px solid var(--succes-500);
   color: var(--text);
-  border-radius: 7px;
+  border-radius: var(--radius);
   box-shadow: 0 4px 14px rgba(23, 27, 33, 0.12);
   padding: 0.55rem 0.9rem;
   font-size: 0.82rem;
@@ -1458,7 +1513,7 @@ pre.details {
 .degrade-swatch {
   width: 56px;
   height: 40px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   border: 2px solid transparent;
   display: flex;
   align-items: center;
