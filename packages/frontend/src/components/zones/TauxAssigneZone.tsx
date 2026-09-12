@@ -91,7 +91,7 @@ function SuggestionsProduitCharge({
               <button onClick={() => void handleConfirmer(s.compte)} disabled={enCours === s.compte}>
                 {enCours === s.compte ? '…' : 'Assigner'}
               </button>
-              <button className="secondary" onClick={() => onConsommee(s.compte)} disabled={enCours === s.compte}>
+              <button className="tertiaire" onClick={() => onConsommee(s.compte)} disabled={enCours === s.compte}>
                 Ignorer
               </button>
             </div>
@@ -286,7 +286,7 @@ function SuggestionsClient({
                 {enCours === s.numeroCompteTiers ? '…' : 'Assigner'}
               </button>
               <button
-                className="secondary"
+                className="tertiaire"
                 onClick={() => onConsommee(s.numeroCompteTiers)}
                 disabled={enCours === s.numeroCompteTiers}
               >

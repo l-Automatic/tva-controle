@@ -181,7 +181,7 @@ function CompteCard({
         <button disabled={enCours !== null || !cle} onClick={() => void handleAjouter()}>
           {enCours === 'ajouter' ? '…' : 'Ajouter'}
         </button>
-        <button className="secondary" disabled={enCours !== null} onClick={() => void handleAucuneCategorie()}>
+        <button className="tertiaire" disabled={enCours !== null} onClick={() => void handleAucuneCategorie()}>
           {enCours === 'aucune' ? '…' : 'Aucune de celles-là'}
         </button>
       </div>
@@ -238,7 +238,7 @@ function CompteSousCategorieAutoliquidationCard({
         <button disabled={enCours !== null} onClick={() => void handleChoix(true)}>
           {enCours === 'lie' ? '…' : "Lié à l'autoliquidation (sous-traitance)"}
         </button>
-        <button className="secondary" disabled={enCours !== null} onClick={() => void handleChoix(false)}>
+        <button className="tertiaire" disabled={enCours !== null} onClick={() => void handleChoix(false)}>
           {enCours === 'non_lie' ? '…' : 'Non lié'}
         </button>
       </div>

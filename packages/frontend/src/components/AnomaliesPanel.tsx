@@ -436,7 +436,7 @@ function EncaissementQualification({
             <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
             Lié à une vente
           </button>
-          <button onClick={() => setDecision('hors_vente')} className="secondary" disabled={submitting}>
+          <button onClick={() => setDecision('hors_vente')} className="tertiaire" disabled={submitting}>
             Sans lien avec une vente
           </button>
         </div>
@@ -456,7 +456,7 @@ function EncaissementQualification({
             <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting ? '…' : 'Confirmer'}
           </button>
-          <button onClick={() => setDecision(null)} className="secondary" disabled={submitting}>
+          <button onClick={() => setDecision(null)} className="tertiaire" disabled={submitting}>
             Annuler
           </button>
         </div>
@@ -475,7 +475,7 @@ function EncaissementQualification({
             <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting ? '…' : 'Confirmer'}
           </button>
-          <button onClick={() => setDecision(null)} className="secondary" disabled={submitting}>
+          <button onClick={() => setDecision(null)} className="tertiaire" disabled={submitting}>
             Annuler
           </button>
         </div>
@@ -530,7 +530,7 @@ function VerificationComptesNonReconnus({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -550,7 +550,7 @@ function VerificationComptesNonReconnus({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -599,7 +599,7 @@ function QualificationAvoir({
           <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
           {submitting === 'avoir' ? '…' : 'Avoir'}
         </button>
-        <button onClick={() => void handleQualifier('od')} className="secondary" disabled={submitting !== null}>
+        <button onClick={() => void handleQualifier('od')} className="tertiaire" disabled={submitting !== null}>
           {submitting === 'od' ? '…' : 'OD de régularisation'}
         </button>
       </div>
@@ -663,7 +663,7 @@ function VerificationAvoirs({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -683,7 +683,7 @@ function VerificationAvoirs({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -731,7 +731,7 @@ function QualificationVehiculeTourisme({
           <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
           {submitting === 'confirme_tourisme' ? '…' : 'Confirmer véhicule de tourisme'}
         </button>
-        <button onClick={() => void handleQualifier('pas_tourisme')} className="secondary" disabled={submitting !== null}>
+        <button onClick={() => void handleQualifier('pas_tourisme')} className="tertiaire" disabled={submitting !== null}>
           {submitting === 'pas_tourisme' ? '…' : "Ce n'est pas un véhicule de tourisme"}
         </button>
       </div>
@@ -791,7 +791,7 @@ function VerificationVehiculeTourisme({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -811,7 +811,7 @@ function VerificationVehiculeTourisme({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -859,7 +859,7 @@ function QualificationImmobilisation({
           <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
           {submitting === 'confirme_immo' ? '…' : "C'est bien une immobilisation"}
         </button>
-        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+        <button onClick={() => void handleQualifier('ignore')} className="tertiaire" disabled={submitting !== null}>
           {submitting === 'ignore' ? '…' : "Ce n'est pas une immobilisation"}
         </button>
       </div>
@@ -924,7 +924,7 @@ function VerificationImmobilisation({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -944,7 +944,7 @@ function VerificationImmobilisation({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -994,7 +994,7 @@ function QualificationNouveauTiers({
           <ICONE_ACTION.valider size={14} aria-hidden="true" />
           {submitting === 'valide' ? '…' : 'Valider le tiers'}
         </button>
-        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+        <button onClick={() => void handleQualifier('ignore')} className="tertiaire" disabled={submitting !== null}>
           {submitting === 'ignore' ? '…' : 'Ignorer'}
         </button>
       </div>
@@ -1071,7 +1071,7 @@ function QualificationEncaissementClientTaux({
             <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting === 'bon_taux' ? '…' : "C'est le bon taux"}
           </button>
-          <button onClick={() => setDecision('mauvais_taux')} className="secondary" disabled={submitting !== null}>
+          <button onClick={() => setDecision('mauvais_taux')} className="tertiaire" disabled={submitting !== null}>
             Le taux est faux
           </button>
         </div>
@@ -1091,7 +1091,7 @@ function QualificationEncaissementClientTaux({
             <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting === 'mauvais_taux' ? '…' : 'Confirmer'}
           </button>
-          <button onClick={() => setDecision(null)} className="secondary" disabled={submitting !== null}>
+          <button onClick={() => setDecision(null)} className="tertiaire" disabled={submitting !== null}>
             Annuler
           </button>
         </div>
@@ -1146,7 +1146,7 @@ function QualificationTvaHotel({
           <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
           {submitting === 'confirme' ? '…' : 'Confirmer'}
         </button>
-        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+        <button onClick={() => void handleQualifier('ignore')} className="tertiaire" disabled={submitting !== null}>
           {submitting === 'ignore' ? '…' : 'Ignorer'}
         </button>
       </div>
@@ -1209,7 +1209,7 @@ function VerificationTvaHotel({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -1229,7 +1229,7 @@ function VerificationTvaHotel({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -1278,7 +1278,7 @@ function QualificationFraisVehicule({
           <ICONE_ACTION.qualifier size={14} aria-hidden="true" />
           {submitting === 'confirme' ? '…' : 'Confirmer'}
         </button>
-        <button onClick={() => void handleQualifier('ignore')} className="secondary" disabled={submitting !== null}>
+        <button onClick={() => void handleQualifier('ignore')} className="tertiaire" disabled={submitting !== null}>
           {submitting === 'ignore' ? '…' : 'Ignorer'}
         </button>
       </div>
@@ -1340,7 +1340,7 @@ function VerificationFraisVehicule({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -1360,7 +1360,7 @@ function VerificationFraisVehicule({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -1418,7 +1418,7 @@ function VerificationNumerotation({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -1438,7 +1438,7 @@ function VerificationNumerotation({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -1503,7 +1503,7 @@ function VerificationSimple({
 
   if (!ouvert) {
     return (
-      <button className="secondary" onClick={() => setOuvert(true)}>
+      <button className="tertiaire" onClick={() => setOuvert(true)}>
         <RefreshCw size={14} aria-hidden="true" />
         Vérifier à nouveau
       </button>
@@ -1523,7 +1523,7 @@ function VerificationSimple({
       <button onClick={() => void handleVerifier()} disabled={submitting}>
         {submitting ? 'Vérification…' : 'Vérifier'}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -1879,7 +1879,7 @@ function AnomalieRow({
                 <ICONE_ACTION.resoudre size={14} aria-hidden="true" />
                 {submitting === 'resoudre' ? '…' : 'Ok'}
               </button>
-              <button onClick={handleResoudre} className="secondary" disabled={submitting !== null}>
+              <button onClick={handleResoudre} className="tertiaire" disabled={submitting !== null}>
                 {submitting === 'resoudre' ? '…' : 'Ignorer'}
               </button>
             </div>
@@ -1896,7 +1896,7 @@ function AnomalieRow({
                 <ICONE_ACTION.resoudre size={14} aria-hidden="true" />
                 {submitting === 'resoudre' ? '…' : 'Résoudre'}
               </button>
-              <button onClick={handleJustifier} disabled={submitting !== null} className="secondary">
+              <button onClick={handleJustifier} disabled={submitting !== null} className="tertiaire">
                 <ICONE_ACTION.justifier size={14} aria-hidden="true" />
                 {submitting === 'justifier' ? '…' : 'Justifier'}
               </button>
@@ -1980,7 +1980,7 @@ function ResolutionMasse({
       <button onClick={() => void handleConfirmer()} disabled={submitting}>
         {submitting ? '…' : `Résoudre les ${anomalieIds.length} anomalies`}
       </button>
-      <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+      <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}

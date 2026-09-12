@@ -161,7 +161,7 @@ export function VehiculesPanel({ cabinetId, dossierId, utilisateurId, onCountCha
             </p>
             <div className="actions">
               <button
-                className="secondary"
+                className="danger"
                 disabled={retraitEnCours === v.id}
                 onClick={() => void handleRetirer(v.id)}
               >

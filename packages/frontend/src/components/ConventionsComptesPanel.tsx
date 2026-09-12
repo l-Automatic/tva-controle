@@ -96,7 +96,7 @@ function ConventionRow({
             <ICONE_ACTION.confirmer size={14} aria-hidden="true" />
             {submitting === 'confirmer' ? '…' : 'Confirmer'}
           </button>
-          <button onClick={handleRejeter} disabled={submitting !== null} className="secondary">
+          <button onClick={handleRejeter} disabled={submitting !== null} className="danger">
             <ICONE_ACTION.rejeter size={14} aria-hidden="true" />
             {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>

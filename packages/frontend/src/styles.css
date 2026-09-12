@@ -83,8 +83,10 @@
      valeur "boutons/champs" demandée ici, pas de doublon créé pour ça.
      Brief v86 (Phase C) : les 15 valeurs 6/7/8px codées en dur hors de
      .card/.panel (sidebar, boutons, champs, tooltip, accordéon, toast,
-     bannières d'erreur/avertissement, degrade-swatch...) repointées vers
-     var(--radius) — aucune n'était un "carte" méritant var(--rayon-carte).
+     bannières d'erreur/avertissement, degrade-swatch — ce dernier retiré
+     depuis avec tout le contrôle "dégradé par cabinet", brief v87 Phase D)
+     repointées vers var(--radius) — aucune n'était un "carte" méritant
+     var(--rayon-carte).
      Les rayons 999px/50%/0 restants (pilules, cercles, coins carrés
      volontaires) ne sont pas des doublons de ces tokens, donc non touchés. */
   --rayon-carte: 12px;
@@ -495,9 +497,9 @@ p {
 
 /* Fond/rayon généralisés au traitement décidé au v83 (brief v86, Phase C) —
    déjà le défaut des .card scopées .popup-large/.panel-calcul-periode
-   depuis le v81 (cf. plus bas dans le fichier, désormais redondantes mais
-   pas retirées ici, nettoyage prévu en Phase D). Bordure et ombre déjà
-   posées avant cette phase, inchangées. */
+   depuis le v81, retirées au v87 (Phase D) une fois devenues redondantes
+   avec cette règle de base. Bordure et ombre déjà posées avant cette
+   phase, inchangées. */
 .panel {
   background: var(--neutre-50);
   border: 1px solid var(--border);
@@ -536,10 +538,10 @@ p {
 
 /* Tailles/graisses du système de tokens (brief v86, Phase C) — jusqu'ici
    des valeurs ad hoc proches mais pas identiques ; .panel-calcul-periode
-   > .panel-header h2 (plus bas) appliquait déjà --typo-h2-* en avance sur
-   ce seul écran, devenue redondante ici mais pas retirée (Phase D). h3
-   passe de 600 à 500 : graisse plus légère du token, cohérente avec le
-   reste de l'échelle. */
+   > .panel-header h2 appliquait déjà --typo-h2-* en avance sur ce seul
+   écran, retirée au v87 (Phase D) une fois devenue redondante. h3 passe
+   de 600 à 500 : graisse plus légère du token, cohérente avec le reste de
+   l'échelle. */
 .panel-header h2 {
   font-size: var(--typo-h2-taille);
   font-weight: var(--typo-h2-graisse);
@@ -584,9 +586,11 @@ button {
 }
 
 /* Survol sur --accent-600 plutôt qu'un opacity+translateY+ombre (brief
-   v85, Phase B) — la règle plus spécifique button.secondary:hover
-   (var(--danger-100), plus bas) continue de l'emporter sur ce
-   background-color, comme elle l'emportait déjà sur l'ancien fond. */
+   v85, Phase B) — les règles plus spécifiques button.danger:hover/
+   button.tertiaire:hover (var(--danger-100)/var(--neutre-100), plus bas)
+   continuent de l'emporter sur ce background-color, comme elles
+   l'emportaient déjà sur l'ancien fond quand les deux n'étaient qu'une
+   seule classe .secondary. */
 button:hover:not(:disabled) {
   background-color: var(--accent-600);
 }
@@ -595,15 +599,36 @@ button:active:not(:disabled) {
   transform: scale(0.98);
 }
 
-button.secondary {
+/* Split sémantique de l'ancienne .secondary (brief v87, Phase D) — un seul
+   style rouge-danger servait jusqu'ici à la fois pour des actions vraiment
+   destructives (Rejeter, Retirer, Désactiver) et pour de simples actions
+   secondaires non destructives (Ignorer, Annuler), sans distinction
+   visuelle entre les deux. .danger garde exactement l'ancien rendu rouge ;
+   .tertiaire est nouveau, gris neutre, pour tout le reste. Chacun des 54
+   usages (17 fichiers) a été examiné au cas par cas, pas basculé en bloc. */
+button.danger {
   background: var(--bg-raised);
   color: var(--danger-500);
   border-color: var(--danger-500);
 }
 
-button.secondary:hover:not(:disabled) {
+button.danger:hover:not(:disabled) {
   background: var(--danger-100);
   box-shadow: 0 4px 10px rgba(217, 45, 32, 0.14);
+}
+
+button.tertiaire {
+  background: var(--bg-raised);
+  color: var(--neutre-500);
+  border-color: var(--neutre-500);
+}
+
+/* rgba() ne peut pas dériver son alpha depuis une variable CSS — valeur
+   recopiée à la main depuis --neutre-500 (#98a2b3 = rgb(152,162,179)),
+   même principe déjà en place pour button.danger:hover ci-dessus. */
+button.tertiaire:hover:not(:disabled) {
+  background: var(--neutre-100);
+  box-shadow: 0 4px 10px rgba(152, 162, 179, 0.14);
 }
 
 button:disabled {
@@ -785,10 +810,11 @@ button:focus-visible {
 
 /* Fond/rayon/ombre généralisés au traitement décidé au v83 (brief v86,
    Phase C) — déjà le défaut de .popup-large .card/.panel-calcul-periode
-   .card depuis le v81 (plus bas dans le fichier), qui n'avaient jamais
-   retiré la bordure/bande latérale de base : elles s'additionnaient déjà
-   au shadow/fond/rayon plutôt que de les remplacer. Pas de survol
-   "soulèvement" (translateY) ajouté ici, volontairement : sur les ~75
+   .card depuis le v81, retirées au v87 (Phase D) une fois redondantes :
+   elles n'avaient jamais retiré la bordure/bande latérale de base,
+   s'additionnant déjà au shadow/fond/rayon plutôt que de les remplacer.
+   Pas de survol "soulèvement" (translateY) ajouté ici, volontairement : sur
+   les ~75
    usages de .card de l'app, un seul (.a-traiter-card, plus haut) est
    réellement cliquable dans son ensemble — et il a déjà son propre signal
    de survol (cursor + bordure). Généraliser translateY donnerait un faux
@@ -1501,31 +1527,6 @@ pre.details {
   }
 }
 
-/* --- Apparence : dégradés du volet --- */
-
-.degrade-grille {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
-  gap: 0.6rem;
-  max-width: 480px;
-}
-
-.degrade-swatch {
-  width: 56px;
-  height: 40px;
-  border-radius: var(--radius);
-  border: 2px solid transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.degrade-swatch.actif {
-  border-color: var(--text);
-}
-
 /* --- Chips (comptes retirables d'une convention) --- */
 
 .chip-list {
@@ -1617,68 +1618,17 @@ pre.details {
   padding-right: 0;
 }
 
-/* Nouveau système de design, étape 2 point 2 (brief v81) : popup
-   "Vérifications préalables" comme deuxième écran de référence — badges
-   d'onglets, fond des cartes et boutons basculés sur les nouveaux tokens
-   (.popup-large comme scope, jamais le reste de l'app à ce stade). */
-.popup-large .sous-onglet {
-  border-radius: var(--radius);
-  background: var(--neutre-50);
-  color: var(--neutre-500);
-  border-color: var(--neutre-100);
-  transition: background-color var(--transition-legere), color var(--transition-legere), border-color var(--transition-legere);
-}
-.popup-large .sous-onglet:hover:not(.actif) {
-  background: var(--accent-50);
-  border-color: var(--accent-100);
-  color: var(--accent-500);
-}
-.popup-large .sous-onglet.actif {
-  background: var(--accent-500);
-  border-color: transparent;
-  color: #fff;
-}
-
-.popup-large .card {
-  background: var(--neutre-50);
-  border-radius: var(--rayon-carte);
-  box-shadow: var(--ombre-carte-repos);
-  transition: transform var(--transition-legere), box-shadow var(--transition-legere);
-}
-.popup-large .card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--ombre-carte-survol);
-}
-
-.popup-large button {
-  border-radius: var(--radius);
-  transition: background-color var(--transition-legere), border-color var(--transition-legere), opacity var(--transition-legere);
-}
-.popup-large button:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-/* Nouveau système de design, étape 2 point 3 (brief v81) : "Calcul de la
-   période" (CycleZone.tsx) comme 3e écran de référence, choisi par Claude
-   Code — l'écran de calcul avec les cartes de montants, celui qui rend le
-   changement le plus visible (le montant de TVA est l'info la plus
-   importante de tout l'écran Cycle). */
-.panel-calcul-periode > .panel-header h2 {
-  font-size: var(--typo-h2-taille);
-  font-weight: var(--typo-h2-graisse);
-  letter-spacing: var(--typo-h2-espacement);
-}
-
-.panel-calcul-periode .card {
-  background: var(--neutre-50);
-  border-radius: var(--rayon-carte);
-  box-shadow: var(--ombre-carte-repos);
-  transition: transform var(--transition-legere), box-shadow var(--transition-legere);
-}
-.panel-calcul-periode .card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--ombre-carte-survol);
-}
+/* Historique (brief v87, Phase D) : les .sous-onglet/.card/button scopées
+   .popup-large et .panel-calcul-periode (posées au v81 comme les 3 écrans
+   de référence du nouveau système, avant qu'il ne s'applique au reste de
+   l'app aux Phases A-C) sont retirées ici — devenues des doublons exacts
+   des règles de base généralisées, cf. .sous-onglet/.card/button plus haut
+   dans ce fichier. Le survol "soulèvement" (translateY) de .popup-large
+   .card/.panel-calcul-periode .card disparaît avec elles, pas par oubli :
+   la Phase C avait délibérément choisi de ne pas généraliser ce survol à
+   .card (aucune de ces cartes n'est cliquable dans son ensemble), le garder
+   ici aurait laissé les cartes des popups seules à donner un faux signal
+   "cliquable" que le reste de l'app évite désormais. */
 
 .panel-calcul-periode .card-header .periode {
   font-size: var(--typo-legende-taille);
@@ -1694,14 +1644,6 @@ pre.details {
   font-size: var(--typo-h1-taille);
   font-weight: var(--typo-h1-graisse);
   letter-spacing: var(--typo-h1-espacement);
-}
-
-.panel-calcul-periode button {
-  border-radius: var(--radius);
-  transition: background-color var(--transition-legere), border-color var(--transition-legere), opacity var(--transition-legere);
-}
-.panel-calcul-periode button:active:not(:disabled) {
-  transform: scale(0.98);
 }
 
 @keyframes popup-overlay-in {

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Check } from 'lucide-react';
 import {
   ApiError,
   configurerDossierOnboarding,
@@ -18,8 +17,6 @@ import { Accordion } from './Accordion';
 import {
   CLE_PENNYLANE_FIRM_API_KEY,
   CLE_REGIME_TVA_ENCAISSEMENT,
-  CLE_THEME_DEGRADE,
-  DEGRADES_SIDEBAR,
   LIBELLE_PERIODICITE_DECLARATION,
   LIBELLE_REGIME_TVA,
   LIBELLE_REGIME_TVA_ENCAISSEMENT,
@@ -46,8 +43,6 @@ interface ParametresPanelProps {
   dossierId: string;
   utilisateurId: string;
   role: Role;
-  degradeActif: string;
-  onDegradeChange: (degrade: string) => void;
   sousOnglet: SousOngletParametres;
   onChangeSousOnglet: (onglet: SousOngletParametres) => void;
   // Appelé après une synchronisation réussie (brief v27), pour que la
@@ -64,7 +59,7 @@ const ONGLETS_PARAMETRES: { id: SousOngletParametres; libelle: string; descripti
     id: 'cabinet',
     libelle: 'Paramètres cabinet',
     description:
-      "Réglages qui s'appliquent à tout le cabinet, tous dossiers confondus : clé Mistral, jeton API Cabinet Pennylane, synchronisation et activation des dossiers, apparence du volet latéral.",
+      "Réglages qui s'appliquent à tout le cabinet, tous dossiers confondus : clé Mistral, jeton API Cabinet Pennylane, synchronisation et activation des dossiers.",
   },
   {
     id: 'dossier',
@@ -522,7 +517,7 @@ function DossierActivationRow({
             {submitting ? '…' : 'Confirmer la désactivation'}
           </button>
           <button
-            className="secondary"
+            className="tertiaire"
             onClick={() => {
               setFormulaireOuvert(false);
               setMotif('');
@@ -577,76 +572,6 @@ function DossiersActivationSection({ cabinetId }: { cabinetId: string }) {
           </ul>
         </Accordion>
       )}
-    </section>
-  );
-}
-
-// Cabinet-wide depuis le brief v55 (auparavant un paramètre dossier,
-// rechargé et réécrit à chaque dossier) : un seul choix pour tout le
-// cabinet, réservé à admin_cabinet (masqué entièrement pour un
-// collaborateur dans ParametresPanel ci-dessous, même principe que
-// CabinetSection). Écrit via definirParametreCabinet, plus definirParametreDossier.
-//
-// DEVENU UN CONTRÔLE MORT depuis le brief v84 (retrait de --degrade-actif
-// de styles.css, repointé vers --accent-500 fixe partout) : choisir un
-// dégradé ici n'a plus aucun effet visible, décision actée avec Rami plutôt
-// que de préserver la personnalisation, incompatible avec la nouvelle
-// direction Stripe/claire à couleur unique. À masquer ou supprimer
-// entièrement (UI + paramètre backend) lors d'une prochaine phase de la
-// refonte (v83, phase B ou D).
-function DegradeSection({
-  cabinetId,
-  utilisateurId,
-  degradeActif,
-  onDegradeChange,
-}: {
-  cabinetId: string;
-  utilisateurId: string;
-  degradeActif: string;
-  onDegradeChange: (degrade: string) => void;
-}) {
-  const [submitting, setSubmitting] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const notifier = useToast();
-
-  async function handleChoisir(degrade: string) {
-    setSubmitting(degrade);
-    setError(null);
-    try {
-      await definirParametreCabinet(cabinetId, utilisateurId, CLE_THEME_DEGRADE, degrade);
-      onDegradeChange(degrade);
-      notifier('Dégradé du cabinet mis à jour');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Échec de la mise à jour');
-    } finally {
-      setSubmitting(null);
-    }
-  }
-
-  return (
-    <section className="panel panel-full">
-      <div className="panel-header">
-        <h2>Apparence</h2>
-      </div>
-      <p className="reference">
-        Dégradé du volet latéral pour tout le cabinet (tous les dossiers), sert aussi de couleur secondaire pour
-        les boutons principaux et les badges actifs. Réservé aux administrateurs du cabinet.
-      </p>
-      <div className="degrade-grille">
-        {DEGRADES_SIDEBAR.map((degrade) => (
-          <button
-            key={degrade}
-            className={`degrade-swatch${degrade === degradeActif ? ' actif' : ''}`}
-            style={{ background: degrade }}
-            disabled={submitting !== null}
-            onClick={() => void handleChoisir(degrade)}
-            aria-label="Choisir ce dégradé"
-          >
-            {degrade === degradeActif && <Check size={16} color="#fff" aria-hidden="true" />}
-          </button>
-        ))}
-      </div>
-      {error && <p className="error">{error}</p>}
     </section>
   );
 }
@@ -791,7 +716,7 @@ function DossierSection({
         Clé/valeur libres, pour préparer le terrain. Aucun paramètre ici n'est encore exploité par un contrôle.
       </p>
       {(() => {
-        const visibles = parametres.filter((p) => p.cle !== CLE_THEME_DEGRADE && p.cle !== CLE_REGIME_TVA_ENCAISSEMENT);
+        const visibles = parametres.filter((p) => p.cle !== CLE_REGIME_TVA_ENCAISSEMENT);
         return (
           <>
             {!loading && visibles.length === 0 && <p className="empty">Aucun paramètre défini pour ce dossier.</p>}
@@ -830,17 +755,14 @@ function DossierSection({
 // simple succession de sections dans un seul onglet) : les routes API sont
 // déjà séparées (/parametres-cabinet vs /dossiers/:id/parametres). Depuis
 // le brief v25, /parametres-cabinet répond 403 à un collaborateur côté
-// backend, donc CabinetSection et DegradeSection (cabinet-wide depuis v55)
-// sont masquées ENTIÈREMENT pour ce rôle, pas juste désactivées ; le reste
-// (paramètres dossier) reste accessible aux deux rôles, cf. brief refonte
-// section 3 pour ce choix d'origine.
+// backend, donc CabinetSection est masquée ENTIÈREMENT pour ce rôle, pas
+// juste désactivée ; le reste (paramètres dossier) reste accessible aux
+// deux rôles, cf. brief refonte section 3 pour ce choix d'origine.
 export function ParametresPanel({
   cabinetId,
   dossierId,
   utilisateurId,
   role,
-  degradeActif,
-  onDegradeChange,
   sousOnglet,
   onChangeSousOnglet,
   onDossiersSynchronises = () => {},
@@ -875,14 +797,6 @@ export function ParametresPanel({
             )}
             <DossiersOnboardingSection cabinetId={cabinetId} refreshKey={dossiersRefreshKey} />
             {role === 'admin_cabinet' && <DossiersActivationSection cabinetId={cabinetId} />}
-            {role === 'admin_cabinet' && (
-              <DegradeSection
-                cabinetId={cabinetId}
-                utilisateurId={utilisateurId}
-                degradeActif={degradeActif}
-                onDegradeChange={onDegradeChange}
-              />
-            )}
           </>
         )}
         {sousOnglet === 'dossier' && (

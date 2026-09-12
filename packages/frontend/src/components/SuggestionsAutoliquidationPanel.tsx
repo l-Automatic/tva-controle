@@ -85,7 +85,7 @@ function SuggestionRow({
         <button disabled={enCours !== null} onClick={() => void handleConfirmer()}>
           {enCours === 'confirmer' ? '…' : 'Confirmer'}
         </button>
-        <button className="secondary" disabled={enCours !== null} onClick={() => void handleRefuser()}>
+        <button className="danger" disabled={enCours !== null} onClick={() => void handleRefuser()}>
           {enCours === 'refuser' ? '…' : 'Refuser'}
         </button>
       </div>

@@ -323,7 +323,7 @@ function TauxConfirmesSection({ cabinetId, dossierId, utilisateurId }: SectionPr
             </p>
             <div className="actions">
               <button
-                className="secondary"
+                className="danger"
                 disabled={rejet === p.id}
                 onClick={() => void handleRejeter(p.id, estTiers)}
               >

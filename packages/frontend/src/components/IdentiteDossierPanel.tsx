@@ -137,7 +137,7 @@ function ExercicesComptablesPanel({ cabinetId, dossierId }: { cabinetId: string;
             {submitting ? '…' : 'Ajouter'}
           </button>
           <button
-            className="secondary"
+            className="tertiaire"
             onClick={() => {
               setFormulaireOuvert(false);
               setError(null);
@@ -148,7 +148,7 @@ function ExercicesComptablesPanel({ cabinetId, dossierId }: { cabinetId: string;
           </button>
         </div>
       ) : (
-        <button className="secondary" onClick={() => setFormulaireOuvert(true)}>
+        <button className="tertiaire" onClick={() => setFormulaireOuvert(true)}>
           Ajouter un exercice comptable
         </button>
       )}

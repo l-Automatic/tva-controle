@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { ATraiterPanel } from './components/ATraiterPanel';
 import { LoginScreen } from './components/LoginScreen';
 import { ParametresPanel, type SousOngletParametres } from './components/ParametresPanel';
@@ -9,12 +9,10 @@ import { CycleZone } from './components/zones/CycleZone';
 import { DeclarationZone } from './components/zones/DeclarationZone';
 import { HistoriqueZone } from './components/zones/HistoriqueZone';
 import { UtilisateursZone } from './components/zones/UtilisateursZone';
-import { definirJeton, fetchAnomalies, fetchCalculs, fetchConventions, fetchParametresCabinet, surSessionExpiree } from './api';
+import { definirJeton, fetchAnomalies, fetchCalculs, fetchConventions, surSessionExpiree } from './api';
 import { toDateOnly } from './dateUtils';
 import {
-  CLE_THEME_DEGRADE,
   CLES_CONVENTIONS_COMPTES,
-  DEGRADE_PAR_DEFAUT,
   type CleConventionCompte,
   type CompteACategoriser,
   type CompteClientSansTauxAssigne,
@@ -61,7 +59,6 @@ export function App() {
   // immédiatement les nouveaux dossiers, sans attendre une nouvelle
   // frappe dans le champ de recherche.
   const [dossiersRefreshKey, setDossiersRefreshKey] = useState(0);
-  const [degrade, setDegrade] = useState<string>(DEGRADE_PAR_DEFAUT);
   const [suggestionsTauxComptes, setSuggestionsTauxComptes] = useState<CompteSansTauxAssigne[]>([]);
   const [suggestionsTauxClients, setSuggestionsTauxClients] = useState<CompteClientSansTauxAssigne[]>([]);
   const [suggestionsAutoliquidation, setSuggestionsAutoliquidation] = useState<CompteACategoriser[]>([]);
@@ -109,22 +106,6 @@ export function App() {
   // anticipé vers l'écran de connexion arrive après, cf. plus bas (règle
   // des hooks React : jamais après un retour conditionnel).
   const cabinetId = session?.utilisateur.cabinetId ?? '';
-
-  useEffect(() => {
-    if (!cabinetId) {
-      setDegrade(DEGRADE_PAR_DEFAUT);
-      return;
-    }
-    let annule = false;
-    fetchParametresCabinet(cabinetId).then((parametres) => {
-      if (annule) return;
-      const param = parametres.find((p) => p.cle === CLE_THEME_DEGRADE);
-      setDegrade(typeof param?.valeur === 'string' ? param.valeur : DEGRADE_PAR_DEFAUT);
-    });
-    return () => {
-      annule = true;
-    };
-  }, [cabinetId]);
 
   if (!session) {
     return <LoginScreen onConnecte={connexionReussie} />;
@@ -209,7 +190,7 @@ export function App() {
   }
 
   return (
-    <div className="app-shell" style={{ '--degrade-actif': degrade } as CSSProperties}>
+    <div className="app-shell">
       <Sidebar
         cabinetId={cabinetId}
         role={role}
@@ -291,8 +272,6 @@ export function App() {
                   dossierId={dossier.id}
                   utilisateurId={utilisateurId}
                   role={role}
-                  degradeActif={degrade}
-                  onDegradeChange={setDegrade}
                   onDossiersSynchronises={() => setDossiersRefreshKey((k) => k + 1)}
                   dossiersRefreshKey={dossiersRefreshKey}
                   sousOnglet={sousOngletParametres}

@@ -214,7 +214,7 @@ export function CalculRow({
             <ICONE_ACTION.valider size={14} aria-hidden="true" />
             {submitting === 'valider' ? '…' : 'Valider'}
           </button>
-          <button onClick={() => void handleRejeter()} disabled={submitting !== null} className="secondary">
+          <button onClick={() => void handleRejeter()} disabled={submitting !== null} className="danger">
             <ICONE_ACTION.rejeter size={14} aria-hidden="true" />
             {submitting === 'rejeter' ? '…' : 'Rejeter'}
           </button>

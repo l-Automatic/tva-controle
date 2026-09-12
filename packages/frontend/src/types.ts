@@ -444,30 +444,6 @@ export interface TauxAssigneEntry {
   updatedAt: string;
 }
 
-// --- Dégradés du volet latéral (brief v7) — palette sombre et premium,
-// chaque dégradé nuance une seule teinte (pas un mélange de deux couleurs)
-// vers une variante légèrement plus claire d'elle-même, stockée comme
-// paramètre dossier (`theme_degrade`), jamais cabinet. Remplace intégralement
-// la palette vive de la v2. La variante claire du taupe est volontairement
-// moins éclaircie que les autres (~5% au lieu de ~20%) : au-delà, le texte
-// blanc du volet tombe sous le seuil de contraste WCAG AA (4.5:1) — c'est la
-// seule des 9 couleurs assez claire pour que ça se voit. ---
-
-export const CLE_THEME_DEGRADE = 'theme_degrade';
-
-export const DEGRADES_SIDEBAR = [
-  'linear-gradient(135deg, #2A0F2E, #553F58)', // violet très foncé
-  'linear-gradient(135deg, #0F5757, #3F7979)', // sarcelle foncé
-  'linear-gradient(135deg, #003D3D, #336464)', // vert-bleu très foncé
-  'linear-gradient(135deg, #191919, #474747)', // quasi noir
-  'linear-gradient(135deg, #3A2D28, #615753)', // brun foncé
-  'linear-gradient(135deg, #80685C, #867064)', // taupe/mocha
-  'linear-gradient(135deg, #49111C, #6D4149)', // bordeaux très foncé
-  'linear-gradient(135deg, #142174, #434D90)', // bleu roi profond
-  'linear-gradient(135deg, #61053B, #813762)', // magenta/lie-de-vin foncé
-] as const;
-export const DEGRADE_PAR_DEFAUT: string = DEGRADES_SIDEBAR[7]; // bleu roi, cohérent avec l'accent existant
-
 export type ActeurAudit = 'agent' | 'utilisateur' | 'systeme';
 
 export interface AuditEvenement {

@@ -190,17 +190,17 @@ function AjustementLigne({
           <button onClick={() => void handleEnregistrer()} disabled={submitting || !justification.trim()}>
             {submitting ? '…' : 'Enregistrer'}
           </button>
-          <button className="secondary" onClick={() => setOuvert(false)} disabled={submitting}>
+          <button className="tertiaire" onClick={() => setOuvert(false)} disabled={submitting}>
             Annuler
           </button>
         </div>
       ) : (
         <div className="actions">
-          <button className="secondary" onClick={ouvrirFormulaire} disabled={submitting}>
+          <button className="tertiaire" onClick={ouvrirFormulaire} disabled={submitting}>
             {ajustement ? 'Modifier l’ajustement' : 'Ajuster'}
           </button>
           {ajustement && (
-            <button className="secondary" onClick={() => void handleRetirer()} disabled={submitting}>
+            <button className="danger" onClick={() => void handleRetirer()} disabled={submitting}>
               {submitting ? '…' : 'Retirer l’ajustement'}
             </button>
           )}
@@ -461,7 +461,7 @@ export function CycleForm({
           seul popup à onglets (brief v58) — consultable à tout moment, pas
           seulement en réaction à un 409 au lancement du cycle. */}
       <div className="cycle-form">
-        <button className="secondary" onClick={handleVerifierPortesObligatoires}>
+        <button className="tertiaire" onClick={handleVerifierPortesObligatoires}>
           Vérifications préalables
         </button>
       </div>

@@ -104,7 +104,7 @@ export function AuditPanel({ cabinetId, dossierId }: AuditPanelProps) {
           <RefreshCw size={14} aria-hidden="true" />
           {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
-        <button onClick={() => void handleExporter()} disabled={exporting} className="secondary">
+        <button onClick={() => void handleExporter()} disabled={exporting} className="tertiaire">
           <Download size={14} aria-hidden="true" />
           {exporting ? 'Export…' : 'Exporter en CSV'}
         </button>

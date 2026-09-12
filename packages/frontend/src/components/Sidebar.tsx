@@ -34,7 +34,7 @@ export const ZONES: { id: Zone; libelle: string; description: string; roles?: Ro
     id: 'parametres',
     libelle: 'Paramètres',
     description:
-      'Réglages du cabinet (clé Mistral, jeton Pennylane, dégradé du volet latéral) et réglages du dossier (régime TVA, décisions déjà validées modifiables).',
+      'Réglages du cabinet (clé Mistral, jeton Pennylane, synchronisation et activation des dossiers) et réglages du dossier (régime TVA, décisions déjà validées modifiables).',
   },
   {
     id: 'utilisateurs',

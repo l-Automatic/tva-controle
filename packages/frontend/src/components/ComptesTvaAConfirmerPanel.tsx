@@ -191,7 +191,7 @@ function ComptesTvaConfirmesSection({
             <p className="label">Compte {c.compte}</p>
             <p className="reference">{CHOIX.find((choix) => choix.cle === c.cle)?.libelle ?? c.cle}</p>
             <div className="actions">
-              <button className="secondary" disabled={rejet === c.id} onClick={() => void handleRejeter(c.id, c.compte)}>
+              <button className="danger" disabled={rejet === c.id} onClick={() => void handleRejeter(c.id, c.compte)}>
                 {rejet === c.id ? '…' : 'Rejeter'}
               </button>
             </div>

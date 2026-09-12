@@ -164,7 +164,7 @@ export function DeclarationZone({ cabinetId, dossierId }: DeclarationZoneProps) 
         <ul className="card-list">
           {calculs.map((c) => (
             <li key={c.id} className={`card${calculSelectionne?.id === c.id ? ' actif' : ''}`}>
-              <button className="secondary" onClick={() => setCalculSelectionne(c)}>
+              <button className="tertiaire" onClick={() => setCalculSelectionne(c)}>
                 <BadgeStatut statut={c.statut} libelle={LIBELLE_STATUT_CALCUL[c.statut]} />
                 {formatDate(c.periodeDebut)} au {formatDate(c.periodeFin)}
               </button>

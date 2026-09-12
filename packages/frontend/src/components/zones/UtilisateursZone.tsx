@@ -58,7 +58,7 @@ function ReinitialiserMotDePasseForm({
       <button onClick={() => void handleEnregistrer()} disabled={submitting}>
         {submitting ? '…' : 'Enregistrer'}
       </button>
-      <button className="secondary" onClick={onTermine} disabled={submitting}>
+      <button className="tertiaire" onClick={onTermine} disabled={submitting}>
         Annuler
       </button>
       {error && <p className="error">{error}</p>}
@@ -117,11 +117,11 @@ function UtilisateurRow({
         />
       ) : (
         <div className="actions">
-          <button className="secondary" onClick={() => setReinitOuvert(true)}>
+          <button className="tertiaire" onClick={() => setReinitOuvert(true)}>
             Réinitialiser le mot de passe
           </button>
           {estActif && (
-            <button className="secondary" onClick={() => void handleDesactiver()} disabled={desactivation !== null}>
+            <button className="danger" onClick={() => void handleDesactiver()} disabled={desactivation !== null}>
               {desactivation === 'en_cours' ? '…' : 'Désactiver'}
             </button>
           )}
