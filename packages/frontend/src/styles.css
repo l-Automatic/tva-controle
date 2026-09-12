@@ -120,13 +120,15 @@ p {
   min-height: 100vh;
 }
 
-/* Écran de connexion (brief v25) */
+/* Écran de connexion (brief v25). Fond clair (brief v85, Phase B) : aligné
+   sur le même traitement que le volet latéral, pour ne pas laisser un
+   3e aplat marine isolé alors que sidebar et boutons sont déjà repeints. */
 .login-shell {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-500);
+  background: var(--neutre-50);
   padding: 1.5rem;
 }
 
@@ -173,6 +175,13 @@ p {
 }
 
 /* --- Volet latéral --- */
+/* Direction claire (brief v83, confirmée par Rami ; exécutée au brief v85,
+   Phase B) : fond quasi-blanc, texte foncé, séparé du contenu par une fine
+   bordure plutôt que par un contraste de fond sombre/clair. Remplace les 14
+   règles ci-dessous, jusqu'ici codées pour du texte blanc sur fond sombre
+   (l'ancien --degrade-actif, retiré au v84). Seul l'item de navigation actif
+   garde un aplat plein (--accent-500) — c'est désormais la seule surface
+   sombre du volet, au lieu de tout le volet. */
 
 .sidebar {
   position: sticky;
@@ -180,8 +189,9 @@ p {
   flex: 0 0 var(--sidebar-width);
   width: var(--sidebar-width);
   min-height: 100vh;
-  background: var(--accent-500);
-  color: #fff;
+  background: var(--neutre-50);
+  border-right: 1px solid var(--neutre-100);
+  color: var(--text);
   padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
@@ -206,7 +216,7 @@ p {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-muted);
   margin: 0 0 0.5rem;
 }
 
@@ -215,9 +225,9 @@ p {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
   font-weight: 600;
   font-size: 0.85rem;
   padding: 0.5rem 0.7rem;
@@ -227,7 +237,7 @@ p {
 }
 
 .sidebar-dossier-actuel:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--neutre-100);
 }
 
 .sidebar-dossier-actuel-nom {
@@ -240,8 +250,8 @@ p {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
   border-radius: 7px;
   padding: 0.4rem 0.6rem;
 }
@@ -249,14 +259,14 @@ p {
 .sidebar-search-input input[type='text'] {
   background: transparent;
   border: none;
-  color: #fff;
+  color: var(--text);
   font-size: 0.85rem;
   padding: 0;
   width: 100%;
 }
 
 .sidebar-search-input input[type='text']::placeholder {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
 }
 
 .sidebar-search-input input[type='text']:focus-visible {
@@ -266,12 +276,12 @@ p {
 .sidebar-vide,
 .sidebar-error {
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-muted);
   margin: 0.5rem 0 0;
 }
 
 .sidebar-error {
-  color: #ffd7d0;
+  color: var(--danger-500);
 }
 
 .sidebar-dossier-liste {
@@ -292,7 +302,7 @@ p {
   width: 100%;
   background: transparent;
   border: 1px solid transparent;
-  color: #fff;
+  color: var(--text);
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
   text-align: left;
@@ -300,8 +310,8 @@ p {
 }
 
 .sidebar-dossier-item:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--neutre-100);
+  border-color: var(--border);
 }
 
 .sidebar-dossier-item-nom {
@@ -311,7 +321,7 @@ p {
 
 .sidebar-dossier-item-meta {
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-muted);
 }
 
 .sidebar-nav {
@@ -327,7 +337,7 @@ p {
   gap: 0.6rem;
   background: transparent;
   border: 1px solid transparent;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--text-muted);
   font-weight: 500;
   font-size: 0.87rem;
   padding: 0.5rem 0.65rem;
@@ -337,20 +347,20 @@ p {
 }
 
 .sidebar-nav-item:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: var(--neutre-100);
+  color: var(--text);
 }
 
 .sidebar-nav-item.actif {
-  background: rgba(255, 255, 255, 0.92);
-  color: #22263a;
+  background: var(--accent-500);
+  color: #fff;
   border-color: transparent;
 }
 
 .sidebar-footer {
   margin-top: auto;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -358,7 +368,7 @@ p {
 
 .sidebar-footer-role {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-muted);
 }
 
 .sidebar-logout {
@@ -366,16 +376,16 @@ p {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
   font-size: 0.78rem;
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
 }
 
 .sidebar-logout:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--neutre-100);
   opacity: 1;
 }
 
@@ -534,15 +544,16 @@ button {
   transition: opacity 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
+/* Survol sur --accent-600 plutôt qu'un opacity+translateY+ombre (brief
+   v85, Phase B) — la règle plus spécifique button.secondary:hover
+   (var(--danger-100), plus bas) continue de l'emporter sur ce
+   background-color, comme elle l'emportait déjà sur l'ancien fond. */
 button:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(23, 27, 33, 0.16);
+  background-color: var(--accent-600);
 }
 
 button:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: none;
+  transform: scale(0.98);
 }
 
 button.secondary {
